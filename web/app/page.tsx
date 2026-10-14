@@ -11,8 +11,17 @@ async function readData<T>(filename: string, fallback: T): Promise<T> {
   }
 }
 
+async function readText(filename: string, fallback: string): Promise<string> {
+  try {
+    const file = path.join(process.cwd(), "public", "data", filename);
+    return await readFile(file, "utf8");
+  } catch {
+    return fallback;
+  }
+}
+
 export default async function Home() {
-  const [result, runStatus] = await Promise.all([
+  const [result, runStatus, markdown] = await Promise.all([
     readData("latest-results.json", {
       status: "missing",
       last_successful_run_at: null,
@@ -27,6 +36,7 @@ export default async function Home() {
       candidate_count: 0,
     }),
     readData("latest-run-status.json", { status: "not_run", attempted_at: null, reference_date: null, message: null }),
+    readText("latest-candidates.md", "# 미국주식 스윙 스크리너 — 최종 후보\n\n아직 스크리너 결과가 없습니다."),
   ]);
-  return <Dashboard result={result} runStatus={runStatus} />;
+  return <Dashboard result={result} runStatus={runStatus} markdown={markdown} />;
 }

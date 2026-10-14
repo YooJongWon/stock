@@ -91,17 +91,17 @@ npm run dev
 3. 저장소의 **Settings → Secrets and variables → Actions**에서 `SEC_USER_AGENT` secret을 추가합니다. 앱 이름과 실제 연락 가능한 이메일을 사용하되 코드나 문서에는 적지 않습니다.
 4. **Actions**에서 워크플로를 활성화하고 **US stock screener → Run workflow**를 한 번 실행합니다.
 
-스케줄은 UTC 22:00, 즉 한국 시간 오전 7시입니다. XNYS 거래일 달력으로 휴장일과 기준 세션을 계산합니다. SPY와 각 종목 봉이 기준일 종가까지 갱신되지 않은 경우 stale 종목을 DATA_ERROR로 기록하고, SPY가 기준일 종가가 아니면 새 결과를 게시하지 않습니다. 실패 상태는 별도 JSON에 남기며 이전 정상 결과 JSON/CSV를 유지합니다.
+자동 스케줄은 한국 시간 오전 9시(UTC 00:00, 화~토)입니다. 한국 날짜 기준 전날이 XNYS 거래일일 때만 스크리너를 호출하고, 미국 휴장일은 건너뜁니다. SPY와 각 종목 봉이 기준일 종가까지 갱신되지 않은 경우 stale 종목을 DATA_ERROR로 기록하고, SPY가 기준일 종가가 아니면 새 결과를 게시하지 않습니다. 실패 상태는 별도 JSON에 남기며 이전 정상 결과 JSON/CSV를 유지합니다.
 
-정상 후보 CSV와 대시보드 JSON은 `web/public/data/`에 저장되고 Actions가 변경된 파일만 커밋합니다. 워크플로에는 `push` 트리거가 없으므로 이 커밋이 스크리너를 다시 실행하지 않습니다.
+정상 후보 CSV와 대시보드 JSON 및 `final_candidates.md`는 `web/public/data/`에 저장되고 Actions가 변경된 파일만 커밋합니다. 웹은 기존 `output/final_candidates.md`와 동일한 스크리너 보고서를 표시하고 실행 한국 시간과 조회한 미국 거래일을 상단에 보여줍니다. 워크플로에는 `push` 트리거가 없으므로 이 커밋이 스크리너를 다시 실행하지 않습니다.
 
 ### 새 Vercel 프로젝트 연결
 
 1. Vercel에서 기존 프로젝트를 선택하지 말고 **New Project**로 이 비공개 GitHub 저장소를 연결합니다.
 2. Root Directory를 `web`로 설정하고 Next.js 기본 빌드 설정을 사용합니다.
 3. Python 또는 SEC API secret은 Vercel에 넣지 않습니다. 대시보드는 공개 결과 JSON/CSV만 읽습니다.
-4. 첫 Actions 실행의 데이터 커밋 뒤 Vercel 배포에서 후보표와 CSV 다운로드를 확인합니다.
+4. 첫 Actions 실행의 데이터 커밋 뒤 Vercel 배포에서 Markdown 후보 리포트와 CSV 다운로드를 확인합니다.
 
 비공개 저장소 연결과 별개로 Vercel Hobby로 배포한 사이트와 JSON/CSV URL은 공개됩니다. 페이지 검색 색인은 비활성화했지만 URL 접근을 막지는 않으므로, 공개해도 되는 종목 및 지표만 저장소에 게시해야 합니다. 개인 정보와 API 키는 게시하지 않습니다.
 
-스케줄된 워크플로 실행은 마지막 XNYS 기준일이 이미 게시된 날짜와 같으면 건너뜁니다. 수동 실행은 같은 세션도 다시 계산합니다.
+스케줄된 워크플로 실행은 전날 XNYS 거래일이 없거나 마지막 XNYS 기준일이 이미 게시된 날짜와 같으면 건너뜁니다. 수동 실행은 같은 세션도 다시 계산합니다.

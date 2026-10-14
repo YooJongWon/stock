@@ -34,15 +34,23 @@ def _atomic_write(path: Path, contents: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run and publish a validated US-stock screener snapshot")
     parser.add_argument("--skip-unchanged", action="store_true", help="skip scheduled runs when the same XNYS session is already published")
+    parser.add_argument("--scheduled", action="store_true", help="only run when the previous Korea calendar date was an XNYS session")
     args = parser.parse_args(argv)
 
     # Set this before importing config/screener; local output files remain untouched.
     with tempfile.TemporaryDirectory(prefix="stock-screener-") as scratch:
         os.environ["SCREENER_OUTPUT_DIR"] = scratch
-        from market_calendar import is_exchange_session, latest_completed_session
+        from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
         from screener import Screener
 
-        reference_date = latest_completed_session()
+        if args.scheduled:
+            reference_date = previous_korea_date_session()
+            if reference_date is None:
+                print("No XNYS session on the previous Korea calendar date; skipping the scheduled screener run.")
+                return 0
+        else:
+            reference_date = latest_completed_session()
+
         if not is_exchange_session(reference_date):
             raise RuntimeError(f"Calculated reference date is not an XNYS session: {reference_date}")
 
@@ -65,8 +73,11 @@ def main(argv: list[str] | None = None) -> int:
 
         stage = Path(scratch)
         candidate_csv = stage / "final_candidates.csv"
+        candidate_markdown = stage / "final_candidates.md"
         if not candidate_csv.is_file():
             raise RuntimeError("The screener did not create final_candidates.csv.")
+        if not candidate_markdown.is_file():
+            raise RuntimeError("The screener did not create final_candidates.md.")
 
         import pandas as pd
 
@@ -106,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
 
         # Do not touch the published files until all fatal checks and serialization pass.
         _atomic_write(result_path, json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+        markdown_path = result_path.with_name("latest-candidates.md")
+        _atomic_write(markdown_path, candidate_markdown.read_text(encoding="utf-8"))
         csv_path = result_path.with_name("latest-candidates.csv")
         temporary_csv = csv_path.with_suffix(".csv.tmp")
         shutil.copyfile(candidate_csv, temporary_csv)

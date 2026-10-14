@@ -2,8 +2,8 @@ name: US stock screener
 
 on:
   schedule:
-    # 07:00 KST daily; the runner checks the XNYS calendar and skips unchanged dates.
-    - cron: "0 22 * * 0-5"
+    # 09:00 KST Tue-Sat; the runner skips dates when the prior US session was closed.
+    - cron: "0 0 * * 2-6"
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
         run: |
           args=()
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            args+=(--skip-unchanged)
+            args+=(--scheduled --skip-unchanged)
           fi
           python scripts/run_cloud.py "${args[@]}"
       - name: Commit refreshed dashboard data
@@ -42,6 +42,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/public/data/latest-results.json
+          git add web/public/data/latest-candidates.md
           git add web/public/data/latest-run-status.json
           if [[ -f web/public/data/latest-candidates.csv ]]; then
             git add web/public/data/latest-candidates.csv

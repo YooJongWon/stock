@@ -1,21 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-type Candidate = Record<string, string | number | boolean | null | Record<string, boolean>> & {
-  Ticker?: string;
-  "Company Name"?: string;
-  Final?: string;
-  Score?: number;
-  Price?: number;
-  RSI14?: number;
-  "Relative Strength"?: number;
-  "ATR Stop %"?: number;
-  "Entry Plan"?: number;
-  "Initial Stop"?: number;
-  "2R Target"?: number;
-  filter_results?: Record<string, boolean>;
-};
+import { useEffect, useState, type ReactNode } from "react";
 
 type Result = {
   status: string;
@@ -28,54 +13,119 @@ type Result = {
   watch_count: number;
   universe_scanned_count: number;
   candidate_count: number;
-  candidates: Candidate[];
 };
 
 type RunStatus = { status: string; attempted_at: string | null; reference_date: string | null; message: string | null };
 
-const filterLabels: Record<string, string> = {
-  "Price >= $10": "주가 10달러 이상",
-  "Market Cap >= $2B": "시가총액 20억 달러 이상",
-  "PE > 0": "P/E 양수",
-  "PE < 40": "P/E 40 미만",
-  "ROE > 15%": "ROE 15% 초과",
-  "Sales Growth 5Y > 5%": "5년 매출 성장률 5% 초과",
-  "Average Volume >= 1M": "30일 평균 거래량 100만 주 이상",
-  "Average Dollar Volume >= $30M": "30일 평균 거래대금 3,000만 달러 이상",
-  "Market Regime BULL": "시장 상승장",
-  "Trend Stack EMA20 > SMA50 > SMA200": "EMA20 > SMA50 > SMA200",
-  "SMA50 Rising": "SMA50 상승",
-  "Relative Strength > 0": "SPY 대비 상대강도 양수",
-  "RSI >= 55": "RSI 55 이상",
-  "RSI < 68": "RSI 68 미만",
-  "Recent 50MA Pullback": "최근 SMA50 눌림",
-  "Recent Volume Dry-up": "최근 거래량 감소",
-  "Volume Expansion": "거래량 증가",
-  "Strong Bull Candle": "강한 양봉",
-  "50MA Distance 0..2 ATR": "SMA50 이격 0~2 ATR",
-  "ATR Stop <= 5%": "ATR 손절폭 5% 이하",
-  "Score >= 7": "점수 7점 이상",
-};
-
-function number(value: unknown, digits = 2) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  return value.toLocaleString("ko-KR", { maximumFractionDigits: digits, minimumFractionDigits: digits });
-}
-
 function localDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" }).format(date);
+  return Number.isNaN(date.valueOf())
+    ? value
+    : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" }).format(date);
 }
 
-export default function Dashboard({ result, runStatus }: { result: Result; runStatus: RunStatus }) {
+function usSessionDate(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isNaN(date.valueOf())
+    ? value
+    : new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "long",
+        timeZone: "America/New_York",
+      }).format(date);
+}
+
+function markdownCells(line: string) {
+  const escapedPipe = "\u0000";
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .replace(/\\\|/g, escapedPipe)
+    .split("|")
+    .map((cell) => cell.trim().replaceAll(escapedPipe, "|"));
+}
+
+function isTableSeparator(line: string) {
+  return /^\|(?:\s*:?-+:?\s*\|)+$/.test(line.trim());
+}
+
+function renderMarkdown(source: string) {
+  const lines = source.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      const Heading = heading[1].length === 1 ? "h2" : "h3";
+      blocks.push(<Heading key={index}>{heading[2]}</Heading>);
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+      const headers = markdownCells(line);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && lines[index].trim().startsWith("|")) {
+        rows.push(markdownCells(lines[index]));
+        index += 1;
+      }
+      blocks.push(
+        <div className="markdown-table-wrap" key={index}>
+          <table className="markdown-table">
+            <thead><tr>{headers.map((cell, cellIndex) => <th key={cellIndex}>{cell}</th>)}</tr></thead>
+            <tbody>{rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>{headers.map((_, cellIndex) => <td key={cellIndex}>{row[cellIndex] ?? ""}</td>)}</tr>
+            ))}</tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      const items: string[] = [];
+      while (index < lines.length && lines[index].trim().startsWith("- ")) {
+        items.push(lines[index].trim().slice(2));
+        index += 1;
+      }
+      blocks.push(<ul key={index}>{items.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>);
+      continue;
+    }
+
+    const paragraph = [line];
+    index += 1;
+    while (index < lines.length && lines[index].trim() && !/^(#{1,3})\s+/.test(lines[index].trim()) && !lines[index].trim().startsWith("|") && !lines[index].trim().startsWith("- ")) {
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    blocks.push(<p key={index}>{paragraph.join(" ")}</p>);
+  }
+
+  return <div className="markdown-content">{blocks}</div>;
+}
+
+export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
 
   const stale = now !== null && !!result.last_successful_run_at && now - Date.parse(result.last_successful_run_at) > 96 * 60 * 60 * 1000;
   const missing = result.status === "not_run" || result.status === "missing";
   const failed = runStatus.status === "failed";
-  const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+  const displayedRunAt = runStatus.attempted_at ?? result.last_successful_run_at;
+  const displayedSession = runStatus.reference_date ?? result.data_date;
 
   return (
     <main className="shell">
@@ -83,6 +133,11 @@ export default function Dashboard({ result, runStatus }: { result: Result; runSt
         <a className="brand" href="#top"><span className="brand-mark">S</span> US EQUITY SCREENER</a>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
+
+      <section className="run-meta" aria-label="스크리너 실행 정보">
+        <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
+        <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
+      </section>
 
       <section className="hero" id="top">
         <div className="eyebrow">RULE-BASED SWING SCREENER</div>
@@ -96,36 +151,18 @@ export default function Dashboard({ result, runStatus }: { result: Result; runSt
       {missing && <div className="alert info"><strong>아직 정상 실행 결과가 없습니다</strong><span>GitHub Actions에서 스크리너를 한 번 실행하면 이 화면에 결과가 표시됩니다.</span></div>}
 
       <section className="summary-grid" aria-label="실행 요약">
-        <article className="summary-card"><span>데이터 기준일</span><strong>{result.data_date || "—"}</strong><small>마지막 XNYS 정규장 종가</small></article>
-        <article className="summary-card"><span>마지막 정상 실행</span><strong className="time-value">{localDate(result.last_successful_run_at)}</strong><small>한국 시간</small></article>
-        <article className="summary-card"><span>매수 후보</span><strong className="accent">{number(result.buy_count, 0)}<em>종목</em></strong><small>기존 BUY 판정</small></article>
-        <article className="summary-card"><span>관심 종목</span><strong>{number(result.watch_count, 0)}<em>종목</em></strong><small>기존 WATCH 판정</small></article>
+        <article className="summary-card"><span>매수 후보</span><strong className="accent">{result.buy_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>기존 BUY 판정</small></article>
+        <article className="summary-card"><span>관심 종목</span><strong>{result.watch_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>기존 WATCH 판정</small></article>
+        <article className="summary-card"><span>전체 스캔</span><strong>{result.universe_scanned_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>미국 상장 보통주</small></article>
+        <article className="summary-card"><span>최종 후보</span><strong>{result.candidate_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>BUY 및 WATCH</small></article>
       </section>
 
       <section className="results-section">
         <div className="section-heading">
-          <div><div className="eyebrow">LATEST SCREEN</div><h2>매수 후보 목록</h2><p>전체 {number(result.universe_scanned_count, 0)}종목 검사 · BUY 우선 정렬</p></div>
-          {!missing && result.status !== "failed" && <a className="download" href="/data/latest-candidates.csv" download>CSV 다운로드 <span>↓</span></a>}
+          <div><div className="eyebrow">LATEST SCREEN</div><h2>최종 후보 리포트</h2><p>로컬 output/final_candidates.md와 같은 스크리너 보고서</p></div>
+          {!missing && <a className="download" href="/data/latest-candidates.csv" download>CSV 다운로드 <span>↓</span></a>}
         </div>
-
-        {candidates.length === 0 ? (
-          <div className="empty-state"><span className="empty-icon">⌕</span><strong>{missing ? "결과를 기다리는 중입니다" : "조건에 맞는 후보가 없습니다"}</strong><p>{missing ? "첫 번째 정상 실행 후 후보 목록이 여기에 표시됩니다." : "이번 실행은 정상 완료됐지만 BUY 또는 WATCH 종목이 없습니다."}</p></div>
-        ) : (
-          <div className="table-wrap"><table>
-            <thead><tr><th>종목</th><th>판정</th><th>점수</th><th>종가</th><th>RSI14</th><th>SPY 대비</th><th>손절폭</th><th>진입 추정</th><th>2R 목표</th><th>필터</th></tr></thead>
-            <tbody>{candidates.map((item, index) => {
-              const checks = item.filter_results || {};
-              return <tr key={`${item.Ticker || "row"}-${index}`}>
-                <td><strong className="ticker">{item.Ticker || "—"}</strong><span className="company">{item["Company Name"] || "회사명 없음"}</span></td>
-                <td><span className={`decision ${item.Final === "BUY" ? "buy" : "watch"}`}>{item.Final === "BUY" ? "매수" : "관심"}</span></td>
-                <td><strong className="score">{number(item.Score, 0)}<small>/10</small></strong></td>
-                <td>${number(item.Price)}</td><td>{number(item.RSI14)}</td><td>{number(item["Relative Strength"])}%</td><td>{number(item["ATR Stop %"])}%</td>
-                <td>${number(item["Entry Plan"])}</td><td>${number(item["2R Target"])}</td>
-                <td><details className="checks"><summary>통과 {Object.values(checks).filter(Boolean).length}/{Object.keys(checks).length}</summary><ul>{Object.entries(checks).map(([key, passed]) => <li key={key} className={passed ? "pass" : "fail"}><span>{passed ? "✓" : "×"}</span>{filterLabels[key] || key}</li>)}</ul></details></td>
-              </tr>;
-            })}</tbody>
-          </table></div>
-        )}
+        {renderMarkdown(markdown)}
       </section>
 
       <footer><span>지표와 판정은 기존 Python 스크리너 산출값입니다.</span><span>매매 결정 전 시세와 갭 위험을 확인하세요.</span></footer>

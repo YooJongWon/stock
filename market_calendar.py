@@ -1,8 +1,10 @@
 from __future__ import annotations
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo("America/New_York")
+KST = ZoneInfo("Asia/Seoul")
+
 
 def latest_completed_session(now: datetime | None = None) -> date:
     """Last NYSE session whose regular close (16:00 ET) has passed."""
@@ -29,13 +31,24 @@ def latest_completed_session(now: datetime | None = None) -> date:
             d = date.fromordinal(d.toordinal()-1)
         return d
 
+
 def filter_confirmed_bars(frame, reference_date):
     """Remove future bars. Caller must select an actual row no later than the reference date."""
     from indicators import normalize_ohlcv
     return normalize_ohlcv(frame, reference_date)
+
 
 def is_exchange_session(session_date) -> bool:
     """Return whether a date is a scheduled regular XNYS session."""
     import exchange_calendars as xc
     cal = xc.get_calendar("XNYS")
     return bool(cal.is_session(session_date))
+
+
+def previous_korea_date_session(now: datetime | None = None) -> date | None:
+    """Return yesterday's KST calendar date only when XNYS was open that day."""
+    now = now or datetime.now(KST)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=KST)
+    previous_date = now.astimezone(KST).date() - timedelta(days=1)
+    return previous_date if is_exchange_session(previous_date) else None
