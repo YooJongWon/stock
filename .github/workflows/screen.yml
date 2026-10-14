@@ -1,0 +1,68 @@
+name: US stock screener
+
+on:
+  schedule:
+    # 07:00 KST daily; the runner checks the XNYS calendar and skips unchanged dates.
+    - cron: "0 22 * * 0-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: us-stock-screener
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+      - id: screener
+        name: Run screener and validate the latest close
+        continue-on-error: true
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          args=()
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            args+=(--skip-unchanged)
+          fi
+          python scripts/run_cloud.py "${args[@]}"
+      - name: Commit refreshed dashboard data
+        if: steps.screener.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/public/data/latest-results.json
+          git add web/public/data/latest-run-status.json
+          if [[ -f web/public/data/latest-candidates.csv ]]; then
+            git add web/public/data/latest-candidates.csv
+          fi
+          if git diff --cached --quiet; then
+            echo "Dashboard data did not change."
+          else
+            git commit -m "Update screener data"
+            git push
+          fi
+      - name: Record failed attempt while preserving the last good result
+        if: steps.screener.outcome == 'failure'
+        run: python scripts/write_failed_status.py
+      - name: Commit failed-run status
+        if: steps.screener.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/public/data/latest-run-status.json
+          git commit -m "Record screener run failure"
+          git push
+      - name: Mark failed screening run as failed
+        if: steps.screener.outcome == 'failure'
+        run: exit 1

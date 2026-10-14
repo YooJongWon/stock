@@ -1,0 +1,28 @@
+# Local credentials and per-machine configuration
+.env
+.env.*
+!.env.example
+
+# Python environments, bytecode, test/cache data
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+cache/
+
+# Local scan outputs can contain large, stale snapshots
+output/*
+
+# Generated binaries and archives
+StockScreener.exe
+*.zip
+
+# Next.js build products
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+*.tsbuildinfo
