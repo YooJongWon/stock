@@ -58,7 +58,7 @@ def classify(ticker: str, technical: dict, fundamental: dict | None, meta: dict 
     initial_stop = technical.get("atr_stop_price")
     one_r = technical.get("one_r")
     return {
-        "Ticker":ticker,"Company Name":meta.get("name"),"Exchange":meta.get("exchange"),"Data Source":meta.get("data_source"),
+        "Ticker":ticker,"Company Name":meta.get("name"),"Sector":meta.get("sector"),"Exchange":meta.get("exchange"),"Data Source":meta.get("data_source"),
         "Fundamental Source":f.get("fundamental_source"),"Fundamental Quality":f.get("fundamental_quality","UNAVAILABLE"),
         "Fundamental Period Start":f.get("period_start"),"Fundamental Period End":f.get("period_end"),"Fundamental Filing Date":f.get("filing_date"),
         "Fundamental Form":f.get("form"),"Fundamental Basis":f.get("fundamental_basis"),"Fundamental Source Detail":f.get("source_detail"),

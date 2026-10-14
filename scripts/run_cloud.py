@@ -112,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             "candidate_count": len(candidates),
             "data_failures": stats.get("data_failures", 0),
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
+            "sector_performance": stats.get("sector_performance", []),
             "candidates": candidates,
         }
 

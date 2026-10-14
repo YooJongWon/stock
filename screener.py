@@ -11,6 +11,13 @@ from providers.yfinance_provider import YFinanceProvider, is_us_common_equity
 
 LOG=logging.getLogger(__name__)
 
+SECTOR_ETFS=(
+    ("XLB","소재"),("XLC","커뮤니케이션 서비스"),("XLE","에너지"),
+    ("XLF","금융"),("XLI","산업재"),("XLK","정보기술"),
+    ("XLP","필수소비재"),("XLRE","부동산"),("XLU","유틸리티"),
+    ("XLV","헬스케어"),("XLY","임의소비재"),
+)
+
 
 class Screener:
     def __init__(self,universe=None,prices=None,fundamentals=None,instrument_lookup=None):
@@ -44,6 +51,8 @@ class Screener:
                 )
         except Exception as exc:
             raise RuntimeError(f"Cannot start screener without a confirmed SPY close for {reference_date}: {exc}") from exc
+
+        stats["sector_performance"] = self._sector_performance(reference_date)
 
         for index,member in enumerate(members,1):
             ticker=member["ticker"]
@@ -92,7 +101,7 @@ class Screener:
                         row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source,"exchange":info.get("exchange")})
                         row["Fail Reason"]="Non-common or unverified instrument"
                         row["Technical Prefilter Pass"]=True; rows.append(row); continue
-                    member={**member,"exchange":info.get("exchange") or member.get("exchange"),"name":info.get("longName") or info.get("shortName") or member.get("name")}
+                    member={**member,"sector":info.get("sector"),"exchange":info.get("exchange") or member.get("exchange"),"name":info.get("longName") or info.get("shortName") or member.get("name")}
                 except Exception as exc:
                     stats["data_failures"]+=1
                     row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source})
@@ -139,6 +148,26 @@ class Screener:
         LOG.info("Final BUY/WATCH/REJECT: %d/%d/%d",buys,watches,stats["reject_count"])
         return rows,stats
 
+    def _sector_performance(self,reference_date):
+        results=[]
+        for symbol,sector in SECTOR_ETFS:
+            try:
+                result=self.prices.history(symbol,reference_date)
+                if result.frame is None or len(result.frame)<2:
+                    raise ValueError(result.error or "at least two daily closes are required")
+                frame=result.frame
+                latest=str(frame.index[-1])[:10]
+                if latest!=str(reference_date):
+                    raise ValueError(f"stale ETF close: expected {reference_date}, received {latest}")
+                previous=float(frame["Close"].iloc[-2])
+                close=float(frame["Close"].iloc[-1])
+                if previous<=0:
+                    raise ValueError("previous close is not positive")
+                results.append({"symbol":symbol,"sector":sector,"change_pct":round((close/previous-1)*100,2)})
+            except Exception as exc:
+                LOG.warning("Sector ETF %s unavailable: %s: %s",symbol,type(exc).__name__,exc)
+                results.append({"symbol":symbol,"sector":sector,"change_pct":None})
+        return results
     @staticmethod
     def _write(rows,stats):
         SETTINGS.output_dir.mkdir(parents=True,exist_ok=True)
@@ -157,7 +186,7 @@ class Screener:
 
     @staticmethod
     def _write_markdown(frame,stats,path,final):
-        fields=[("Ticker","티커"),("Company Name","회사명"),("Price","기준봉 종가"),("Score","점수"),("RSI14","RSI14"),("Relative Strength","SPY 대비 강도"),("SMA50","SMA50"),("SMA200","SMA200"),("ATR14","ATR14"),("ATR Stop %","손절폭"),("Entry Plan","진입가 추정"),("Initial Stop","초기 손절가"),("1R","1R 위험폭"),("2R Target","2R 목표가"),("Market Regime","시장 환경"),("Final","판정"),("Fail Reason","미충족 조건")]
+        fields=[("Ticker","티커"),("Company Name","회사명"),("Sector","섹터"),("Price","기준봉 종가"),("Score","점수"),("RSI14","RSI14"),("Relative Strength","SPY 대비 강도"),("SMA50","SMA50"),("SMA200","SMA200"),("ATR14","ATR14"),("ATR Stop %","손절폭"),("Entry Plan","진입가 추정"),("Initial Stop","초기 손절가"),("1R","1R 위험폭"),("2R Target","2R 목표가"),("Market Regime","시장 환경"),("Final","판정"),("Fail Reason","미충족 조건")]
         selected=[f for f,_ in fields if f in frame.columns]
         labels=dict(fields)
         title="# 미국주식 스윙 스크리너 — 최종 후보" if final else "# 미국주식 스윙 스크리너 — 기술 후보"

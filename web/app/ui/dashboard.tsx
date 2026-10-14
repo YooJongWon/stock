@@ -14,6 +14,7 @@ type Result = {
   universe_scanned_count?: number;
   candidate_count?: number;
   candidates?: Candidate[];
+  sector_performance?: { symbol: string; sector: string; change_pct: number | null }[];
 };
 
 type RunStatus = { status: string; attempted_at: string | null; reference_date: string | null; message: string | null };
@@ -193,6 +194,10 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
   const buyCandidates = candidates.filter((candidate) => candidate.Final === "BUY");
   const watchCandidates = candidates.filter((candidate) => candidate.Final === "WATCH");
   const finalCandidates = candidates.filter((candidate) => candidate.Final === "BUY" || candidate.Final === "WATCH");
+  const sectorPerformance = result.sector_performance ?? [
+    ["XLB", "소재"], ["XLC", "커뮤니케이션 서비스"], ["XLE", "에너지"], ["XLF", "금융"], ["XLI", "산업재"], ["XLK", "정보기술"],
+    ["XLP", "필수소비재"], ["XLRE", "부동산"], ["XLU", "유틸리티"], ["XLV", "헬스케어"], ["XLY", "임의소비재"],
+  ].map(([symbol, sector]) => ({ symbol, sector, change_pct: null as number | null }));
 
   return (
     <main className="shell">
@@ -215,6 +220,19 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
         <div className="eyebrow">RULE-BASED SWING SCREENER</div>
         <h1>미국 주식 스크리너</h1>
         <p>기존 Python 엔진이 계산한 매수·관심 후보와 지표를 확인합니다.</p>
+      </section>
+
+      <section className="sector-overview" aria-label="섹터별 ETF 등락률">
+        <div className="sector-overview-heading"><div><div className="eyebrow">SECTOR PERFORMANCE</div><h2>섹터별 상승 · 하락</h2><p>미국장 기준일의 대표 섹터 ETF 등락률</p></div><span>기준일 종가</span></div>
+        <div className="sector-grid">
+          {sectorPerformance.map((item) => {
+            const direction = item.change_pct === null ? "unknown" : item.change_pct > 0 ? "up" : item.change_pct < 0 ? "down" : "flat";
+            const value = item.change_pct === null ? "자료 없음" : `${item.change_pct > 0 ? "+" : ""}${item.change_pct.toFixed(2)}%`;
+            return <article className={`sector-card ${direction}`} key={item.symbol}>
+              <span>{item.sector}</span><strong>{value}</strong><small>{item.symbol}</small>
+            </article>;
+          })}
+        </div>
       </section>
 
       {failed && <div className="alert error"><strong>최근 자동 실행 실패</strong><span>{runStatus.message || "새 결과를 만들지 못해 마지막 정상 결과를 유지하고 있습니다."}</span><small>시도: {localDate(runStatus.attempted_at)} · 기준일 {runStatus.reference_date || "—"}</small></div>}
@@ -334,10 +352,10 @@ function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onCl
       <header className="modal-header"><div><div className="eyebrow">{modal.kind === "list" ? "SCREEN RESULTS" : "SCREEN CONDITIONS"}</div><h2 id="candidate-modal-title">{title}</h2></div><button type="button" className="modal-close" onClick={onClose} aria-label="팝업 닫기">×</button></header>
       {modal.kind === "list" ? <div className="candidate-list">
         {modal.candidates.length ? modal.candidates.map((item) => <a className="candidate-list-link" key={item.Ticker} href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">
-          <span><strong>{item.Ticker || "—"}</strong><small>{candidateText(item, "Company Name")}</small></span><span className="candidate-list-meta"><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b><small>점수 {candidateText(item, "Score")} · 차트 열기 ↗</small></span>
+          <span><strong>{item.Ticker || "—"}</strong><small>{candidateText(item, "Company Name")} · {candidateText(item, "Sector")}</small></span><span className="candidate-list-meta"><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b><small>점수 {candidateText(item, "Score")} · 차트 열기 ↗</small></span>
         </a>) : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
       </div> : <div className="candidate-details">
-        <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
+        <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"} · {candidateText(candidate!, "Sector")}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
         <div className="candidate-metrics">
           {[["판정", candidate?.Final === "BUY" ? "매수" : candidate?.Final === "WATCH" ? "관심" : candidateText(candidate!, "Final")], ["점수", candidateText(candidate!, "Score")], ["기준봉 종가", candidateText(candidate!, "Price")], ["RSI14", candidateText(candidate!, "RSI14")], ["SPY 대비 강도", candidateText(candidate!, "Relative Strength") + "%"], ["손절폭", candidateText(candidate!, "ATR Stop %")]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
         </div>
