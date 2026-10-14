@@ -9,13 +9,17 @@ type Result = {
   error: string | null;
   warnings: string[];
   warning_count: number;
-  buy_count: number;
-  watch_count: number;
-  universe_scanned_count: number;
-  candidate_count: number;
+  buy_count?: number;
+  watch_count?: number;
+  universe_scanned_count?: number;
+  candidate_count?: number;
 };
 
 type RunStatus = { status: string; attempted_at: string | null; reference_date: string | null; message: string | null };
+
+function count(value: number | undefined) {
+  return (typeof value === "number" && Number.isFinite(value) ? value : 0).toLocaleString("ko-KR");
+}
 
 function localDate(value: string | null) {
   if (!value) return "—";
@@ -151,10 +155,10 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
       {missing && <div className="alert info"><strong>아직 정상 실행 결과가 없습니다</strong><span>GitHub Actions에서 스크리너를 한 번 실행하면 이 화면에 결과가 표시됩니다.</span></div>}
 
       <section className="summary-grid" aria-label="실행 요약">
-        <article className="summary-card"><span>매수 후보</span><strong className="accent">{result.buy_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>기존 BUY 판정</small></article>
-        <article className="summary-card"><span>관심 종목</span><strong>{result.watch_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>기존 WATCH 판정</small></article>
-        <article className="summary-card"><span>전체 스캔</span><strong>{result.universe_scanned_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>미국 상장 보통주</small></article>
-        <article className="summary-card"><span>최종 후보</span><strong>{result.candidate_count.toLocaleString("ko-KR")}<em>종목</em></strong><small>BUY 및 WATCH</small></article>
+        <article className="summary-card"><span>매수 후보</span><strong className="accent">{count(result.buy_count)}<em>종목</em></strong><small>기존 BUY 판정</small></article>
+        <article className="summary-card"><span>관심 종목</span><strong>{count(result.watch_count)}<em>종목</em></strong><small>기존 WATCH 판정</small></article>
+        <article className="summary-card"><span>전체 스캔</span><strong>{count(result.universe_scanned_count)}<em>종목</em></strong><small>미국 상장 보통주</small></article>
+        <article className="summary-card"><span>최종 후보</span><strong>{count(result.candidate_count)}<em>종목</em></strong><small>BUY 및 WATCH</small></article>
       </section>
 
       <section className="results-section">

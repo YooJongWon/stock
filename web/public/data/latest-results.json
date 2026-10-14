@@ -6,5 +6,9 @@
   "error": null,
   "warnings": [],
   "warning_count": 0,
-  "candidates": []
+  "candidates": [],
+  "buy_count": 0,
+  "watch_count": 0,
+  "universe_scanned_count": 0,
+  "candidate_count": 0
 }
