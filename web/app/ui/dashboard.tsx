@@ -13,6 +13,7 @@ type Result = {
   watch_count?: number;
   universe_scanned_count?: number;
   candidate_count?: number;
+  candidates?: Candidate[];
 };
 
 type RunStatus = { status: string; attempted_at: string | null; reference_date: string | null; message: string | null };
@@ -58,7 +59,56 @@ function isTableSeparator(line: string) {
   return /^\|(?:\s*:?-+:?\s*\|)+$/.test(line.trim());
 }
 
-function renderMarkdown(source: string) {
+type Candidate = {
+  Ticker?: string;
+  "Company Name"?: string;
+  Exchange?: string;
+  Final?: string;
+  Score?: number;
+  filter_results?: Record<string, boolean>;
+  [key: string]: unknown;
+};
+type DashboardModal = { kind: "list"; title: string; candidates: Candidate[] } | { kind: "detail"; candidate: Candidate };
+
+const FILTER_LABELS: Record<string, string> = {
+  "Price >= $10": "주가 $10 이상",
+  "Market Cap >= $2B": "시가총액 $20억 이상",
+  "PE > 0": "PER 양수",
+  "PE < 40": "PER 40 미만",
+  "ROE > 15%": "ROE 15% 초과",
+  "Sales Growth 5Y > 5%": "5년 매출 성장률 5% 초과",
+  "Average Volume >= 1M": "30일 평균 거래량 100만 주 이상",
+  "Average Dollar Volume >= $30M": "30일 평균 거래대금 $3,000만 이상",
+  "Market Regime BULL": "시장 상승장 조건",
+  "Trend Stack EMA20 > SMA50 > SMA200": "EMA20 > SMA50 > SMA200 추세 배열",
+  "SMA50 Rising": "SMA50 상승",
+  "Relative Strength > 0": "SPY 대비 상대강도 양수",
+  "RSI >= 55": "RSI 55 이상",
+  "RSI < 68": "RSI 68 미만",
+  "Recent 50MA Pullback": "최근 3일 SMA50 눌림",
+  "Recent Volume Dry-up": "최근 거래량 감소",
+  "Volume Expansion": "기준봉 거래량 증가",
+  "Strong Bull Candle": "강한 양봉",
+  "50MA Distance 0..2 ATR": "SMA50 이격 0~2 ATR",
+  "ATR Stop <= 5%": "ATR 손절폭 5% 이하",
+  "Score >= 7": "점수 7점 이상",
+};
+
+function candidateText(candidate: Candidate, key: string) {
+  const value = candidate[key];
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+function tradingViewUrl(candidate: Candidate) {
+  const rawExchange = String(candidate.Exchange || "").toUpperCase();
+  const exchange = rawExchange.includes("NYSE") || rawExchange === "NYQ" ? "NYSE"
+    : rawExchange.includes("NASDAQ") || ["NMS", "NGM", "NCM"].includes(rawExchange) ? "NASDAQ"
+    : "NASDAQ";
+  return "https://kr.tradingview.com/chart/QaUkvTii/?symbol=" + encodeURIComponent(exchange + ":" + (candidate.Ticker || ""));
+}
+function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (candidate: Candidate) => void) {
+  const tickerColumn = -1;
+  const byTicker = new Map(candidates.map((candidate) => [String(candidate.Ticker || ""), candidate]));
   const lines = source.split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -80,6 +130,7 @@ function renderMarkdown(source: string) {
 
     if (line.startsWith("|") && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
       const headers = markdownCells(line);
+      const tickerColumn = headers.findIndex((header) => header === "티커" || header.toLowerCase() === "ticker");
       const rows: string[][] = [];
       index += 2;
       while (index < lines.length && lines[index].trim().startsWith("|")) {
@@ -91,7 +142,13 @@ function renderMarkdown(source: string) {
           <table className="markdown-table">
             <thead><tr>{headers.map((cell, cellIndex) => <th key={cellIndex}>{cell}</th>)}</tr></thead>
             <tbody>{rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>{headers.map((_, cellIndex) => <td key={cellIndex}>{row[cellIndex] ?? ""}</td>)}</tr>
+              <tr key={rowIndex}>{headers.map((_, cellIndex) => {
+                const cell = row[cellIndex] ?? "";
+                const candidate = cellIndex === tickerColumn ? byTicker.get(cell) : undefined;
+                return candidate && onSelect
+                  ? <td key={cellIndex}><button type="button" className="candidate-ticker-button" onClick={() => onSelect(candidate)}>{cell}</button></td>
+                  : <td key={cellIndex}>{cell}</td>;
+              })}</tr>
             ))}</tbody>
           </table>
         </div>,
@@ -123,6 +180,7 @@ function renderMarkdown(source: string) {
 
 export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
   const [activeMenu, setActiveMenu] = useState<"screener" | "calculator">("screener");
+  const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
 
@@ -131,6 +189,10 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
   const failed = runStatus.status === "failed";
   const displayedRunAt = runStatus.attempted_at ?? result.last_successful_run_at;
   const displayedSession = runStatus.reference_date ?? result.data_date;
+  const candidates = result.candidates ?? [];
+  const buyCandidates = candidates.filter((candidate) => candidate.Final === "BUY");
+  const watchCandidates = candidates.filter((candidate) => candidate.Final === "WATCH");
+  const finalCandidates = candidates.filter((candidate) => candidate.Final === "BUY" || candidate.Final === "WATCH");
 
   return (
     <main className="shell">
@@ -161,10 +223,10 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
       {missing && <div className="alert info"><strong>아직 정상 실행 결과가 없습니다</strong><span>GitHub Actions에서 스크리너를 한 번 실행하면 이 화면에 결과가 표시됩니다.</span></div>}
 
       <section className="summary-grid" aria-label="실행 요약">
-        <article className="summary-card"><span>매수 후보</span><strong className="accent">{count(result.buy_count)}<em>종목</em></strong><small>기존 BUY 판정</small></article>
-        <article className="summary-card"><span>관심 종목</span><strong>{count(result.watch_count)}<em>종목</em></strong><small>기존 WATCH 판정</small></article>
+        <button type="button" className="summary-card summary-card-button" aria-haspopup="dialog" onClick={() => setModal({ kind: "list", title: "매수 후보", candidates: buyCandidates })}><span>매수 후보</span><strong className="accent">{count(result.buy_count)}<em>종목</em></strong><small>기존 BUY 판정 · 클릭해 목록 보기</small></button>
+        <button type="button" className="summary-card summary-card-button" aria-haspopup="dialog" onClick={() => setModal({ kind: "list", title: "관심 종목", candidates: watchCandidates })}><span>관심 종목</span><strong>{count(result.watch_count)}<em>종목</em></strong><small>기존 WATCH 판정 · 클릭해 목록 보기</small></button>
         <article className="summary-card"><span>전체 스캔</span><strong>{count(result.universe_scanned_count)}<em>종목</em></strong><small>미국 상장 보통주</small></article>
-        <article className="summary-card"><span>최종 후보</span><strong>{count(result.candidate_count)}<em>종목</em></strong><small>BUY 및 WATCH</small></article>
+        <button type="button" className="summary-card summary-card-button" aria-haspopup="dialog" onClick={() => setModal({ kind: "list", title: "최종 후보", candidates: finalCandidates })}><span>최종 후보</span><strong>{count(result.candidate_count)}<em>종목</em></strong><small>BUY 및 WATCH · 클릭해 목록 보기</small></button>
       </section>
 
       <section className="results-section">
@@ -172,7 +234,8 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <div><div className="eyebrow">LATEST SCREEN</div><h2>최종 후보 리포트</h2><p>로컬 output/final_candidates.md와 같은 스크리너 보고서</p></div>
           {!missing && <a className="download" href="/data/latest-candidates.csv" download>CSV 다운로드 <span>↓</span></a>}
         </div>
-        {renderMarkdown(markdown)}
+        {renderMarkdown(markdown, finalCandidates, (candidate) => setModal({ kind: "detail", candidate }))}
+        <CandidateModal modal={modal} onClose={() => setModal(null)} />
       </section>
 
       <footer><span>지표와 판정은 기존 Python 스크리너 산출값입니다.</span><span>매매 결정 전 시세와 갭 위험을 확인하세요.</span></footer>
@@ -258,4 +321,33 @@ function InvestmentCalculator() {
     </section>
     <footer><span>입력한 운용 기준에 따른 단순 계산 예시입니다.</span><span>실제 매매 전 주가, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
+}
+
+function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onClose: () => void }) {
+  if (!modal) return null;
+  const title = modal.kind === "list" ? modal.title : (modal.candidate.Ticker || "종목") + " 판정 근거";
+  const candidate = modal.kind === "detail" ? modal.candidate : null;
+  const checks = candidate?.filter_results ?? {};
+  const fundamentalUnavailable = candidate?.["Fundamental Quality"] === "UNAVAILABLE";
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-modal-title">
+      <header className="modal-header"><div><div className="eyebrow">{modal.kind === "list" ? "SCREEN RESULTS" : "SCREEN CONDITIONS"}</div><h2 id="candidate-modal-title">{title}</h2></div><button type="button" className="modal-close" onClick={onClose} aria-label="팝업 닫기">×</button></header>
+      {modal.kind === "list" ? <div className="candidate-list">
+        {modal.candidates.length ? modal.candidates.map((item) => <a className="candidate-list-link" key={item.Ticker} href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">
+          <span><strong>{item.Ticker || "—"}</strong><small>{candidateText(item, "Company Name")}</small></span><span className="candidate-list-meta"><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b><small>점수 {candidateText(item, "Score")} · 차트 열기 ↗</small></span>
+        </a>) : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
+      </div> : <div className="candidate-details">
+        <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
+        <div className="candidate-metrics">
+          {[["판정", candidate?.Final === "BUY" ? "매수" : candidate?.Final === "WATCH" ? "관심" : candidateText(candidate!, "Final")], ["점수", candidateText(candidate!, "Score")], ["기준봉 종가", candidateText(candidate!, "Price")], ["RSI14", candidateText(candidate!, "RSI14")], ["SPY 대비 강도", candidateText(candidate!, "Relative Strength") + "%"], ["손절폭", candidateText(candidate!, "ATR Stop %")]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+        </div>
+        <h3>필터 판정</h3>
+        {Object.keys(checks).length || fundamentalUnavailable ? <ul className="condition-list">
+          {Object.entries(checks).map(([key, passed]) => <li className={passed ? "pass" : "fail"} key={key}><b>{passed ? "통과" : "미통과"}</b><span>{FILTER_LABELS[key] || key}</span></li>)}
+          {fundamentalUnavailable && <li className="fail"><b>미확인</b><span>재무 데이터 확인 불가</span></li>}
+        </ul> : <p className="modal-empty">이 항목의 조건 상세가 결과 파일에 없습니다.</p>}
+        {candidate && Boolean(candidate["Fail Reason"]) && <p className="fail-reason"><strong>미충족 사유:</strong> {String(candidate["Fail Reason"])}</p>}
+      </div>}
+    </section>
+  </div>;
 }
