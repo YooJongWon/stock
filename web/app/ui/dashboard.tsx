@@ -138,19 +138,25 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
         rows.push(markdownCells(lines[index]));
         index += 1;
       }
+      const sectorColumn = headers.findIndex((header) => header === "섹터" || header.toLowerCase() === "sector");
+      if (sectorColumn === -1) headers.push("섹터");
+      const visibleSectorColumn = sectorColumn === -1 ? headers.length - 1 : sectorColumn;
       blocks.push(
         <div className="markdown-table-wrap" key={index}>
           <table className="markdown-table">
             <thead><tr>{headers.map((cell, cellIndex) => <th key={cellIndex}>{cell}</th>)}</tr></thead>
-            <tbody>{rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>{headers.map((_, cellIndex) => {
-                const cell = row[cellIndex] ?? "";
+            <tbody>{rows.map((row, rowIndex) => {
+              const rowCandidate = byTicker.get(row[tickerColumn] ?? "");
+              return <tr key={rowIndex}>{headers.map((_, cellIndex) => {
+                const cell = cellIndex === visibleSectorColumn && sectorColumn === -1
+                  ? (rowCandidate ? candidateText(rowCandidate, "Sector") : "—")
+                  : row[cellIndex] ?? "";
                 const candidate = cellIndex === tickerColumn ? byTicker.get(cell) : undefined;
                 return candidate && onSelect
                   ? <td key={cellIndex}><button type="button" className="candidate-ticker-button" onClick={() => onSelect(candidate)}>{cell}</button></td>
                   : <td key={cellIndex}>{cell}</td>;
-              })}</tr>
-            ))}</tbody>
+              })}</tr>;
+            })}</tbody>
           </table>
         </div>,
       );
@@ -350,10 +356,14 @@ function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onCl
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-modal-title">
       <header className="modal-header"><div><div className="eyebrow">{modal.kind === "list" ? "SCREEN RESULTS" : "SCREEN CONDITIONS"}</div><h2 id="candidate-modal-title">{title}</h2></div><button type="button" className="modal-close" onClick={onClose} aria-label="팝업 닫기">×</button></header>
-      {modal.kind === "list" ? <div className="candidate-list">
-        {modal.candidates.length ? modal.candidates.map((item) => <a className="candidate-list-link" key={item.Ticker} href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">
-          <span><strong>{item.Ticker || "—"}</strong><small>{candidateText(item, "Company Name")} · {candidateText(item, "Sector")}</small></span><span className="candidate-list-meta"><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b><small>점수 {candidateText(item, "Score")} · 차트 열기 ↗</small></span>
-        </a>) : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
+      {modal.kind === "list" ? <div className="candidate-list-table-wrap">
+        {modal.candidates.length ? <table className="candidate-list-table"><thead><tr><th>티커</th><th>회사명</th><th>섹터</th><th>판정</th><th>점수</th></tr></thead>
+          <tbody>{modal.candidates.map((item) => <tr key={item.Ticker}>
+            <td><a href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">{item.Ticker || "—"} ↗</a></td>
+            <td>{candidateText(item, "Company Name")}</td><td>{candidateText(item, "Sector")}</td>
+            <td><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b></td>
+            <td>{candidateText(item, "Score")}</td>
+          </tr>)}</tbody></table> : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
       </div> : <div className="candidate-details">
         <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"} · {candidateText(candidate!, "Sector")}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
         <div className="candidate-metrics">
