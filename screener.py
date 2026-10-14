@@ -38,10 +38,12 @@ class Screener:
             spy=spy_market_regime(spy_result.frame,reference_date)
             stats["spy_regime"],stats["spy_roc63"]=spy["market_regime"],spy["spy_roc63"]
             stats["spy_reference_date"]=spy.get("reference_date")
+            if stats["spy_reference_date"] != str(reference_date):
+                raise RuntimeError(
+                    f"SPY close is stale: expected {reference_date}, received {stats['spy_reference_date']!r}"
+                )
         except Exception as exc:
-            LOG.error("SPY regime unavailable: %s",exc)
-            spy={"market_regime":"UNKNOWN","spy_roc63":None}
-            stats["spy_error"]=f"{type(exc).__name__}: {exc}"
+            raise RuntimeError(f"Cannot start screener without a confirmed SPY close for {reference_date}: {exc}") from exc
 
         for index,member in enumerate(members,1):
             ticker=member["ticker"]
@@ -199,3 +201,4 @@ def _korean_reason(value):
         "ATR Stop <= 5%":"ATR 손절폭 5% 이하","Score >= 7":"점수 7점 이상","Fundamental data unavailable":"재무 데이터 확인 불가",
         "Instrument type verification unavailable":"종목 유형 확인 불가","Non-common or unverified instrument":"보통주가 아니거나 종목 유형 미확인"}
     return "; ".join(labels.get(x.strip(),x.strip()) for x in value.split(";"))
+
