@@ -51,6 +51,7 @@ jobs:
             echo "Dashboard data did not change."
           else
             git commit -m "Update screener data"
+            git pull --rebase origin main
             git push
           fi
       - name: Record failed attempt while preserving the last good result
@@ -63,6 +64,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/public/data/latest-run-status.json
           git commit -m "Record screener run failure"
+          git pull --rebase origin main
           git push
       - name: Mark failed screening run as failed
         if: steps.screener.outcome == 'failure'
