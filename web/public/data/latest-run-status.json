@@ -1,6 +1,6 @@
 {
-  "status": "failed",
-  "attempted_at": "2026-10-14T01:33:12.077092+00:00",
+  "status": "degraded",
+  "attempted_at": "2026-10-14T02:53:04.566016+00:00",
   "reference_date": "2026-10-13",
-  "message": "The latest automated run failed. The dashboard continues to show the last successful result."
+  "message": null
 }
