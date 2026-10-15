@@ -100,6 +100,36 @@ function candidateText(candidate: Candidate, key: string) {
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
 
+
+const SECTOR_LABELS: Record<string, string> = {
+  "Basic Materials": "소재 (XLB)",
+  "Materials": "소재 (XLB)",
+  "Communication Services": "커뮤니케이션 서비스 (XLC)",
+  "Energy": "에너지 (XLE)",
+  "Financial Services": "금융 (XLF)",
+  "Financials": "금융 (XLF)",
+  "Industrials": "산업재 (XLI)",
+  "Technology": "정보기술 (XLK)",
+  "Information Technology": "정보기술 (XLK)",
+  "Consumer Defensive": "필수소비재 (XLP)",
+  "Consumer Staples": "필수소비재 (XLP)",
+  "Real Estate": "부동산 (XLRE)",
+  "Utilities": "유틸리티 (XLU)",
+  "Healthcare": "헬스케어 (XLV)",
+  "Health Care": "헬스케어 (XLV)",
+  "Consumer Cyclical": "임의소비재 (XLY)",
+  "Consumer Discretionary": "임의소비재 (XLY)",
+};
+
+function displaySector(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  const sector = String(value).trim();
+  return SECTOR_LABELS[sector] ?? sector;
+}
+
 function tradingViewUrl(candidate: Candidate) {
   const rawExchange = String(candidate.Exchange || "").toUpperCase();
   const exchange = rawExchange.includes("NYSE") || rawExchange === "NYQ" ? "NYSE"
@@ -148,9 +178,17 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
             <tbody>{rows.map((row, rowIndex) => {
               const rowCandidate = byTicker.get(row[tickerColumn] ?? "");
               return <tr key={rowIndex}>{headers.map((_, cellIndex) => {
-                const cell = cellIndex === visibleSectorColumn && sectorColumn === -1
+                
+              const rawCell =
+                cellIndex === visibleSectorColumn && sectorColumn === -1
                   ? (rowCandidate ? candidateText(rowCandidate, "Sector") : "—")
                   : row[cellIndex] ?? "";
+              
+              const cell =
+                cellIndex === visibleSectorColumn
+                  ? displaySector(rawCell)
+                  : rawCell;
+
                 const candidate = cellIndex === tickerColumn ? byTicker.get(cell) : undefined;
                 return candidate && onSelect
                   ? <td key={cellIndex}><button type="button" className="candidate-ticker-button" onClick={() => onSelect(candidate)}>{cell}</button></td>
@@ -360,12 +398,12 @@ function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onCl
         {modal.candidates.length ? <table className="candidate-list-table"><thead><tr><th>티커</th><th>회사명</th><th>섹터</th><th>판정</th><th>점수</th></tr></thead>
           <tbody>{modal.candidates.map((item) => <tr key={item.Ticker}>
             <td><a href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">{item.Ticker || "—"} ↗</a></td>
-            <td>{candidateText(item, "Company Name")}</td><td>{candidateText(item, "Sector")}</td>
+            <td>{candidateText(item, "Company Name")}</td><td>{displaySector(item["Sector"])}</td>
             <td><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b></td>
             <td>{candidateText(item, "Score")}</td>
           </tr>)}</tbody></table> : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
       </div> : <div className="candidate-details">
-        <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"} · {candidateText(candidate!, "Sector")}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
+        <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"} · {displaySector(candidate?.["Sector"])}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
         <div className="candidate-metrics">
           {[["판정", candidate?.Final === "BUY" ? "매수" : candidate?.Final === "WATCH" ? "관심" : candidateText(candidate!, "Final")], ["점수", candidateText(candidate!, "Score")], ["기준봉 종가", candidateText(candidate!, "Price")], ["RSI14", candidateText(candidate!, "RSI14")], ["SPY 대비 강도", candidateText(candidate!, "Relative Strength") + "%"], ["손절폭", candidateText(candidate!, "ATR Stop %")]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
         </div>
