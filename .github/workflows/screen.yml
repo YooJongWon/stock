@@ -3,7 +3,7 @@ name: US stock screener
 on:
   schedule:
     # 09:00 KST Tue-Sat; the runner skips dates when the prior US session was closed.
-    - cron: "0 0 * * 2-6"
+    - cron: "30 1 * * 2-6"
   workflow_dispatch:
 
 permissions:
