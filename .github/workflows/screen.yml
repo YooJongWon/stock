@@ -2,7 +2,7 @@ name: US stock screener
 
 on:
   schedule:
-    - cron: "30 1 * * 2-6"
+    - cron: "17 1 * * 2-6"
   workflow_dispatch:
 
 permissions:
