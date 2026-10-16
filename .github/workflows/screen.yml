@@ -1,8 +1,6 @@
 name: US stock screener
 
 on:
-  schedule:
-    - cron: "17 1 * * 2-6"
   workflow_dispatch:
     inputs:
       scheduled:
