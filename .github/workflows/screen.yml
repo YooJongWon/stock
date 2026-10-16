@@ -37,7 +37,7 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
           args=()
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.scheduled }}" == "true" ]]; then
             args+=(--scheduled --skip-unchanged)
           fi
           python scripts/run_cloud.py "${args[@]}"
