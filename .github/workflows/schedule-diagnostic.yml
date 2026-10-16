@@ -1,0 +1,20 @@
+name: Schedule diagnostic
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm scheduled event
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "UTC time: $(date -u)"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Ref: ${{ github.ref }}"
