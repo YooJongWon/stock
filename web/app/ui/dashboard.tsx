@@ -25,10 +25,21 @@ function count(value: number | undefined) {
 
 function localDate(value: string | null) {
   if (!value) return "—";
+
   const date = new Date(value);
+
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" }).format(date);
+    : new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "long",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Seoul",
+      }).format(date);
 }
 
 function usSessionDate(value: string | null) {
