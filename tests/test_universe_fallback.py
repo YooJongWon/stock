@@ -1,3 +1,7 @@
+from dataclasses import replace
+
+import data_provider as data_provider_module
+from config import SETTINGS
 from data_provider import NasdaqTraderUniverseProvider, UniverseProvider
 
 SAMPLE="""Nasdaq Traded|Symbol|Security Name|Listing Exchange|Market Category|ETF|Round Lot Size|Test Issue|Financial Status|CQS Symbol|NASDAQ Symbol|NextShares
@@ -34,7 +38,14 @@ def test_sec_403_falls_back_to_nasdaq_directory():
     assert items[0]["ticker"]=="AAA" and items[0]["cik"] is None
     assert items[0]["universe_source"]=="Nasdaq Trader (no SEC CIK match)"
 
-def test_sec_exchange_mapping_is_used_when_primary_mapping_fails():
+def test_sec_exchange_mapping_is_used_when_primary_mapping_fails(monkeypatch):
+    # The live app must provide a descriptive SEC User-Agent. This isolated fixture
+    # uses a synthetic contact string so the request path can be tested without secrets.
+    monkeypatch.setattr(
+        data_provider_module,
+        "SETTINGS",
+        replace(SETTINGS, sec_user_agent="stock-screener-test contact@example.test"),
+    )
     exchange_payload={
         "fields":["cik","name","ticker","exchange"],
         "data":[[320193,"Apple Inc.","AAPL","Nasdaq"],[1045810,"NVIDIA Corp.","NVDA","Nasdaq"]],
