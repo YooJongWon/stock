@@ -38,7 +38,7 @@ def test_screener_scans_entire_universe_and_all_eligible_fundamentals(monkeypatc
     setup(monkeypatch,tmp_path); prices=FakePrices(); fundamentals=FakeFundamentals()
     runner=module.Screener(FakeUniverse(),prices,fundamentals,lambda t:{"quoteType":"EQUITY","exchange":"NMS"})
     _,stats=runner.run("2026-10-07")
-    assert len(prices.tickers)==16 # SPY regime + all 15 listed symbols
+    assert len(prices.tickers)==1 + 15 + len(module.SECTOR_ETFS) # SPY + listed symbols + sector ETFs
     assert fundamentals.calls==15
     assert stats["universe_scanned_count"]==15 and "stop_reason" not in stats
     assert stats["buy_count"]==15
