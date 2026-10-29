@@ -23,6 +23,8 @@ def _price_failure_category(message):
     text=str(message).lower()
     if any(token in text for token in ("429","rate limit","too many requests")):
         return "yahoo_rate_limit"
+    if any(token in text for token in ("nonpositive price","nonpositive close","nonpositive ohlc")):
+        return "invalid_price_data"
     if "stale" in text or "expected" in text:
         return "stale_or_unconfirmed_close"
     if any(token in text for token in ("empty","no daily bars","no ohlcv","no data")):
