@@ -24,8 +24,7 @@ def test_transient_failures_allow_three_retries_with_1_2_4_second_backoff(monkey
             raise RuntimeError("temporary service error")
     monkeypatch.setattr(yfinance_provider.yf,"Ticker",Ticker)
     monkeypatch.setattr(yfinance_provider.time,"sleep",lambda value:delays.append(value))
-    monkeypatch.setattr(yfinance_provider.YFinanceProvider,"history_delay",0.0,raising=False)
-    try: yfinance_provider.YFinanceProvider().history("RETRY","2026-10-06")
+    try: yfinance_provider.YFinanceProvider(history_delay=0).history("RETRY","2026-10-06")
     except RuntimeError: pass
     else: raise AssertionError("transient failures should be reported")
     assert calls["n"]==4
