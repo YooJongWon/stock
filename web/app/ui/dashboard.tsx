@@ -458,32 +458,34 @@ function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onCl
   const fundamentalUnavailable = candidate?.["Fundamental Quality"] === "UNAVAILABLE";
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="candidate-modal" role="dialog" aria-modal="true" aria-labelledby="candidate-modal-title">
-      <header className="modal-header"><div><div className="eyebrow">{modal.kind === "list" ? "SCREEN RESULTS" : "SCREEN CONDITIONS"}</div><h2 id="candidate-modal-title">{title}</h2></div><button type="button" className="modal-close" onClick={onClose} aria-label="팝업 닫기">×</button></header>
+      <header className="modal-header"><div><div className="eyebrow">{modal.kind === "list" ? "SCREEN RESULTS" : "SCREEN CONDITIONS"}</div><h2 id="candidate-modal-title">{title}</h2>{modal.kind === "list" && modal.description && <p className="modal-description">{modal.description}</p>}</div><button type="button" className="modal-close" onClick={onClose} aria-label="팝업 닫기">×</button></header>
       {modal.kind === "list" ? <div className="candidate-list-table-wrap">
         {modal.candidates.length ? <table className="candidate-list-table"><thead><tr><th>티커</th><th>회사명</th><th>섹터</th><th>판정</th><th>점수</th></tr></thead>
           <tbody>{modal.candidates.map((item) => <tr key={item.Ticker}>
             <td><a href={tradingViewUrl(item)} target="_blank" rel="noopener noreferrer">{item.Ticker || "—"} ↗</a></td>
             <td>{candidateText(item, "Company Name")}</td><td>{displaySector(item["Sector"])}</td>
-            <td><b className={item.Final === "BUY" ? "decision buy" : "decision watch"}>{item.Final === "BUY" ? "매수" : "관심"}</b></td>
+            <td><b className={`decision ${candidateStageClass(item)}`}>{candidateStageLabel(item)}</b></td>
             <td>{candidateText(item, "Score")}</td>
           </tr>)}</tbody></table> : <p className="modal-empty">표시할 종목이 없습니다. 스크리너 실행 결과를 확인하세요.</p>}
       </div> : <div className="candidate-details">
         <div className="candidate-detail-heading"><div><strong>{candidate?.Ticker}</strong><span>{candidateText(candidate!, "Company Name")} · {candidate?.Exchange || "NASDAQ"} · {displaySector(candidate?.["Sector"])}</span></div><a className="download" href={tradingViewUrl(candidate!)} target="_blank" rel="noopener noreferrer">TradingView 차트 ↗</a></div>
         <div className="candidate-metrics">
-          {[["판정", candidate?.Final === "BUY" ? "매수" : candidate?.Final === "WATCH" ? "관심" : candidateText(candidate!, "Final")], ["점수", candidateText(candidate!, "Score")], ["기준봉 종가", candidateText(candidate!, "Price")], ["RSI14", candidateText(candidate!, "RSI14")], ["SPY 대비 강도", candidateText(candidate!, "Relative Strength") + "%"], ["손절폭", candidateText(candidate!, "ATR Stop %")]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+          {[["판정", candidateStageLabel(candidate!)], ["점수", candidateText(candidate!, "Score")], ["기준봉 종가", candidateText(candidate!, "Price")], ["RSI14", candidateText(candidate!, "RSI14")], ["SPY 대비 강도", candidateText(candidate!, "Relative Strength") + "%"], ["손절폭", candidateText(candidate!, "ATR Stop %")]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
         </div>
+        {candidate?.["Status Reason"] && <p className={`stage-reason stage-${candidateStage(candidate!).toLowerCase()}`}>{String(candidate["Status Reason"])}</p>}
         <h3>필터 판정</h3>
         {Object.keys(checks).length || fundamentalUnavailable ? <ul className="condition-list">
           {Object.entries(checks).map(([key, passed]) => {
             const marketWarning = key === "Market Regime BULL" && !passed;
-            const state = marketWarning ? "warning" : passed ? "pass" : "fail";
-            const status = marketWarning ? "경고" : passed ? "통과" : "미통과";
-            const label = marketWarning ? "시장 위험구간 (매수 차단 조건 아님)" : FILTER_LABELS[key] || key;
+            const fundamentalUnknown = fundamentalUnavailable && ["Market Cap >= $2B", "PE > 0", "PE < 40", "ROE > 15%", "Sales Growth 5Y > 5%"].includes(key);
+            const state = marketWarning || fundamentalUnknown ? "warning" : passed ? "pass" : "fail";
+            const status = marketWarning ? "경고" : fundamentalUnknown ? "미확인" : passed ? "통과" : "미통과";
+            const label = marketWarning ? "시장 위험구간 (매수 차단 조건 아님)" : fundamentalUnknown ? `${FILTER_LABELS[key] || key} (재무자료 없음)` : FILTER_LABELS[key] || key;
             return <li className={state} key={key}><b>{status}</b><span>{label}</span></li>;
           })}
-          {fundamentalUnavailable && <li className="fail"><b>미확인</b><span>재무 데이터 확인 불가</span></li>}
+          {fundamentalUnavailable && <li className="warning"><b>미확인</b><span>재무 데이터 확인 불가</span></li>}
         </ul> : <p className="modal-empty">이 항목의 조건 상세가 결과 파일에 없습니다.</p>}
-        {candidate && Boolean(candidate["Fail Reason"]) && <p className="fail-reason"><strong>미충족 사유:</strong> {String(candidate["Fail Reason"])}</p>}
+        {candidate && candidateStage(candidate) !== "WAIT" && Boolean(candidate["Fail Reason"]) && <p className="fail-reason"><strong>미충족 사유:</strong> {String(candidate["Fail Reason"])}</p>}
       </div>}
     </section>
   </div>;
