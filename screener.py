@@ -19,6 +19,32 @@ SECTOR_ETFS=(
 )
 
 
+def _price_failure_category(message):
+    text=str(message).lower()
+    if any(token in text for token in ("429","rate limit","too many requests")):
+        return "yahoo_rate_limit"
+    if any(token in text for token in ("stooq","api key","apikey","access denied","403","quota")):
+        return "fallback_provider_unavailable"
+    if "stale" in text or "expected" in text:
+        return "stale_or_unconfirmed_close"
+    if any(token in text for token in ("empty","no daily bars","no ohlcv","no data")):
+        return "empty_price_history"
+    if any(token in text for token in ("timeout","timed out","connection")):
+        return "network_timeout_or_connection"
+    return "other"
+
+
+def _record_price_failure(stats, ticker, error):
+    message=str(error or "Price provider returned no frame")
+    stats["data_failures"]+=1
+    stats["price_history_failures"]+=1
+    category=_price_failure_category(message)
+    categories=stats["data_failure_categories"]
+    categories[category]=categories.get(category,0)+1
+    if len(stats["data_failure_examples"])<12:
+        stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","category":category,"error":message[:350]})
+
+
 class Screener:
     def __init__(self,universe=None,prices=None,fundamentals=None,instrument_lookup=None):
         self.universe=universe or UniverseProvider()
@@ -40,7 +66,7 @@ class Screener:
                "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
                "fundamental_missing_fields":{}, "fundamental_failure_examples":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
-               "instrument_rejections":0,"data_failure_examples":[],
+               "instrument_rejections":0,"data_failure_examples":[],"data_failure_categories":{},
                "spy_regime":"UNKNOWN","spy_roc63":None}
         rows=[]; candidates=[]; spy=None
         try:
@@ -66,20 +92,14 @@ class Screener:
             try:
                 result=self.prices.history(ticker,reference_date)
                 if result.frame is None:
-                    stats["data_failures"]+=1
-                    stats["price_history_failures"]+=1
                     error_text=str(result.error or "Price provider returned no frame")
-                    if len(stats["data_failure_examples"])<12:
-                        stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                    _record_price_failure(stats,ticker,error_text)
                     rows.append(_data_error_row(ticker,reference_date,member,error_text))
                     continue
                 tech=technical_snapshot(result.frame,reference_date,spy_roc63=spy.get("spy_roc63"),market_regime=spy.get("market_regime"))
                 if tech.get("reference_date") != str(reference_date):
-                    stats["data_failures"]+=1
-                    stats["price_history_failures"]+=1
                     error_text=f"stale daily close: received {tech.get('reference_date')!r}, expected {reference_date}"
-                    if len(stats["data_failure_examples"])<12:
-                        stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                    _record_price_failure(stats,ticker,error_text)
                     rows.append(_data_error_row(ticker,reference_date,member,error_text))
                     continue
                 tech_candidate=(tech.get("price",0)>=SETTINGS.price_min and
@@ -99,11 +119,8 @@ class Screener:
                     row["Technical Prefilter Pass"]=False
                     rows.append(row)
             except Exception as exc:
-                stats["data_failures"]+=1
-                stats["price_history_failures"]+=1
                 error_text=f"{type(exc).__name__}: {exc}"
-                if len(stats["data_failure_examples"])<12:
-                    stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                _record_price_failure(stats,ticker,error_text)
                 LOG.warning("%s price screening failed: %s",ticker,error_text)
                 rows.append(_data_error_row(ticker,reference_date,member,error_text))
 
@@ -190,20 +207,6 @@ class Screener:
             "reject_count":len(rows)-buys-watches,"execution_seconds":round(time.monotonic()-started,3),
             "run_timestamp":datetime.now(timezone.utc).isoformat(),"universe_source":source})
         if universe_error: stats["universe_error"]=universe_error
-        stats["data_failure_categories"]={}
-        for example in stats["data_failure_examples"]:
-            message=str(example.get("error","")).lower()
-            if any(token in message for token in ("429","rate limit","too many requests")):
-                category="yahoo_rate_limit"
-            elif any(token in message for token in ("stooq","api key","access denied","403","quota")):
-                category="fallback_provider_unavailable"
-            elif "stale" in message or "expected" in message:
-                category="stale_or_unconfirmed_close"
-            elif any(token in message for token in ("empty","no daily bars","no ohlcv","no data")):
-                category="empty_price_history"
-            else:
-                category="other"
-            stats["data_failure_categories"][category]=stats["data_failure_categories"].get(category,0)+1
         self._write(rows,stats)
         LOG.info("Price history failures: %d; instrument metadata warnings: %d",stats["price_history_failures"],stats["instrument_lookup_failures"])
         LOG.info("Fundamental candidates: %d (SEC %d; Yahoo %d; incomplete %d; provider failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_source_failures"])
