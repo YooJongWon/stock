@@ -40,7 +40,9 @@ def _dashboard_stage(candidate: dict) -> str:
         return "READY"
     quality = str(candidate.get("Fundamental Quality") or "").upper()
     technical_pass = candidate.get("Technical Prefilter Pass") in (True, 1, "True", "true")
-    if technical_pass and quality == "UNAVAILABLE":
+    required_financial_fields = ("Market Cap", "PE", "ROE", "Sales Growth 5Y")
+    missing_financials = any(candidate.get(field) is None for field in required_financial_fields)
+    if technical_pass and (quality == "UNAVAILABLE" or missing_financials):
         return "WAIT"
     return "REJECT"
 
@@ -51,6 +53,14 @@ def _dashboard_stage_reason(candidate: dict, stage: str) -> str:
     if stage == "READY":
         return "핵심 조건은 통과했지만 일부 진입 타이밍 조건이 부족합니다."
     if stage == "WAIT":
+        missing = [
+            label for field, label in (
+                ("Market Cap", "시가총액"), ("PE", "PER"), ("ROE", "ROE"),
+                ("Sales Growth 5Y", "5년 매출 성장률"),
+            ) if candidate.get(field) is None
+        ]
+        if missing:
+            return "기술 사전 필터는 통과했지만 필수 재무자료 미확인: " + ", ".join(missing)
         return "기술 사전 필터는 통과했지만 필수 재무자료를 확인하지 못해 판정을 보류합니다."
     return str(candidate.get("Fail Reason") or "필수 조건을 충족하지 못했습니다.")
 
