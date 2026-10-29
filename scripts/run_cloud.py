@@ -164,9 +164,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
         metadata_failures = int(stats.get("instrument_lookup_failures", 0) or 0)
         if metadata_failures:
+            examples = stats.get("instrument_lookup_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:3]
+            )
             warnings.append(
                 f"Yahoo 종목 메타정보 조회 실패/불완전 {metadata_failures}종목. "
                 "거래소 디렉터리를 사용해 스크리닝을 계속했으며, 이 항목만으로 종목을 제외하지 않았습니다."
+                + (f" 예시: {example_text}" if example_text else "")
             )
         source_failures = int(stats.get("fundamental_source_failures", 0) or 0)
         incomplete = int(stats.get("fundamental_incomplete", stats.get("fundamental_unavailable", 0)) or 0)
@@ -213,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             "data_failure_examples": stats.get("data_failure_examples", []),
             "stooq_fallback_enabled": bool(os.getenv("STOOQ_API_KEY", "").strip()),
             "instrument_lookup_failures": stats.get("instrument_lookup_failures", 0),
+            "instrument_lookup_examples": stats.get("instrument_lookup_examples", []),
             "instrument_rejections": stats.get("instrument_rejections", 0),
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
             "fundamental_source_failures": stats.get("fundamental_source_failures", 0),
