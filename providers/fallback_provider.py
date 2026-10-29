@@ -15,8 +15,7 @@ class PriceResult:
 class FallbackMarketDataProvider:
     """Yahoo-only market data access.
 
-    The screener deliberately does not call Stooq or another quota-limited
-    provider. Yahoo handles bounded retries; exhausted/invalid results are
+    Yahoo handles bounded retries; exhausted/invalid results are
     returned as a diagnostic data failure and recorded by the screener.
     """
 
