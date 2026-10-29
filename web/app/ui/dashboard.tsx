@@ -420,7 +420,13 @@ function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onCl
         </div>
         <h3>필터 판정</h3>
         {Object.keys(checks).length || fundamentalUnavailable ? <ul className="condition-list">
-          {Object.entries(checks).map(([key, passed]) => <li className={passed ? "pass" : "fail"} key={key}><b>{passed ? "통과" : "미통과"}</b><span>{FILTER_LABELS[key] || key}</span></li>)}
+          {Object.entries(checks).map(([key, passed]) => {
+            const marketWarning = key === "Market Regime BULL" && !passed;
+            const state = marketWarning ? "warning" : passed ? "pass" : "fail";
+            const status = marketWarning ? "경고" : passed ? "통과" : "미통과";
+            const label = marketWarning ? "시장 위험구간 (매수 차단 조건 아님)" : FILTER_LABELS[key] || key;
+            return <li className={state} key={key}><b>{status}</b><span>{label}</span></li>;
+          })}
           {fundamentalUnavailable && <li className="fail"><b>미확인</b><span>재무 데이터 확인 불가</span></li>}
         </ul> : <p className="modal-empty">이 항목의 조건 상세가 결과 파일에 없습니다.</p>}
         {candidate && Boolean(candidate["Fail Reason"]) && <p className="fail-reason"><strong>미충족 사유:</strong> {String(candidate["Fail Reason"])}</p>}
