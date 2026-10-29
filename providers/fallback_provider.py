@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import quote, quote_plus
 
 import requests
 
@@ -40,6 +41,15 @@ class FallbackMarketDataProvider:
             "403", "401", "api key", "apikey", "unauthorized", "access denied", "quota exceeded",
         ))
 
+    def _safe_error(self, exc):
+        message = f"{type(exc).__name__}: {exc}"
+        secret = str(getattr(self.fallback, "api_key", "") or "").strip()
+        if secret:
+            for variant in (secret, quote(secret, safe=""), quote_plus(secret)):
+                if variant:
+                    message = message.replace(variant, "[REDACTED]")
+        return message
+
     def history(self, ticker, reference_date):
         errors = []
         try:
@@ -71,9 +81,10 @@ class FallbackMarketDataProvider:
             self._validate_spy_session(ticker, frame, reference_date, "Stooq")
             return PriceResult(frame, "stooq_fallback", "; ".join(errors))
         except Exception as second:
-            errors.append(f"stooq: {type(second).__name__}: {second}")
+            safe_second = self._safe_error(second)
+            errors.append(f"stooq: {safe_second}")
             if self._looks_like_auth_failure(second):
-                self._fallback_auth_failure = f"{type(second).__name__}: {second}"
+                self._fallback_auth_failure = safe_second
             # Do not disable Stooq for the entire run after a timeout/connection reset.
             # Only authorization/quota errors make subsequent attempts pointless.
             return PriceResult(None, None, "; ".join(errors))
