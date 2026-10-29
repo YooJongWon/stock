@@ -37,7 +37,11 @@ class Screener:
         LOG.info("Reference date: %s",reference_date); LOG.info("Total universe: %d (%s)",len(members),source)
         stats={"universe_count":len(members),"universe_scanned_count":0,"technical_prefilter_count":0,
                "fundamental_candidate_count":0,"sec_success":0,"sec_api_success":0,"yfinance_fundamental_success":0,
-               "fundamental_unavailable":0,"data_failures":0,"spy_regime":"UNKNOWN","spy_roc63":None}
+               "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
+               "fundamental_missing_fields":{}, "fundamental_failure_examples":[],
+               "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
+               "instrument_rejections":0,"data_failure_examples":[],
+               "spy_regime":"UNKNOWN","spy_roc63":None}
         rows=[]; candidates=[]; spy=None
         try:
             spy_result=self.prices.history("SPY",reference_date)
@@ -63,13 +67,20 @@ class Screener:
                 result=self.prices.history(ticker,reference_date)
                 if result.frame is None:
                     stats["data_failures"]+=1
-                    rows.append(_data_error_row(ticker,reference_date,member,result.error))
+                    stats["price_history_failures"]+=1
+                    error_text=str(result.error or "Price provider returned no frame")
+                    if len(stats["data_failure_examples"])<12:
+                        stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                    rows.append(_data_error_row(ticker,reference_date,member,error_text))
                     continue
                 tech=technical_snapshot(result.frame,reference_date,spy_roc63=spy.get("spy_roc63"),market_regime=spy.get("market_regime"))
                 if tech.get("reference_date") != str(reference_date):
                     stats["data_failures"]+=1
-                    rows.append(_data_error_row(ticker,reference_date,member,
-                        f"stale daily close: received {tech.get('reference_date')!r}, expected {reference_date}"))
+                    stats["price_history_failures"]+=1
+                    error_text=f"stale daily close: received {tech.get('reference_date')!r}, expected {reference_date}"
+                    if len(stats["data_failure_examples"])<12:
+                        stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                    rows.append(_data_error_row(ticker,reference_date,member,error_text))
                     continue
                 tech_candidate=(tech.get("price",0)>=SETTINGS.price_min and
                     tech.get("average_volume") is not None and tech["average_volume"]>=SETTINGS.avg_volume_min and
@@ -89,45 +100,82 @@ class Screener:
                     rows.append(row)
             except Exception as exc:
                 stats["data_failures"]+=1
-                LOG.warning("%s screening failed: %s: %s",ticker,type(exc).__name__,exc)
-                rows.append(_data_error_row(ticker,reference_date,member,f"{type(exc).__name__}: {exc}"))
+                stats["price_history_failures"]+=1
+                error_text=f"{type(exc).__name__}: {exc}"
+                if len(stats["data_failure_examples"])<12:
+                    stats["data_failure_examples"].append({"ticker":ticker,"stage":"price_history","error":error_text[:350]})
+                LOG.warning("%s price screening failed: %s",ticker,error_text)
+                rows.append(_data_error_row(ticker,reference_date,member,error_text))
 
         for index,(member,data_source,tech) in enumerate(candidates,1):
             ticker=member["ticker"]
             try:
+                metadata_warning=None
                 try:
                     info=self.instrument_lookup(ticker)
-                    if not is_us_common_equity(info):
-                        row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source,"exchange":info.get("exchange")})
-                        row["Fail Reason"]="Non-common or unverified instrument"
+                    # The exchange directory is already filtered to US-listed equities.
+                    # Treat Yahoo metadata as corroboration, not as a single point of failure.
+                    quote_type=str((info or {}).get("quoteType") or "").upper()
+                    if quote_type and quote_type != "EQUITY":
+                        stats["instrument_rejections"]+=1
+                        row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},
+                            {**member,"data_source":data_source,"exchange":(info or {}).get("exchange") or member.get("exchange")})
+                        row["Fail Reason"]=f"Non-common instrument according to Yahoo quoteType={quote_type}"
                         row["Technical Prefilter Pass"]=True; rows.append(row); continue
-                    member={**member,"sector":info.get("sector"),"exchange":info.get("exchange") or member.get("exchange"),"name":info.get("longName") or info.get("shortName") or member.get("name")}
+                    if not info or not quote_type:
+                        metadata_warning="Yahoo instrument metadata incomplete; trusted filtered exchange directory"
+                        stats["instrument_lookup_failures"]+=1
+                    member={**member,"sector":(info or {}).get("sector") or member.get("sector"),
+                        "exchange":(info or {}).get("exchange") or member.get("exchange"),
+                        "name":(info or {}).get("longName") or (info or {}).get("shortName") or member.get("name")}
                 except Exception as exc:
-                    stats["data_failures"]+=1
-                    row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source})
-                    row["Fail Reason"]="Instrument type verification unavailable"
-                    row["Fundamental Error"]=f"{type(exc).__name__}: {exc}"
-                    row["Technical Prefilter Pass"]=True; rows.append(row)
-                    continue
+                    metadata_warning=f"{type(exc).__name__}: {exc}"
+                    stats["instrument_lookup_failures"]+=1
+                    LOG.warning("%s Yahoo instrument metadata unavailable; continuing with exchange-directory record: %s",
+                        ticker,metadata_warning)
                 stats["fundamental_candidate_count"]+=1
                 fundamental=self.fundamentals.get_fundamentals(ticker,member.get("cik"),reference_date,tech["price"])
-                complete=(fundamental.get("fundamental_quality")!="UNAVAILABLE" and
-                          all(fundamental.get(k) is not None for k in ("market_cap","pe","roe","sales_growth_5y")))
-                if fundamental.get("fundamental_source")=="SEC":
+                required_fields=("market_cap","pe","roe","sales_growth_5y")
+                missing_fields=[key for key in required_fields if fundamental.get(key) is None]
+                complete=(fundamental.get("fundamental_quality")!="UNAVAILABLE" and not missing_fields)
+                source=str(fundamental.get("fundamental_source") or "UNAVAILABLE")
+                if source=="SEC":
                     stats["sec_api_success"]+=1
                     if complete: stats["sec_success"]+=1
-                elif fundamental.get("fundamental_source")=="yfinance_fallback" and complete:
+                elif source=="yfinance_fallback" and complete:
                     stats["yfinance_fundamental_success"]+=1
                 if not complete:
                     stats["fundamental_unavailable"]+=1
+                    stats["fundamental_incomplete"]+=1
+                    for key in missing_fields:
+                        missing=stats["fundamental_missing_fields"]
+                        missing[key]=missing.get(key,0)+1
+                    reason=str(fundamental.get("error") or fundamental.get("warning") or "No provider error detail")
+                    if fundamental.get("warning"):
+                        reason += "; " + str(fundamental["warning"])
+                    if fundamental.get("statement_error"):
+                        reason += "; income statement: " + str(fundamental["statement_error"])
+                    if fundamental.get("fundamental_quality")=="UNAVAILABLE":
+                        stats["fundamental_source_failures"]+=1
+                    if len(stats["fundamental_failure_examples"])<12:
+                        stats["fundamental_failure_examples"].append({
+                            "ticker":ticker,"source":source,"missing_fields":missing_fields,"error":reason[:500]})
                 row=classify(ticker,tech,fundamental,{**member,"data_source":data_source})
-                row["Technical Prefilter Pass"]=True; row["Fundamental Error"]=fundamental.get("error")
+                row["Technical Prefilter Pass"]=True
+                row["Fundamental Error"]=fundamental.get("error")
+                if metadata_warning:
+                    row["Instrument Metadata Warning"]=metadata_warning
                 rows.append(row)
             except Exception as exc:
                 stats["fundamental_unavailable"]+=1
-                LOG.warning("%s fundamental lookup failed: %s: %s",ticker,type(exc).__name__,exc)
+                stats["fundamental_source_failures"]+=1
+                error_text=f"{type(exc).__name__}: {exc}"
+                LOG.warning("%s fundamental lookup failed: %s",ticker,error_text)
+                if len(stats["fundamental_failure_examples"])<12:
+                    stats["fundamental_failure_examples"].append({
+                        "ticker":ticker,"source":"UNAVAILABLE","missing_fields":["market_cap","pe","roe","sales_growth_5y"],"error":error_text[:500]})
                 row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source})
-                row["Technical Prefilter Pass"]=True; row["Fundamental Error"]=f"{type(exc).__name__}: {exc}"
+                row["Technical Prefilter Pass"]=True; row["Fundamental Error"]=error_text
                 rows.append(row)
 
         # Required order: BUY, WATCH, REJECT; BUY ranking follows requested tie-breakers.
@@ -142,7 +190,23 @@ class Screener:
             "reject_count":len(rows)-buys-watches,"execution_seconds":round(time.monotonic()-started,3),
             "run_timestamp":datetime.now(timezone.utc).isoformat(),"universe_source":source})
         if universe_error: stats["universe_error"]=universe_error
+        stats["data_failure_categories"]={}
+        for example in stats["data_failure_examples"]:
+            message=str(example.get("error","")).lower()
+            if any(token in message for token in ("429","rate limit","too many requests")):
+                category="yahoo_rate_limit"
+            elif any(token in message for token in ("stooq","api key","access denied","403","quota")):
+                category="fallback_provider_unavailable"
+            elif "stale" in message or "expected" in message:
+                category="stale_or_unconfirmed_close"
+            elif any(token in message for token in ("empty","no daily bars","no ohlcv","no data")):
+                category="empty_price_history"
+            else:
+                category="other"
+            stats["data_failure_categories"][category]=stats["data_failure_categories"].get(category,0)+1
         self._write(rows,stats)
+        LOG.info("Price history failures: %d; instrument metadata warnings: %d",stats["price_history_failures"],stats["instrument_lookup_failures"])
+        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo %d; incomplete %d; provider failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_source_failures"])
         LOG.info("Technical prefilter: %d",stats["technical_prefilter_count"])
         LOG.info("Fundamental candidates: %d (SEC %d; Yahoo %d; unavailable %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_unavailable"])
         LOG.info("Final BUY/WATCH/REJECT: %d/%d/%d",buys,watches,stats["reject_count"])
