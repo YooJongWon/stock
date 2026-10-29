@@ -3,6 +3,7 @@ indicator("미국주식 스윙 v4.2", overlay=true, max_labels_count=300)
 
 // 일봉 기준 보조 지표입니다. Python 스크리너가 재무 조건까지 포함한 최종 판정을 담당합니다.
 // TradingView 데이터 제공 범위와 기업별 재무 공개 시점 차이 때문에 Pine 신호는 기술 조건만 표시합니다.
+// 시장 환경은 위험 경고로 표시하며, 시장이 위험구간이라는 이유만으로 기술적 매수 신호를 차단하지 않습니다.
 
 ema20 = ta.ema(close, 20)
 ema10 = ta.ema(close, 10)
@@ -40,7 +41,7 @@ oneRPlan = close - initialStopPlan
 targetPlan = close + 2 * oneRPlan
 
 score = (trendStack ? 2 : 0) + (sma50Rising ? 1 : 0) + (rs > 0 ? 2 : 0) + (pullbackRecent ? 2 : 0) + (bullCandle ? 1 : 0) + (volumeExpansion ? 1 : 0) + (rsi14 >= 55 and rsi14 < 68 ? 1 : 0)
-technicalBuy = dailyChart and barstate.isconfirmed and close >= 10 and avgVol30 >= 1000000 and avgDollar30 >= 30000000 and marketBull and trendStack and sma50Rising and rs > 0 and rsi14 >= 55 and rsi14 < 68 and pullbackRecent and dryRecent and volumeExpansion and bullCandle and distance50Atr >= 0 and distance50Atr <= 2 and stopPct <= 5 and score >= 7
+technicalBuy = dailyChart and barstate.isconfirmed and close >= 10 and avgVol30 >= 1000000 and avgDollar30 >= 30000000 and trendStack and sma50Rising and rs > 0 and rsi14 >= 55 and rsi14 < 68 and pullbackRecent and dryRecent and volumeExpansion and bullCandle and distance50Atr >= 0 and distance50Atr <= 2 and stopPct <= 5 and score >= 7
 setupSignal = dailyChart and barstate.isconfirmed and trendStack and sma50Rising and score >= 6 and not technicalBuy
 
 plot(ema20, "EMA 20", color=color.new(color.teal, 0), linewidth=2)
