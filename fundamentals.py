@@ -85,6 +85,16 @@ class FallbackFundamentalProvider:
             return combined
         except Exception as exc:
             errors.append(f"Yahoo: {type(exc).__name__}: {exc}")
+            if primary_result:
+                partial = dict(primary_result)
+                missing = [field for field in REQUIRED_FIELDS if partial.get(field) is None]
+                partial["fundamental_source"] = "SEC"
+                partial["fundamental_quality"] = (
+                    "LOW" if any(partial.get(field) is not None for field in REQUIRED_FIELDS) else "UNAVAILABLE"
+                )
+                partial["warning"] = "Yahoo fallback failed; SEC fields preserved. Missing: " + ", ".join(missing)
+                partial["error"] = "; ".join(errors)
+                return partial
 
         return {
             "market_cap": None,
