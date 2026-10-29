@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
+import logging
+import time as time_module
 
 import pandas as pd
 import yfinance as yf
 
 
 NEW_YORK = ZoneInfo("America/New_York")
+LOG = logging.getLogger(__name__)
 REVENUE_ROW_NAMES = (
     "Total Revenue",
     "Operating Revenue",
@@ -22,7 +25,7 @@ def current_market_date() -> date | None:
     now = datetime.now(NEW_YORK)
     # Yahoo has no field-level filing timestamps. Using its snapshot intraday could
     # include financial information not available at that session close.
-    if now.time() < time(16, 30):
+    if (now.hour, now.minute) < (16, 30):
         return None
     return now.date()
 
@@ -99,27 +102,41 @@ class YahooFundamentalProvider:
                 "because reference date is not the current New York market date"
             )
 
-        asset = yf.Ticker(ticker)
-        try:
-            info = asset.get_info()
-        except AttributeError:
-            info = asset.info
-        if not isinstance(info, dict):
-            raise ValueError("Yahoo fundamentals info payload is empty")
+        info = None
+        asset = None
+        info_errors = []
+        # Yahoo may respond with an empty payload while rate-limited. Recreate the
+        # Ticker object per attempt because yfinance can cache a failed profile request.
+        for attempt in range(4):
+            try:
+                asset = yf.Ticker(ticker)
+                try:
+                    candidate_info = asset.get_info()
+                except AttributeError:
+                    candidate_info = asset.info
+                if isinstance(candidate_info, dict) and candidate_info:
+                    info = candidate_info
+                    break
+                info_errors.append("Yahoo Finance returned an empty fundamentals info payload")
+            except Exception as exc:
+                info_errors.append(f"{type(exc).__name__}: {exc}")
+                message = str(exc).lower()
+                retryable = any(token in message for token in (
+                    "429", "too many requests", "rate limit", "timeout", "timed out",
+                    "temporarily unavailable", "502", "503", "504",
+                ))
+                if not retryable and attempt >= 1:
+                    break
+            if attempt < 3:
+                delay = min(2 ** attempt, 8)
+                LOG.warning("Yahoo fundamentals info retry for %s in %ss", ticker, delay)
+                time_module.sleep(delay)
+        if info is None or asset is None:
+            raise RuntimeError("Yahoo fundamentals info lookup failed: " + " | ".join(info_errors))
 
         cap = info.get("marketCap")
         pe = info.get("trailingPE")
         roe = info.get("returnOnEquity")
-        growth = None
-        growth_periods = None
-        statement_error = None
-
-        try:
-            statement = asset.income_stmt
-            growth, growth_periods = _five_year_revenue_cagr(statement, ref)
-        except Exception as exc:
-            statement_error = f"{type(exc).__name__}: {exc}"
-
         if cap is None or pe is None or roe is None:
             missing = [
                 name for name, value in (
@@ -127,6 +144,35 @@ class YahooFundamentalProvider:
                 ) if value is None
             ]
             raise ValueError("Yahoo fundamentals missing required values: " + ", ".join(missing))
+
+        growth = None
+        growth_periods = None
+        statement_error = None
+        statement = None
+        statement_errors = []
+        for attempt in range(3):
+            try:
+                statement = asset.income_stmt
+                if statement is not None and not getattr(statement, "empty", True):
+                    break
+                statement_errors.append("Yahoo annual income statement is empty")
+            except Exception as exc:
+                statement_errors.append(f"{type(exc).__name__}: {exc}")
+                message = str(exc).lower()
+                retryable = any(token in message for token in (
+                    "429", "too many requests", "rate limit", "timeout", "timed out",
+                    "temporarily unavailable", "502", "503", "504",
+                ))
+                if not retryable:
+                    break
+            if attempt < 2:
+                delay = min(2 ** attempt, 4)
+                LOG.warning("Yahoo annual income-statement retry for %s in %ss", ticker, delay)
+                time_module.sleep(delay)
+                asset = yf.Ticker(ticker)
+        if statement_errors:
+            statement_error = " | ".join(statement_errors)
+        growth, growth_periods = _five_year_revenue_cagr(statement, ref)
 
         return {
             "market_cap": float(cap),
