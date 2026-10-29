@@ -24,6 +24,11 @@ class FallbackFundamentalProvider:
             result = self.primary.get_fundamentals(cik, reference_date, price)
             if isinstance(result, dict):
                 primary_result = result
+                # A nonpositive TTM net income is a real financial condition, not a
+                # provider outage. P/E is legitimately undefined in this case, so do
+                # not try to overwrite it with an undated Yahoo snapshot.
+                if result.get("fundamental_status") == "NON_POSITIVE_TTM_EARNINGS":
+                    return result
                 missing = [field for field in REQUIRED_FIELDS if result.get(field) is None]
                 if result.get("fundamental_quality") != "UNAVAILABLE" and not missing:
                     return result
