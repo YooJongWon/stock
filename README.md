@@ -63,7 +63,7 @@ Finviz는 빠른 후보 검산에만 사용합니다. 참고 조건은 USA, 시�
 
 ## 데이터 한계 및 위험
 
-가격은 yfinance 우선, Stooq 대체로 가져옵니다. yfinance의 빈 일봉 응답과 일시적 네트워크·rate-limit 오류는 재시도합니다. Stooq 자동 CSV 접근은 `STOOQ_API_KEY`가 설정된 경우에만 fallback으로 시도합니다. 가격 오류는 원인 분류와 종목별 예시를 실행 진단에 남깁니다. 데이터 누락·오류 종목은 DATA_ERROR로 기록하고 전체 실행을 계속합니다. 지연 OHLCV는 최대 7일만 허용합니다. yfinance 조정주가와 Stooq 가격 조정 방식, TradingView 제공 데이터에는 차이가 있을 수 있습니다. SEC는 API 키나 계정 신청이 필요 없지만 식별 가능한 User-Agent와 공정 이용 속도 제한을 지켜야 합니다.
+가격은 Yahoo Finance(yfinance)만 사용합니다. 빈 일봉 응답과 일시적인 네트워크·rate-limit 오류는 제한 횟수만큼 재시도합니다. 재시도 후에도 실패한 종목은 가격 오류로 기록하고 전체 실행은 계속합니다. 가격 오류는 원인 분류와 종목별 예시를 실행 진단에 남깁니다. 지연 OHLCV는 최대 7일만 허용합니다. Yahoo Finance 가격과 TradingView 제공 데이터에는 차이가 있을 수 있습니다. SEC는 API 키나 계정 신청이 필요 없지만 식별 가능한 User-Agent와 공정 이용 속도 제한을 지켜야 합니다.
 
 SEC에 상장사 CIK가 없는 교환 디렉터리 티커는 SEC 재무조회가 불가능할 수 있으며 Yahoo의 공시일 없는 스냅샷은 look-ahead 방지를 위해 과거 기준일에서 제외됩니다. 시장데이터 서비스의 오류·지연·상장폐지 심볼 등으로 개별 종목은 분석에서 빠질 수 있습니다.
 
@@ -90,7 +90,7 @@ npm run dev
 1. GitHub에서 빈 비공개 저장소를 만듭니다. README, `.gitignore`, 라이선스는 GitHub에서 생성하지 않습니다.
 2. 이 프로젝트의 기본 브랜치를 저장소에 push합니다.
 3. 저장소의 **Settings → Secrets and variables → Actions**에서 `SEC_USER_AGENT` secret을 추가합니다. 앱 이름과 실제 연락 가능한 이메일을 사용하되 코드나 문서에는 적지 않습니다.
-4. **Settings → Secrets and variables → Actions**에 SEC 조회용 `SEC_USER_AGENT`를 등록합니다. 가격 데이터 보조 공급자인 Stooq의 자동 CSV 접근을 사용하려면 제공처에서 발급받은 `STOOQ_API_KEY`도 등록합니다. 키가 없으면 Yahoo Finance 조회 실패 시 Stooq fallback은 시도하지 않고 원인을 결과에 표시합니다.
+4. **Settings → Secrets and variables → Actions**에 SEC 조회용 `SEC_USER_AGENT`를 등록합니다.
 5. **Actions**에서 워크플로를 활성화하고 **US stock screener → Run workflow**를 한 번 실행합니다.
 
 자동 스케줄은 한국 시간 오전 9시(UTC 00:00, 화~토)입니다. 한국 날짜 기준 전날이 XNYS 거래일일 때만 스크리너를 호출하고, 미국 휴장일은 건너뜁니다. SPY와 각 종목 봉이 기준일 종가까지 갱신되지 않은 경우 stale 종목을 DATA_ERROR로 기록하고, SPY가 기준일 종가가 아니면 새 결과를 게시하지 않습니다. 실패 상태는 별도 JSON에 남기며 이전 정상 결과 JSON/CSV를 유지합니다.
