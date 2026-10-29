@@ -13,7 +13,7 @@ class Session:
     def get(self,*args,**kwargs): self.args=(args,kwargs); return Response()
 
 def test_stooq_csv_normalization_and_symbol():
-    session=Session(); provider=StooqProvider(session=session)
+    session=Session(); provider=StooqProvider(session=session, api_key="test-key")
     # A one-bar fixture is intentionally rejected by the minimum history check,
     # but confirms the CSV endpoint parameters and normalization path are reached.
     try: provider.history("BRK-B","2025-01-01")
@@ -25,6 +25,6 @@ def test_stooq_html_or_access_challenge_is_rejected():
     class HtmlResponse(Response): text="Access denied"
     class HtmlSession:
         def get(self,*args,**kwargs): return HtmlResponse()
-    try: StooqProvider(HtmlSession()).history("AAPL","2025-01-01")
+    try: StooqProvider(HtmlSession(), api_key="test-key").history("AAPL","2025-01-01")
     except ValueError as e: assert "did not return CSV" in str(e)
     else: raise AssertionError("non-CSV must be rejected")

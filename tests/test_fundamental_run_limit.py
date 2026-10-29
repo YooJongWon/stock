@@ -30,7 +30,7 @@ def tech(ref,**kwargs):
 
 def setup(monkeypatch,tmp_path):
     monkeypatch.setattr(module,"technical_snapshot",lambda frame,ref,**kw:tech(ref,**kw))
-    monkeypatch.setattr(module,"spy_market_regime",lambda *a,**kw:{"market_regime":"BULL","spy_roc63":.05})
+    monkeypatch.setattr(module,"spy_market_regime",lambda *a,**kw:{"market_regime":"BULL","spy_roc63":.05,"reference_date":str(a[1])})
     monkeypatch.setattr(module,"is_us_common_equity",lambda info:True)
     monkeypatch.setattr(module,"SETTINGS",replace(SETTINGS,output_dir=tmp_path))
 
@@ -38,7 +38,7 @@ def test_screener_scans_entire_universe_and_all_eligible_fundamentals(monkeypatc
     setup(monkeypatch,tmp_path); prices=FakePrices(); fundamentals=FakeFundamentals()
     runner=module.Screener(FakeUniverse(),prices,fundamentals,lambda t:{"quoteType":"EQUITY","exchange":"NMS"})
     _,stats=runner.run("2026-10-07")
-    assert len(prices.tickers)==16 # SPY regime + all 15 listed symbols
+    assert len(prices.tickers)==1 + 15 + len(module.SECTOR_ETFS) # SPY + listed symbols + sector ETFs
     assert fundamentals.calls==15
     assert stats["universe_scanned_count"]==15 and "stop_reason" not in stats
     assert stats["buy_count"]==15

@@ -34,6 +34,10 @@ class StubScreener:
         output = Path(__import__("os").environ["SCREENER_OUTPUT_DIR"])
         pd.DataFrame(self.candidate_rows, columns=["Ticker", "Final", "Score", "Filter Results"]).to_csv(
             output / "final_candidates.csv", index=False, encoding="utf-8-sig")
+        (output / "final_candidates.md").write_text(
+            "# Test candidates\n\n| Ticker | Final | Score | Filter Results |\n|---|---|---:|---|\n| ABC | BUY | 8 | checks pass |\n",
+            encoding="utf-8",
+        )
         return [], {**self.stats}
 
 

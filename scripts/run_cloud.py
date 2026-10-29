@@ -40,7 +40,9 @@ def _dashboard_stage(candidate: dict) -> str:
         return "READY"
     quality = str(candidate.get("Fundamental Quality") or "").upper()
     technical_pass = candidate.get("Technical Prefilter Pass") in (True, 1, "True", "true")
-    if technical_pass and quality == "UNAVAILABLE":
+    required_financial_fields = ("Market Cap", "PE", "ROE", "Sales Growth 5Y")
+    missing_financials = any(candidate.get(field) is None for field in required_financial_fields)
+    if technical_pass and (quality == "UNAVAILABLE" or missing_financials):
         return "WAIT"
     return "REJECT"
 
@@ -51,6 +53,14 @@ def _dashboard_stage_reason(candidate: dict, stage: str) -> str:
     if stage == "READY":
         return "핵심 조건은 통과했지만 일부 진입 타이밍 조건이 부족합니다."
     if stage == "WAIT":
+        missing = [
+            label for field, label in (
+                ("Market Cap", "시가총액"), ("PE", "PER"), ("ROE", "ROE"),
+                ("Sales Growth 5Y", "5년 매출 성장률"),
+            ) if candidate.get(field) is None
+        ]
+        if missing:
+            return "기술 사전 필터는 통과했지만 필수 재무자료 미확인: " + ", ".join(missing)
         return "기술 사전 필터는 통과했지만 필수 재무자료를 확인하지 못해 판정을 보류합니다."
     return str(candidate.get("Fail Reason") or "필수 조건을 충족하지 못했습니다.")
 
@@ -134,10 +144,54 @@ def main(argv: list[str] | None = None) -> int:
         waiting_candidates = [candidate for candidate in technical_candidates if candidate.get("Stage") == "WAIT"]
 
         warnings = []
-        if stats.get("data_failures"):
-            warnings.append(f"{stats['data_failures']} ticker data or instrument checks failed; see the candidate table and run summary.")
-        if stats.get("fundamental_unavailable"):
-            warnings.append(f"Fundamentals were unavailable for {stats['fundamental_unavailable']} screened candidates.")
+        price_failures = int(stats.get("price_history_failures", stats.get("data_failures", 0)) or 0)
+        if price_failures:
+            category_text = ", ".join(
+                f"{name}={count}" for name, count in sorted((stats.get("data_failure_categories") or {}).items())
+            ) or "분류 없음"
+            examples = stats.get("data_failure_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('error', '')}" for item in examples[:3]
+            )
+            warnings.append(
+                f"가격 데이터 조회 실패 {price_failures}종목. 원인 분류(전체): {category_text}."
+                + (f" 예시: {example_text}" if example_text else "")
+            )
+            if not os.getenv("STOOQ_API_KEY", "").strip():
+                warnings.append(
+                    "STOOQ_API_KEY가 설정되지 않아 Stooq 보조 가격 공급자는 비활성 상태입니다. "
+                    "Yahoo 조회 실패 종목의 보조 복구를 원하면 제공처에서 발급받은 키를 GitHub Actions Secret에 등록하세요."
+                )
+        metadata_failures = int(stats.get("instrument_lookup_failures", 0) or 0)
+        if metadata_failures:
+            examples = stats.get("instrument_lookup_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:3]
+            )
+            warnings.append(
+                f"Yahoo 종목 메타정보 조회 실패/불완전 {metadata_failures}종목. "
+                "거래소 디렉터리를 사용해 스크리닝을 계속했으며, 이 항목만으로 종목을 제외하지 않았습니다."
+                + (f" 예시: {example_text}" if example_text else "")
+            )
+        source_failures = int(stats.get("fundamental_source_failures", 0) or 0)
+        incomplete = int(stats.get("fundamental_incomplete", stats.get("fundamental_unavailable", 0)) or 0)
+        if source_failures:
+            examples = stats.get("fundamental_failure_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('error', '')}" for item in examples[:4]
+            )
+            warnings.append(
+                f"SEC와 Yahoo 재무 공급자 모두 실패/UNAVAILABLE: {source_failures}종목."
+                + (f" 예시: {example_text}" if example_text else "")
+            )
+        incomplete_only = max(0, incomplete - source_failures)
+        if incomplete_only:
+            missing_fields = stats.get("fundamental_missing_fields") or {}
+            missing_text = ", ".join(f"{field}={count}" for field, count in sorted(missing_fields.items()))
+            warnings.append(
+                f"재무 데이터 일부 누락으로 필수 필드를 모두 채우지 못한 종목: {incomplete_only}."
+                + (f" 누락 필드 집계: {missing_text}." if missing_text else "")
+            )
 
         payload = {
             "schema_version": 1,
@@ -159,7 +213,19 @@ def main(argv: list[str] | None = None) -> int:
             "waiting_count": len(waiting_candidates),
             "candidate_count": len(candidates),
             "data_failures": stats.get("data_failures", 0),
+            "price_history_failures": stats.get("price_history_failures", stats.get("data_failures", 0)),
+            "data_failure_categories": stats.get("data_failure_categories", {}),
+            "data_failure_examples": stats.get("data_failure_examples", []),
+            "stooq_fallback_enabled": bool(os.getenv("STOOQ_API_KEY", "").strip()),
+            "instrument_lookup_failures": stats.get("instrument_lookup_failures", 0),
+            "instrument_lookup_examples": stats.get("instrument_lookup_examples", []),
+            "instrument_rejections": stats.get("instrument_rejections", 0),
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
+            "fundamental_source_failures": stats.get("fundamental_source_failures", 0),
+            "fundamental_incomplete": stats.get("fundamental_incomplete", 0),
+            "mixed_source_fundamentals": stats.get("mixed_source_fundamentals", 0),
+            "fundamental_missing_fields": stats.get("fundamental_missing_fields", {}),
+            "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
             "candidates": candidates,
             "technical_candidates": technical_candidates,

@@ -6,6 +6,10 @@ def candidate(**overrides):
         "Final": "REJECT",
         "Technical Prefilter Pass": True,
         "Fundamental Quality": "HIGH",
+        "Market Cap": 3_000_000_000,
+        "PE": 21.0,
+        "ROE": 0.18,
+        "Sales Growth 5Y": 0.08,
         "Fail Reason": "Recent Volume Dry-up",
     }
     row.update(overrides)
@@ -24,6 +28,12 @@ def test_technical_candidate_without_fundamentals_is_waiting():
     row = candidate(**{"Fundamental Quality": "UNAVAILABLE"})
     assert _dashboard_stage(row) == "WAIT"
     assert "재무자료" in _dashboard_stage_reason(row, "WAIT")
+
+
+def test_missing_one_required_financial_field_is_waiting():
+    row = candidate(**{"Sales Growth 5Y": None})
+    assert _dashboard_stage(row) == "WAIT"
+    assert "5년 매출 성장률" in _dashboard_stage_reason(row, "WAIT")
 
 
 def test_unavailable_fundamentals_without_technical_prefilter_is_not_waiting():

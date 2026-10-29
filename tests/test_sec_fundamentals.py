@@ -32,3 +32,67 @@ def test_both_fundamental_sources_fail():
         def get_fundamentals(self,*a): raise ValueError("offline")
     result=FallbackFundamentalProvider(Fail(),Fail()).get_fundamentals("ABC","1","2026-01-01",20)
     assert result["fundamental_quality"]=="UNAVAILABLE" and result["market_cap"] is None
+
+
+def test_partial_sec_result_is_preserved_and_yahoo_only_fills_missing_fields():
+    class PartialSEC:
+        def get_fundamentals(self, *args):
+            return {
+                "market_cap": 3e9,
+                "pe": 22.0,
+                "roe": 0.20,
+                "sales_growth_5y": None,
+                "fundamental_source": "SEC",
+                "fundamental_quality": "LOW",
+                "source_detail": "SEC companyfacts",
+            }
+
+    class Yahoo:
+        def get_fundamentals(self, *args):
+            return {
+                "market_cap": 8e9,
+                "pe": 30.0,
+                "roe": 0.15,
+                "sales_growth_5y": 0.08,
+                "fundamental_source": "yfinance_fallback",
+                "fundamental_quality": "MEDIUM",
+                "source_detail": "Yahoo Finance snapshot",
+            }
+
+    result = FallbackFundamentalProvider(PartialSEC(), Yahoo()).get_fundamentals(
+        "ABC", "0000000001", "2026-01-01", 50
+    )
+
+    assert result["fundamental_source"] == "SEC+Yahoo"
+    assert result["market_cap"] == 3e9
+    assert result["pe"] == 22.0
+    assert result["roe"] == 0.20
+    assert result["sales_growth_5y"] == 0.08
+    assert result["fallback_fields"] == ["sales_growth_5y"]
+
+
+def test_partial_sec_result_survives_yahoo_fallback_exception():
+    class PartialSEC:
+        def get_fundamentals(self, *args):
+            return {
+                "market_cap": 3e9,
+                "pe": 22.0,
+                "roe": 0.20,
+                "sales_growth_5y": None,
+                "fundamental_source": "SEC",
+                "fundamental_quality": "LOW",
+            }
+
+    class FailYahoo:
+        def get_fundamentals(self, *args):
+            raise RuntimeError("temporarily unavailable")
+
+    result = FallbackFundamentalProvider(PartialSEC(), FailYahoo()).get_fundamentals(
+        "ABC", "0000000001", "2026-01-01", 50
+    )
+
+    assert result["market_cap"] == 3e9
+    assert result["pe"] == 22.0
+    assert result["fundamental_source"] == "SEC"
+    assert result["fundamental_quality"] == "LOW"
+    assert "temporarily unavailable" in result["error"]
