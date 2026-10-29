@@ -197,7 +197,13 @@ class Screener:
                         stats["yfinance_fundamental_success"]+=1
                 elif source=="yfinance_fallback" and complete:
                     stats["yfinance_fundamental_success"]+=1
-                if missing_fields:
+                source_unavailable=(not nonpositive_earnings and fundamental.get("fundamental_quality")=="UNAVAILABLE")
+                if source_unavailable:
+                    # A missing provider payload is not the same as several independently
+                    # diagnosed field gaps. Keep those counters separate.
+                    stats["fundamental_unavailable"]+=1
+                    stats["fundamental_source_failures"]+=1
+                elif missing_fields:
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_incomplete"]+=1
                     for key in missing_fields:
@@ -209,8 +215,6 @@ class Screener:
                         reason += "; " + str(fundamental["warning"])
                     if fundamental.get("statement_error"):
                         reason += "; income statement: " + str(fundamental["statement_error"])
-                    if fundamental.get("fundamental_quality")=="UNAVAILABLE":
-                        stats["fundamental_source_failures"]+=1
                     if len(stats["fundamental_failure_examples"])<12:
                         stats["fundamental_failure_examples"].append({
                             "ticker":ticker,"source":source,"missing_fields":missing_fields,"error":reason[:500]})
