@@ -30,7 +30,7 @@ def tech(ref,**kwargs):
 
 def setup(monkeypatch,tmp_path):
     monkeypatch.setattr(module,"technical_snapshot",lambda frame,ref,**kw:tech(ref,**kw))
-    monkeypatch.setattr(module,"spy_market_regime",lambda *a,**kw:{"market_regime":"BULL","spy_roc63":.05})
+    monkeypatch.setattr(module,"spy_market_regime",lambda *a,**kw:{"market_regime":"BULL","spy_roc63":.05,"reference_date":str(a[1])})
     monkeypatch.setattr(module,"is_us_common_equity",lambda info:True)
     monkeypatch.setattr(module,"SETTINGS",replace(SETTINGS,output_dir=tmp_path))
 
