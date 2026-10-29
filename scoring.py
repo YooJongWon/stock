@@ -40,10 +40,20 @@ def classify(ticker: str, technical: dict, fundamental: dict | None, meta: dict 
     score = score_snapshot(technical)
     checks["Score >= 7"] = score >= settings.score_min
     required = ("market_cap", "pe", "roe", "sales_growth_5y")
-    fundamental_ok = bool(f) and f.get("fundamental_quality") != "UNAVAILABLE" and all(f.get(k) is not None for k in required)
+    fundamental_status = f.get("fundamental_status")
+    nonpositive_earnings = fundamental_status == "NON_POSITIVE_TTM_EARNINGS"
+    fundamental_ok = (
+        bool(f)
+        and not nonpositive_earnings
+        and f.get("fundamental_quality") != "UNAVAILABLE"
+        and all(f.get(k) is not None for k in required)
+    )
     # Market regime is advisory, not a hard BUY gate. Keep it in checks for visibility.
     failed = [name for name, passed in checks.items() if not passed and name != "Market Regime BULL"]
-    if not fundamental_ok:
+    if nonpositive_earnings:
+        failed = [name for name in failed if name not in ("PE > 0", "PE < 40")]
+        failed.insert(1, "TTM net income is nonpositive; P/E is not meaningful (financial rejection)")
+    elif not fundamental_ok:
         failed.insert(1, "Fundamental data unavailable")
     buy = fundamental_ok and all(passed for key, passed in checks.items() if key != "Market Regime BULL")
     core_keys=("Price >= $10","Market Cap >= $2B","PE > 0","PE < 40","ROE > 15%","Sales Growth 5Y > 5%",
@@ -61,6 +71,10 @@ def classify(ticker: str, technical: dict, fundamental: dict | None, meta: dict 
     return {
         "Ticker":ticker,"Company Name":meta.get("name"),"Sector":meta.get("sector"),"Exchange":meta.get("exchange"),"Data Source":meta.get("data_source"),
         "Fundamental Source":f.get("fundamental_source"),"Fundamental Quality":f.get("fundamental_quality","UNAVAILABLE"),
+        "Fundamental Status":fundamental_status,
+        "Fundamental Rejection Reason":f.get("fundamental_rejection_reason"),
+        "Fundamental Missing Fields":", ".join(f.get("missing_fields", [])) if f.get("missing_fields") else None,
+        "TTM Net Income":f.get("ttm_net_income"),
         "Fundamental Period Start":f.get("period_start"),"Fundamental Period End":f.get("period_end"),"Fundamental Filing Date":f.get("filing_date"),
         "Fundamental Form":f.get("form"),"Fundamental Basis":f.get("fundamental_basis"),"Fundamental Source Detail":f.get("source_detail"),
         "Market Cap Source":f.get("market_cap_source"),"Reference Date":technical.get("reference_date"),"Price":price,
