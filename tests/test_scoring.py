@@ -49,3 +49,19 @@ def test_watch_only_when_core_filters_pass_and_timing_is_missing():
     assert row["Final"]=="WATCH" and "RSI >= 55" in row["Fail Reason"]
     f["roe"]=.10
     assert classify("ABC",t,f)["Final"]=="REJECT"
+
+
+def test_nonpositive_ttm_earnings_is_financial_rejection_not_missing_data():
+    t, f = candidate()
+    f.update({
+        "pe": None,
+        "fundamental_quality": "LOW",
+        "fundamental_status": "NON_POSITIVE_TTM_EARNINGS",
+        "ttm_net_income": -12_000_000,
+        "fundamental_rejection_reason": "TTM net income is nonpositive; P/E not meaningful",
+    })
+    row = classify("ABC", t, f)
+    assert row["Final"] == "REJECT"
+    assert "TTM net income is nonpositive" in row["Fail Reason"]
+    assert "Fundamental data unavailable" not in row["Fail Reason"]
+    assert row["Fundamental Status"] == "NON_POSITIVE_TTM_EARNINGS"
