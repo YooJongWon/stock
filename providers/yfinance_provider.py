@@ -15,7 +15,7 @@ def _retryable_yahoo_error(error: Exception) -> bool:
     message = str(error).lower()
     return isinstance(error, (TimeoutError, ConnectionError)) or any(
         part in message
-        for part in ("429", "too many requests", "rate limit", "timed out", "temporarily unavailable", "502", "503", "504")
+        for part in ("429", "too many requests", "rate limit", "temporary service error", "temporarily unavailable", "service unavailable", "timed out", "502", "503", "504")
     )
 
 
