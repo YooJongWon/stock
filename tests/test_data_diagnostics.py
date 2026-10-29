@@ -1,22 +1,21 @@
 from screener import _price_failure_category
 
 
-def test_yahoo_rate_limit_is_not_hidden_by_missing_stooq_key():
-    message = (
-        "yfinance: RuntimeError: yfinance failed: YFRateLimitError too many requests; "
-        "stooq: not attempted (STOOQ_API_KEY is not configured)"
-    )
+def test_yahoo_rate_limit_is_categorized():
+    message = "yfinance: RuntimeError: YFRateLimitError too many requests"
     assert _price_failure_category(message) == "yahoo_rate_limit"
 
 
 def test_empty_yahoo_history_is_categorized_as_empty_history():
-    message = (
-        "yfinance: RuntimeError: yfinance failed: Yahoo Finance returned an empty daily-history frame; "
-        "stooq: not attempted (STOOQ_API_KEY is not configured)"
-    )
+    message = "yfinance: RuntimeError: Yahoo Finance returned an empty daily-history frame"
     assert _price_failure_category(message) == "empty_price_history"
 
 
-def test_stooq_authorization_error_is_visible_when_primary_error_is_generic():
-    message = "yfinance: RuntimeError: symbol data unavailable; stooq: HTTPError 403 access denied"
-    assert _price_failure_category(message) == "fallback_provider_unavailable"
+def test_stale_price_is_categorized_separately():
+    message = "yfinance: ValueError: stale daily close: expected 2026-10-28, received 2026-10-27"
+    assert _price_failure_category(message) == "stale_or_unconfirmed_close"
+
+
+def test_network_timeouts_are_categorized():
+    message = "yfinance: TimeoutError: connection timed out"
+    assert _price_failure_category(message) == "network_timeout_or_connection"

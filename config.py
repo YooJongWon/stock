@@ -41,7 +41,6 @@ class Settings:
     sec_requests_per_second: float = 5.0
     yfinance_max_retries: int = 3
     sec_user_agent: str = os.getenv("SEC_USER_AGENT", "USStockScreener/1.0 contact@example.com")
-    stooq_api_key: str = os.getenv("STOOQ_API_KEY", "").strip()
     cache_dir: Path = ROOT / "cache"
     # Cloud runs can stage results outside the checked-out working tree.
     output_dir: Path = Path(os.getenv("SCREENER_OUTPUT_DIR", ROOT / "output")).resolve()

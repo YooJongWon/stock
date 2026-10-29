@@ -33,7 +33,6 @@ jobs:
         continue-on-error: true
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-          STOOQ_API_KEY: ${{ secrets.STOOQ_API_KEY }}
         run: |
           args=()
           if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.scheduled }}" == "true" ]]; then

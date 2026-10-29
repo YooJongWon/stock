@@ -21,19 +21,14 @@ SECTOR_ETFS=(
 
 def _price_failure_category(message):
     text=str(message).lower()
-    # Provider errors are chained as "yfinance: ...; stooq: ...". Categorize the
-    # primary failure first so a missing Stooq key does not hide the Yahoo cause.
-    primary=text.split("; stooq:",1)[0]
-    if any(token in primary for token in ("429","rate limit","too many requests")):
+    if any(token in text for token in ("429","rate limit","too many requests")):
         return "yahoo_rate_limit"
-    if "stale" in primary or "expected" in primary:
+    if "stale" in text or "expected" in text:
         return "stale_or_unconfirmed_close"
-    if any(token in primary for token in ("empty","no daily bars","no ohlcv","no data")):
+    if any(token in text for token in ("empty","no daily bars","no ohlcv","no data")):
         return "empty_price_history"
-    if any(token in primary for token in ("timeout","timed out","connection")):
+    if any(token in text for token in ("timeout","timed out","connection")):
         return "network_timeout_or_connection"
-    if any(token in text for token in ("stooq","api key","apikey","access denied","403","quota")):
-        return "fallback_provider_unavailable"
     return "other"
 
 

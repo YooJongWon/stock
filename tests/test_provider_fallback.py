@@ -1,17 +1,28 @@
 import pandas as pd
+
 from providers.fallback_provider import FallbackMarketDataProvider
 
+
 class Good:
-    def history(self,*a): return pd.DataFrame({"Close":[1]})
+    def history(self, *args):
+        return pd.DataFrame({"Close": [1]})
+
+
 class Bad:
-    def history(self,*a): raise RuntimeError("offline")
+    def history(self, *args):
+        raise RuntimeError("offline")
 
-def test_yfinance_success():
-    result=FallbackMarketDataProvider(Good(),Bad()).history("ABC","2026-01-01")
-    assert result.source=="yfinance" and result.error is None
 
-def test_fallback_and_total_failure():
-    result=FallbackMarketDataProvider(Bad(),Good()).history("ABC","2026-01-01")
-    assert result.source=="stooq_fallback" and "offline" in result.error
-    failed=FallbackMarketDataProvider(Bad(),Bad()).history("ABC","2026-01-01")
-    assert failed.frame is None and "stooq" in failed.error
+def test_yahoo_success():
+    result = FallbackMarketDataProvider(Good()).history("ABC", "2026-01-01")
+    assert result.source == "yfinance"
+    assert result.error is None
+
+
+def test_yahoo_failure_is_reported_without_calling_another_provider():
+    result = FallbackMarketDataProvider(Bad()).history("ABC", "2026-01-01")
+    assert result.frame is None
+    assert result.source is None
+    assert "yfinance" in result.error
+    assert "offline" in result.error
+    assert "stooq" not in result.error.lower()
