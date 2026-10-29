@@ -217,7 +217,7 @@ def _data_error_row(ticker,reference_date,member,error):
     return {"Ticker":ticker,"Company Name":member.get("name"),"Reference Date":str(reference_date),"Final":"REJECT","Fail Reason":f"DATA_ERROR: {error}","Technical Prefilter Pass":False}
 
 def _korean(value):
-    return {"BUY":"매수","WATCH":"관심","REJECT":"제외","BULL":"상승장","RISK_OFF":"위험구간","UNKNOWN":"확인 불가"}.get(str(value),str(value))
+    return {"BUY":"매수","WATCH":"준비","REJECT":"제외","BULL":"상승장","RISK_OFF":"위험구간","UNKNOWN":"확인 불가"}.get(str(value),str(value))
 
 def _korean_reason(value):
     labels={"Price >= $10":"주가 10달러 이상","Market Cap >= $2B":"시가총액 20억 달러 이상","PE > 0":"PE 양수",
