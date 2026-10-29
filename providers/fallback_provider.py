@@ -51,7 +51,8 @@ class FallbackMarketDataProvider:
 
         # Stooq started requiring credentials for automated CSV downloads in some access
         # paths. Do not repeatedly make guaranteed-unusable fallback requests if no key exists.
-        if not getattr(self.fallback, "api_key", SETTINGS.stooq_api_key):
+        needs_stooq_key = getattr(self.fallback, "name", "") == "stooq_fallback"
+        if needs_stooq_key and not getattr(self.fallback, "api_key", SETTINGS.stooq_api_key):
             return PriceResult(
                 None,
                 None,
