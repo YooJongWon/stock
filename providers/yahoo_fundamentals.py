@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -17,9 +17,14 @@ REVENUE_ROW_NAMES = (
 )
 
 
-def current_market_date() -> date:
-    """Use the US listing market's calendar date, not the runner's UTC date."""
-    return datetime.now(NEW_YORK).date()
+def current_market_date() -> date | None:
+    """Return the New York date only after the regular-session close has passed."""
+    now = datetime.now(NEW_YORK)
+    # Yahoo has no field-level filing timestamps. Using its snapshot intraday could
+    # include financial information not available at that session close.
+    if now.time() < time(16, 30):
+        return None
+    return now.date()
 
 
 def _five_year_revenue_cagr(statement, reference_date):
@@ -85,9 +90,8 @@ class YahooFundamentalProvider:
 
     def get_fundamentals(self, ticker, reference_date, price):
         # Yahoo's info payload has no filing date per field. Only use it when
-        # the requested session is the current New York calendar date.
-        # GitHub Actions runs in UTC, so date.today() can be one day ahead of
-        # the US market date during the intended evening ET run.
+        # the requested session is today in New York and the regular session has closed.
+        # GitHub Actions runs in UTC, so date.today() can be one day ahead of ET.
         ref = date.fromisoformat(str(reference_date)[:10])
         if current_market_date() != ref:
             raise ValueError(
