@@ -62,6 +62,7 @@ class Screener:
         stats={"universe_count":len(members),"universe_scanned_count":0,"technical_prefilter_count":0,
                "fundamental_candidate_count":0,"sec_success":0,"sec_api_success":0,"yfinance_fundamental_success":0,
                "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
+               "fundamental_nonpositive_earnings":0,"fundamental_rejection_examples":[],
                "mixed_source_fundamentals":0,"fundamental_missing_fields":{}, "fundamental_failure_examples":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
                "instrument_rejections":0,"instrument_lookup_examples":[],
@@ -156,8 +157,33 @@ class Screener:
                 stats["fundamental_candidate_count"]+=1
                 fundamental=self.fundamentals.get_fundamentals(ticker,member.get("cik"),reference_date,tech["price"])
                 required_fields=("market_cap","pe","roe","sales_growth_5y")
-                missing_fields=[key for key in required_fields if fundamental.get(key) is None]
-                complete=(fundamental.get("fundamental_quality")!="UNAVAILABLE" and not missing_fields)
+                fundamental_status=str(fundamental.get("fundamental_status") or "")
+                nonpositive_earnings=fundamental_status=="NON_POSITIVE_TTM_EARNINGS"
+                if nonpositive_earnings:
+                    stats["fundamental_nonpositive_earnings"]+=1
+                    if len(stats["fundamental_rejection_examples"])<12:
+                        stats["fundamental_rejection_examples"].append({
+                            "ticker":ticker,
+                            "reason":fundamental.get("fundamental_rejection_reason") or "TTM net income is nonpositive",
+                            "ttm_net_income":fundamental.get("ttm_net_income"),
+                        })
+                    missing_fields=[
+                        key for key in required_fields
+                        if fundamental.get(key) is None and key!="pe"
+                    ]
+                else:
+                    provider_missing=fundamental.get("missing_fields")
+                    missing_fields=(
+                        [key for key in provider_missing if key in required_fields]
+                        if isinstance(provider_missing,list)
+                        else [key for key in required_fields if fundamental.get(key) is None]
+                    )
+                complete=(
+                    not nonpositive_earnings
+                    and fundamental.get("fundamental_quality")!="UNAVAILABLE"
+                    and not missing_fields
+                    and all(fundamental.get(key) is not None for key in required_fields)
+                )
                 source=str(fundamental.get("fundamental_source") or "UNAVAILABLE")
                 if source=="SEC":
                     stats["sec_api_success"]+=1
@@ -169,12 +195,13 @@ class Screener:
                         stats["yfinance_fundamental_success"]+=1
                 elif source=="yfinance_fallback" and complete:
                     stats["yfinance_fundamental_success"]+=1
-                if not complete:
+                if missing_fields:
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_incomplete"]+=1
                     for key in missing_fields:
                         missing=stats["fundamental_missing_fields"]
                         missing[key]=missing.get(key,0)+1
+                if not complete and not nonpositive_earnings:
                     reason=str(fundamental.get("error") or fundamental.get("warning") or "No provider error detail")
                     if fundamental.get("warning"):
                         reason += "; " + str(fundamental["warning"])
