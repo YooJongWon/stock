@@ -182,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"SEC와 Yahoo 재무 공급자 모두 실패/UNAVAILABLE: {source_failures}종목."
                 + (f" 예시: {example_text}" if example_text else "")
             )
-        incomplete_only = max(0, incomplete - source_failures)
+        incomplete_only = incomplete
         if incomplete_only:
             missing_fields = stats.get("fundamental_missing_fields") or {}
             missing_text = ", ".join(f"{field}={count}" for field, count in sorted(missing_fields.items()))
