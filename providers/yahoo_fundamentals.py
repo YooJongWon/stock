@@ -125,7 +125,7 @@ class YahooFundamentalProvider:
                     "429", "too many requests", "rate limit", "timeout", "timed out",
                     "temporarily unavailable", "502", "503", "504",
                 ))
-                if not retryable and attempt >= 1:
+                if not retryable:
                     break
             if attempt < 3:
                 delay = min(2 ** attempt, 8)
