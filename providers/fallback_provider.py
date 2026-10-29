@@ -1,8 +1,13 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import requests
+
+from config import SETTINGS
 from .yfinance_provider import YFinanceProvider
 from .stooq_provider import StooqProvider
+
 
 @dataclass
 class PriceResult:
@@ -10,9 +15,12 @@ class PriceResult:
     source: str | None
     error: str | None
 
+
 class FallbackMarketDataProvider:
     def __init__(self, primary=None, fallback=None):
-        self.primary=primary or YFinanceProvider(); self.fallback=fallback or StooqProvider(); self._fallback_unavailable=None
+        self.primary = primary or YFinanceProvider()
+        self.fallback = fallback or StooqProvider()
+        self._fallback_auth_failure = None
 
     @staticmethod
     def _validate_spy_session(ticker, frame, reference_date, source):
@@ -25,19 +33,46 @@ class FallbackMarketDataProvider:
         if latest != expected:
             raise ValueError(f"{source} SPY close is stale: expected {expected}, received {latest}")
 
+    @staticmethod
+    def _looks_like_auth_failure(exc):
+        message = str(exc).lower()
+        return any(token in message for token in (
+            "403", "401", "api key", "apikey", "unauthorized", "access denied", "quota exceeded",
+        ))
+
     def history(self, ticker, reference_date):
+        errors = []
         try:
-            frame = self.primary.history(ticker,reference_date)
-            self._validate_spy_session(ticker,frame,reference_date,"yfinance")
-            return PriceResult(frame,"yfinance",None)
+            frame = self.primary.history(ticker, reference_date)
+            self._validate_spy_session(ticker, frame, reference_date, "yfinance")
+            return PriceResult(frame, "yfinance", None)
         except Exception as first:
-            if self._fallback_unavailable:
-                return PriceResult(None,None,f"yfinance: {first}; stooq disabled after prior service failure: {self._fallback_unavailable}")
-            try:
-                frame = self.fallback.history(ticker,reference_date)
-                self._validate_spy_session(ticker,frame,reference_date,"Stooq")
-                return PriceResult(frame,"stooq_fallback",f"yfinance: {first}")
-            except Exception as second:
-                if isinstance(second,(requests.Timeout,requests.ConnectionError)) or "did not return CSV" in str(second) or "403" in str(second):
-                    self._fallback_unavailable=f"{type(second).__name__}: {second}"
-                return PriceResult(None,None,f"yfinance: {first}; stooq: {second}")
+            errors.append(f"yfinance: {type(first).__name__}: {first}")
+
+        # Stooq started requiring credentials for automated CSV downloads in some access
+        # paths. Do not repeatedly make guaranteed-unusable fallback requests if no key exists.
+        if not getattr(self.fallback, "api_key", SETTINGS.stooq_api_key):
+            return PriceResult(
+                None,
+                None,
+                "; ".join(errors + ["stooq: not attempted (STOOQ_API_KEY is not configured)"]),
+            )
+
+        if self._fallback_auth_failure:
+            return PriceResult(
+                None,
+                None,
+                "; ".join(errors + [f"stooq disabled after authorization failure: {self._fallback_auth_failure}"]),
+            )
+
+        try:
+            frame = self.fallback.history(ticker, reference_date)
+            self._validate_spy_session(ticker, frame, reference_date, "Stooq")
+            return PriceResult(frame, "stooq_fallback", "; ".join(errors))
+        except Exception as second:
+            errors.append(f"stooq: {type(second).__name__}: {second}")
+            if self._looks_like_auth_failure(second):
+                self._fallback_auth_failure = f"{type(second).__name__}: {second}"
+            # Do not disable Stooq for the entire run after a timeout/connection reset.
+            # Only authorization/quota errors make subsequent attempts pointless.
+            return PriceResult(None, None, "; ".join(errors))
