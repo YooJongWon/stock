@@ -217,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
             "fundamental_source_failures": stats.get("fundamental_source_failures", 0),
             "fundamental_incomplete": stats.get("fundamental_incomplete", 0),
+            "mixed_source_fundamentals": stats.get("mixed_source_fundamentals", 0),
             "fundamental_missing_fields": stats.get("fundamental_missing_fields", {}),
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
