@@ -21,16 +21,19 @@ SECTOR_ETFS=(
 
 def _price_failure_category(message):
     text=str(message).lower()
-    if any(token in text for token in ("429","rate limit","too many requests")):
+    # Provider errors are chained as "yfinance: ...; stooq: ...". Categorize the
+    # primary failure first so a missing Stooq key does not hide the Yahoo cause.
+    primary=text.split("; stooq:",1)[0]
+    if any(token in primary for token in ("429","rate limit","too many requests")):
         return "yahoo_rate_limit"
+    if "stale" in primary or "expected" in primary:
+        return "stale_or_unconfirmed_close"
+    if any(token in primary for token in ("empty","no daily bars","no ohlcv","no data")):
+        return "empty_price_history"
+    if any(token in primary for token in ("timeout","timed out","connection")):
+        return "network_timeout_or_connection"
     if any(token in text for token in ("stooq","api key","apikey","access denied","403","quota")):
         return "fallback_provider_unavailable"
-    if "stale" in text or "expected" in text:
-        return "stale_or_unconfirmed_close"
-    if any(token in text for token in ("empty","no daily bars","no ohlcv","no data")):
-        return "empty_price_history"
-    if any(token in text for token in ("timeout","timed out","connection")):
-        return "network_timeout_or_connection"
     return "other"
 
 
@@ -156,11 +159,11 @@ class Screener:
                 missing_fields=[key for key in required_fields if fundamental.get(key) is None]
                 complete=(fundamental.get("fundamental_quality")!="UNAVAILABLE" and not missing_fields)
                 source=str(fundamental.get("fundamental_source") or "UNAVAILABLE")
-                if source=="SEC":
+                if source=="SEC" or source.startswith("SEC+"):
                     stats["sec_api_success"]+=1
                     if complete: stats["sec_success"]+=1
-                elif source=="yfinance_fallback" and complete:
-                    stats["yfinance_fundamental_success"]+=1
+                if source=="yfinance_fallback" or source=="SEC+Yahoo":
+                    if complete: stats["yfinance_fundamental_success"]+=1
                 if not complete:
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_incomplete"]+=1
@@ -209,9 +212,8 @@ class Screener:
         if universe_error: stats["universe_error"]=universe_error
         self._write(rows,stats)
         LOG.info("Price history failures: %d; instrument metadata warnings: %d",stats["price_history_failures"],stats["instrument_lookup_failures"])
-        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo %d; incomplete %d; provider failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_source_failures"])
+        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo/mixed %d; incomplete %d; provider failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_source_failures"])
         LOG.info("Technical prefilter: %d",stats["technical_prefilter_count"])
-        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo %d; unavailable %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_unavailable"])
         LOG.info("Final BUY/WATCH/REJECT: %d/%d/%d",buys,watches,stats["reject_count"])
         return rows,stats
 
