@@ -286,8 +286,10 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
   const buyCandidates = candidates.filter((candidate) => candidateStage(candidate) === "BUY");
   const readyCandidates = candidates.filter((candidate) => candidateStage(candidate) === "READY");
   const finalCandidates = candidates.filter((candidate) => ["BUY", "READY"].includes(candidateStage(candidate)));
+  const hasStageLists = Array.isArray(result.technical_candidates);
   const technicalCandidates = result.technical_candidates ?? [];
   const waitingCandidates = result.waiting_candidates ?? [];
+  const rejectedCandidates = technicalCandidates.filter((candidate) => candidateStage(candidate) === "REJECT");
   const waitingCount = result.waiting_count ?? result.fundamental_unavailable ?? waitingCandidates.length;
   const sectorPerformance = result.sector_performance ?? [
     ["XLB", "소재"], ["XLC", "커뮤니케이션 서비스"], ["XLE", "에너지"], ["XLF", "금융"], ["XLI", "산업재"], ["XLK", "정보기술"],
@@ -343,17 +345,24 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
       </section>
 
       <section className="screen-flow" aria-label="후보 선별 흐름">
-        <div className="screen-flow-heading"><div><div className="eyebrow">SCREENING FLOW</div><h2>후보 선별 흐름</h2><p>전체 종목을 기술 조건으로 좁힌 뒤 재무 및 진입 조건을 확인합니다.</p></div></div>
-        <div className="screen-flow-steps">
+        <div className="screen-flow-heading"><div><div className="eyebrow">SCREENING FLOW</div><h2>후보 선별 흐름</h2><p>전체 종목에서 기술 후보를 찾고, 마지막에는 매수·준비·확인 대기·제외로 분류합니다.</p></div></div>
+        <div className="screen-flow-route">
           <div className="screen-flow-step"><span>전체 스캔</span><strong>{count(result.universe_scanned_count)}</strong><small>미국 상장 보통주</small></div>
           <span className="screen-flow-arrow">→</span>
-          {technicalCandidates.length > 0 ? <button type="button" className="screen-flow-step screen-flow-button" onClick={() => setModal({ kind: "list", title: "기술 후보", description: "가격·유동성·추세·상대강도·점수 사전 필터를 통과한 종목입니다. 아직 최종 매수 판정을 의미하지 않습니다.", candidates: technicalCandidates })}><span>기술 후보</span><strong>{count(result.technical_candidate_count ?? technicalCandidates.length)}</strong><small>목록 보기</small></button> : <div className="screen-flow-step"><span>기술 후보</span><strong>{count(result.technical_candidate_count)}</strong><small>사전 기술 필터 통과</small></div>}
+          {technicalCandidates.length > 0 ? <button type="button" className="screen-flow-step screen-flow-button" onClick={() => setModal({ kind: "list", title: "기술 후보", description: "가격·유동성·추세·상대강도·점수 사전 필터를 통과한 종목입니다. 재무 및 최종 진입 조건을 모두 통과했다는 뜻은 아닙니다.", candidates: technicalCandidates })}><span>기술 후보</span><strong>{count(result.technical_candidate_count ?? technicalCandidates.length)}</strong><small>목록 보기</small></button> : <div className="screen-flow-step"><span>기술 후보</span><strong>{count(result.technical_candidate_count)}</strong><small>현재 공개 데이터에는 상세 목록이 없습니다.</small></div>}
           <span className="screen-flow-arrow">→</span>
-          <button type="button" className="screen-flow-step screen-flow-button" onClick={() => setModal({ kind: "list", title: "준비 후보", description: "필수 재무자료와 핵심 추세 조건은 통과했지만, 일부 매수 타이밍 조건이 부족합니다.", candidates: readyCandidates })}><span>준비</span><strong>{count(result.ready_count ?? result.watch_count)}</strong><small>추가 타이밍 확인</small></button>
-          <span className="screen-flow-arrow">→</span>
-          <button type="button" className="screen-flow-step screen-flow-button" onClick={() => setModal({ kind: "list", title: "매수 후보", description: "모든 필수 조건을 통과했으나 실제 매수 전 뉴스·실적·갭 위험을 별도로 확인해야 합니다.", candidates: buyCandidates })}><span>매수</span><strong>{count(result.buy_count)}</strong><small>모든 필수 조건 통과</small></button>
+          <div className="screen-flow-step"><span>최종 판정 대상</span><strong>{hasStageLists ? count(technicalCandidates.length) : "—"}</strong><small>기술 후보에 재무·타이밍 조건 적용</small></div>
         </div>
-        <p className="screen-flow-note">상태 구분: <b>매수</b> = 전체 필수 조건 통과 · <b>준비</b> = 핵심 조건 통과, 일부 타이밍 조건 부족 · <b>확인 대기</b> = 기술 후보이나 재무자료 미확인 · <b>제외</b> = 필수 조건 미충족. Python 스크리너는 실제 보유/주문 상태를 추적하지 않으므로 ‘보유 중’이나 ‘다음 시가 체결’을 표시하지 않습니다.</p>
+        <div className="screen-flow-outcomes">
+          <h3>기술 후보의 최종 상태</h3>
+          <div className="screen-flow-outcome-grid">
+            <button type="button" className="screen-flow-outcome stage-buy" onClick={() => setModal({ kind: "list", title: "매수 후보", description: "재무·유동성·기술 조건을 모두 통과했습니다. 실제 매수 전 뉴스·실적·갭 위험을 확인하세요.", candidates: buyCandidates })}><span>매수</span><strong>{count(result.buy_count)}</strong><small>모든 필수 조건 충족</small></button>
+            <button type="button" className="screen-flow-outcome stage-ready" onClick={() => setModal({ kind: "list", title: "준비 후보", description: "핵심 조건은 통과했지만 일부 진입 타이밍 조건이 부족합니다.", candidates: readyCandidates })}><span>준비</span><strong>{count(result.ready_count ?? result.watch_count)}</strong><small>타이밍 조건 추가 확인</small></button>
+            {waitingCandidates.length > 0 ? <button type="button" className="screen-flow-outcome stage-wait" onClick={() => setModal({ kind: "list", title: "확인 대기 종목", description: "기술 후보이지만 필수 재무자료를 확인하지 못해 최종 판단을 보류합니다.", candidates: waitingCandidates })}><span>확인 대기</span><strong>{count(waitingCount)}</strong><small>재무자료 확인 필요</small></button> : <article className="screen-flow-outcome stage-wait"><span>확인 대기</span><strong>{count(waitingCount)}</strong><small>{waitingCount > 0 ? "현재 데이터에는 개별 목록이 없습니다." : "재무 확인 대기 종목 없음"}</small></article>}
+            {hasStageLists ? <button type="button" className="screen-flow-outcome stage-reject" onClick={() => setModal({ kind: "list", title: "최종 제외된 기술 후보", description: "기술 사전 필터는 통과했지만 재무 또는 필수 매수 조건을 충족하지 못한 종목입니다.", candidates: rejectedCandidates })}><span>제외</span><strong>{count(rejectedCandidates.length)}</strong><small>최종 필수 조건 미충족 · 목록 보기</small></button> : <article className="screen-flow-outcome stage-reject"><span>제외</span><strong>—</strong><small>새 단계 데이터 생성 후 확인 가능</small></article>}
+          </div>
+        </div>
+        <p className="screen-flow-note"><b>매수</b>는 모든 필수 조건 충족, <b>준비</b>는 핵심 조건 충족 후 진입 타이밍 추가 확인, <b>확인 대기</b>는 기술 후보 중 재무자료 미확인, <b>제외</b>는 기술 후보였지만 최종 필수 조건 미충족을 뜻합니다. 실제 보유·주문 체결 상태는 자동 추적하지 않습니다.</p>
       </section>
 
       <section className="results-section">
