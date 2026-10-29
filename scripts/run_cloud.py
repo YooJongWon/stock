@@ -31,6 +31,55 @@ def _atomic_write(path: Path, contents: str) -> None:
     temporary.replace(path)
 
 
+def _dashboard_stage(candidate: dict) -> str:
+    """Map the quantitative result to a human-readable dashboard stage."""
+    final = str(candidate.get("Final") or "").upper()
+    if final == "BUY":
+        return "BUY"
+    if final == "WATCH":
+        return "READY"
+    quality = str(candidate.get("Fundamental Quality") or "").upper()
+    technical_pass = candidate.get("Technical Prefilter Pass") in (True, 1, "True", "true")
+    if technical_pass and quality == "UNAVAILABLE":
+        return "WAIT"
+    return "REJECT"
+
+
+def _dashboard_stage_reason(candidate: dict, stage: str) -> str:
+    if stage == "BUY":
+        return "모든 필수 재무·유동성·기술 조건을 통과했습니다."
+    if stage == "READY":
+        return "핵심 조건은 통과했지만 일부 진입 타이밍 조건이 부족합니다."
+    if stage == "WAIT":
+        return "기술 사전 필터는 통과했지만 필수 재무자료를 확인하지 못해 판정을 보류합니다."
+    return str(candidate.get("Fail Reason") or "필수 조건을 충족하지 못했습니다.")
+
+
+def _load_dashboard_candidates(path: Path) -> list[dict]:
+    """Read candidate CSV and preserve the exact per-row filter results for the UI."""
+    if not path.is_file():
+        return []
+    import pandas as pd
+
+    frame = pd.read_csv(path, encoding="utf-8-sig")
+    records = json.loads(frame.to_json(orient="records", date_format="iso"))
+    for candidate in records:
+        raw_filters = candidate.pop("Filter Results", "{}")
+        if isinstance(raw_filters, str):
+            try:
+                candidate["filter_results"] = json.loads(raw_filters)
+            except ValueError:
+                candidate["filter_results"] = {}
+        elif isinstance(raw_filters, dict):
+            candidate["filter_results"] = raw_filters
+        else:
+            candidate["filter_results"] = {}
+        stage = _dashboard_stage(candidate)
+        candidate["Stage"] = stage
+        candidate["Status Reason"] = _dashboard_stage_reason(candidate, stage)
+    return records
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run and publish a validated US-stock screener snapshot")
     parser.add_argument("--skip-unchanged", action="store_true", help="skip scheduled runs when the same XNYS session is already published")
@@ -73,19 +122,16 @@ def main(argv: list[str] | None = None) -> int:
 
         stage = Path(scratch)
         candidate_csv = stage / "final_candidates.csv"
+        technical_candidate_csv = stage / "technical_candidates.csv"
         candidate_markdown = stage / "final_candidates.md"
         if not candidate_csv.is_file():
             raise RuntimeError("The screener did not create final_candidates.csv.")
         if not candidate_markdown.is_file():
             raise RuntimeError("The screener did not create final_candidates.md.")
 
-        import pandas as pd
-
-        frame = pd.read_csv(candidate_csv, encoding="utf-8-sig")
-        candidates = json.loads(frame.to_json(orient="records", date_format="iso"))
-        for candidate in candidates:
-            raw_filters = candidate.pop("Filter Results", "{}")
-            candidate["filter_results"] = json.loads(raw_filters) if isinstance(raw_filters, str) else {}
+        candidates = _load_dashboard_candidates(candidate_csv)
+        technical_candidates = _load_dashboard_candidates(technical_candidate_csv)
+        waiting_candidates = [candidate for candidate in technical_candidates if candidate.get("Stage") == "WAIT"]
 
         warnings = []
         if stats.get("data_failures"):
@@ -105,15 +151,19 @@ def main(argv: list[str] | None = None) -> int:
             "spy_reference_date": stats.get("spy_reference_date"),
             "universe_count": stats.get("universe_count"),
             "universe_scanned_count": stats.get("universe_scanned_count"),
-            "technical_candidate_count": stats.get("technical_prefilter_count"),
+            "technical_candidate_count": len(technical_candidates) if technical_candidate_csv.is_file() else stats.get("technical_prefilter_count"),
             "fundamental_candidate_count": stats.get("fundamental_candidate_count"),
             "buy_count": stats.get("buy_count"),
             "watch_count": stats.get("watch_count"),
+            "ready_count": stats.get("watch_count"),
+            "waiting_count": len(waiting_candidates),
             "candidate_count": len(candidates),
             "data_failures": stats.get("data_failures", 0),
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
             "sector_performance": stats.get("sector_performance", []),
             "candidates": candidates,
+            "technical_candidates": technical_candidates,
+            "waiting_candidates": waiting_candidates,
         }
 
         # Do not touch the published files until all fatal checks and serialization pass.
