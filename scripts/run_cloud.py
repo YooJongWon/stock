@@ -157,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"가격 데이터 조회 실패 {price_failures}종목. 원인 분류(전체): {category_text}."
                 + (f" 예시: {example_text}" if example_text else "")
             )
+            if not os.getenv("STOOQ_API_KEY", "").strip():
+                warnings.append(
+                    "STOOQ_API_KEY가 설정되지 않아 Stooq 보조 가격 공급자는 비활성 상태입니다. "
+                    "Yahoo 조회 실패 종목의 보조 복구를 원하면 제공처에서 발급받은 키를 GitHub Actions Secret에 등록하세요."
+                )
         metadata_failures = int(stats.get("instrument_lookup_failures", 0) or 0)
         if metadata_failures:
             warnings.append(
@@ -206,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             "price_history_failures": stats.get("price_history_failures", stats.get("data_failures", 0)),
             "data_failure_categories": stats.get("data_failure_categories", {}),
             "data_failure_examples": stats.get("data_failure_examples", []),
+            "stooq_fallback_enabled": bool(os.getenv("STOOQ_API_KEY", "").strip()),
             "instrument_lookup_failures": stats.get("instrument_lookup_failures", 0),
             "instrument_rejections": stats.get("instrument_rejections", 0),
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
