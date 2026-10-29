@@ -67,7 +67,7 @@ class Screener:
         stats={"universe_count":len(members),"universe_scanned_count":0,"technical_prefilter_count":0,
                "fundamental_candidate_count":0,"sec_success":0,"sec_api_success":0,"yfinance_fundamental_success":0,
                "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
-               "fundamental_missing_fields":{}, "fundamental_failure_examples":[],
+               "mixed_source_fundamentals":0,"fundamental_missing_fields":{}, "fundamental_failure_examples":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
                "instrument_rejections":0,"data_failure_examples":[],"data_failure_categories":{},
                "spy_regime":"UNKNOWN","spy_roc63":None}
@@ -159,11 +159,16 @@ class Screener:
                 missing_fields=[key for key in required_fields if fundamental.get(key) is None]
                 complete=(fundamental.get("fundamental_quality")!="UNAVAILABLE" and not missing_fields)
                 source=str(fundamental.get("fundamental_source") or "UNAVAILABLE")
-                if source=="SEC" or source.startswith("SEC+"):
+                if source=="SEC":
                     stats["sec_api_success"]+=1
                     if complete: stats["sec_success"]+=1
-                if source=="yfinance_fallback" or source=="SEC+Yahoo":
-                    if complete: stats["yfinance_fundamental_success"]+=1
+                elif source=="SEC+Yahoo":
+                    stats["sec_api_success"]+=1
+                    if complete:
+                        stats["mixed_source_fundamentals"]+=1
+                        stats["yfinance_fundamental_success"]+=1
+                elif source=="yfinance_fallback" and complete:
+                    stats["yfinance_fundamental_success"]+=1
                 if not complete:
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_incomplete"]+=1
