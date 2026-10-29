@@ -7,7 +7,7 @@ from data_provider import UniverseProvider, DataProvider
 from fundamentals import FallbackFundamentalProvider
 from indicators import technical_snapshot, spy_market_regime
 from scoring import classify, score_snapshot
-from providers.yfinance_provider import YFinanceProvider, is_us_common_equity
+from providers.yfinance_provider import YFinanceProvider
 
 LOG=logging.getLogger(__name__)
 
@@ -69,7 +69,8 @@ class Screener:
                "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
                "mixed_source_fundamentals":0,"fundamental_missing_fields":{}, "fundamental_failure_examples":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
-               "instrument_rejections":0,"data_failure_examples":[],"data_failure_categories":{},
+               "instrument_rejections":0,"instrument_lookup_examples":[],
+               "data_failure_examples":[],"data_failure_categories":{},
                "spy_regime":"UNKNOWN","spy_roc63":None}
         rows=[]; candidates=[]; spy=None
         try:
@@ -145,12 +146,16 @@ class Screener:
                     if not info or not quote_type:
                         metadata_warning="Yahoo instrument metadata incomplete; trusted filtered exchange directory"
                         stats["instrument_lookup_failures"]+=1
+                        if len(stats["instrument_lookup_examples"])<10:
+                            stats["instrument_lookup_examples"].append({"ticker":ticker,"reason":metadata_warning})
                     member={**member,"sector":(info or {}).get("sector") or member.get("sector"),
                         "exchange":(info or {}).get("exchange") or member.get("exchange"),
                         "name":(info or {}).get("longName") or (info or {}).get("shortName") or member.get("name")}
                 except Exception as exc:
                     metadata_warning=f"{type(exc).__name__}: {exc}"
                     stats["instrument_lookup_failures"]+=1
+                    if len(stats["instrument_lookup_examples"])<10:
+                        stats["instrument_lookup_examples"].append({"ticker":ticker,"reason":metadata_warning[:350]})
                     LOG.warning("%s Yahoo instrument metadata unavailable; continuing with exchange-directory record: %s",
                         ticker,metadata_warning)
                 stats["fundamental_candidate_count"]+=1
