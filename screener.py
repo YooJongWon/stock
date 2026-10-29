@@ -7,7 +7,7 @@ from data_provider import UniverseProvider, DataProvider
 from fundamentals import FallbackFundamentalProvider
 from indicators import technical_snapshot, spy_market_regime
 from scoring import classify, score_snapshot
-from providers.yfinance_provider import YFinanceProvider
+from providers.yfinance_provider import YFinanceProvider, is_us_common_equity
 
 LOG=logging.getLogger(__name__)
 
