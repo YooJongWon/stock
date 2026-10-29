@@ -96,3 +96,31 @@ def test_partial_sec_result_survives_yahoo_fallback_exception():
     assert result["fundamental_source"] == "SEC"
     assert result["fundamental_quality"] == "LOW"
     assert "temporarily unavailable" in result["error"]
+
+
+def test_nonpositive_ttm_earnings_does_not_trigger_undated_yahoo_fallback():
+    class LossMakingSEC:
+        def get_fundamentals(self, *args):
+            return {
+                "market_cap": 3e9,
+                "pe": None,
+                "roe": -0.04,
+                "sales_growth_5y": 0.08,
+                "fundamental_source": "SEC",
+                "fundamental_quality": "LOW",
+                "fundamental_status": "NON_POSITIVE_TTM_EARNINGS",
+                "fundamental_rejection_reason": "TTM net income is nonpositive; P/E not meaningful",
+                "ttm_net_income": -20e6,
+                "missing_fields": [],
+            }
+
+    class MustNotUseYahoo:
+        def get_fundamentals(self, *args):
+            raise AssertionError("loss-making issuer must not need an undated Yahoo fallback")
+
+    result = FallbackFundamentalProvider(LossMakingSEC(), MustNotUseYahoo()).get_fundamentals(
+        "ABC", "0000000001", "2026-10-28", 50
+    )
+    assert result["fundamental_status"] == "NON_POSITIVE_TTM_EARNINGS"
+    assert result["pe"] is None
+    assert result["market_cap"] == 3e9
