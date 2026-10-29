@@ -41,10 +41,11 @@ def classify(ticker: str, technical: dict, fundamental: dict | None, meta: dict 
     checks["Score >= 7"] = score >= settings.score_min
     required = ("market_cap", "pe", "roe", "sales_growth_5y")
     fundamental_ok = bool(f) and f.get("fundamental_quality") != "UNAVAILABLE" and all(f.get(k) is not None for k in required)
-    failed = [name for name, passed in checks.items() if not passed]
+    # Market regime is advisory, not a hard BUY gate. Keep it in checks for visibility.
+    failed = [name for name, passed in checks.items() if not passed and name != "Market Regime BULL"]
     if not fundamental_ok:
         failed.insert(1, "Fundamental data unavailable")
-    buy = fundamental_ok and all(checks.values())
+    buy = fundamental_ok and all(passed for key, passed in checks.items() if key != "Market Regime BULL")
     core_keys=("Price >= $10","Market Cap >= $2B","PE > 0","PE < 40","ROE > 15%","Sales Growth 5Y > 5%",
                "Average Volume >= 1M","Average Dollar Volume >= $30M","Trend Stack EMA20 > SMA50 > SMA200",
                "SMA50 Rising","Relative Strength > 0")
@@ -76,7 +77,7 @@ def classify(ticker: str, technical: dict, fundamental: dict | None, meta: dict 
         "Break-even Trigger":(entry+one_r if entry is not None and one_r is not None else None),
         "Trailing Start":(entry+1.5*one_r if entry is not None and one_r is not None else None),
         "Trailing Stop Formula":"EMA10 - 0.5*ATR14","Max Holding Days":settings.max_holding_days,
-        "Score":score,"BUY Checks Passed":sum(checks.values()),"Final":final,"Fail Reason":"; ".join(failed),
+        "Score":score,"BUY Checks Passed":sum(passed for key, passed in checks.items() if key != "Market Regime BULL"),"Final":final,"Fail Reason":"; ".join(failed),
         # These are the same booleans used above to classify BUY/WATCH/REJECT.
         # The cloud JSON exposes them without reimplementing or changing strategy rules.
         "Filter Results":json.dumps(checks,ensure_ascii=False),
