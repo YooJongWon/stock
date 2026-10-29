@@ -1,3 +1,5 @@
+import json
+
 from scoring import score_snapshot, classify
 
 def candidate():
@@ -25,9 +27,21 @@ def test_atr_over_five_percent_cannot_be_buy():
     t,f=candidate(); t["atr_stop_pct"]=5.01
     assert classify("ABC",t,f)["Final"]=="REJECT"
 
-def test_risk_off_blocks_buy():
+def test_risk_off_is_warning_not_buy_blocker():
     t,f=candidate(); t["market_regime"]="RISK_OFF"
-    assert classify("ABC",t,f)["Final"]=="WATCH"
+    row = classify("ABC",t,f)
+    assert row["Final"] == "BUY"
+    assert "Market Regime BULL" not in row["Fail Reason"]
+    checks = json.loads(row["Filter Results"])
+    assert checks["Market Regime BULL"] is False
+
+
+def test_risk_off_does_not_hide_other_failed_buy_conditions():
+    t,f=candidate(); t["market_regime"]="RISK_OFF"; t["strong_bull_candle"]=False
+    row = classify("ABC",t,f)
+    assert row["Final"] == "WATCH"
+    assert "Strong Bull Candle" in row["Fail Reason"]
+    assert "Market Regime BULL" not in row["Fail Reason"]
 
 def test_watch_only_when_core_filters_pass_and_timing_is_missing():
     t,f=candidate(); t["rsi14"]=53
