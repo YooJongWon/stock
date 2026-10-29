@@ -38,6 +38,9 @@ def _dashboard_stage(candidate: dict) -> str:
         return "BUY"
     if final == "WATCH":
         return "READY"
+    fundamental_status = str(candidate.get("Fundamental Status") or "").upper()
+    if fundamental_status == "NON_POSITIVE_TTM_EARNINGS":
+        return "REJECT"
     quality = str(candidate.get("Fundamental Quality") or "").upper()
     technical_pass = candidate.get("Technical Prefilter Pass") in (True, 1, "True", "true")
     required_financial_fields = ("Market Cap", "PE", "ROE", "Sales Growth 5Y")
@@ -179,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"SEC와 Yahoo 재무 공급자 모두 실패/UNAVAILABLE: {source_failures}종목."
                 + (f" 예시: {example_text}" if example_text else "")
             )
-        incomplete_only = max(0, incomplete - source_failures)
+        incomplete_only = incomplete
         if incomplete_only:
             missing_fields = stats.get("fundamental_missing_fields") or {}
             missing_text = ", ".join(f"{field}={count}" for field, count in sorted(missing_fields.items()))
@@ -217,6 +220,8 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_unavailable": stats.get("fundamental_unavailable", 0),
             "fundamental_source_failures": stats.get("fundamental_source_failures", 0),
             "fundamental_incomplete": stats.get("fundamental_incomplete", 0),
+            "fundamental_nonpositive_earnings": stats.get("fundamental_nonpositive_earnings", 0),
+            "fundamental_rejection_examples": stats.get("fundamental_rejection_examples", []),
             "mixed_source_fundamentals": stats.get("mixed_source_fundamentals", 0),
             "fundamental_missing_fields": stats.get("fundamental_missing_fields", {}),
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),

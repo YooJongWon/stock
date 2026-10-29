@@ -43,3 +43,9 @@ def test_unavailable_fundamentals_without_technical_prefilter_is_not_waiting():
 
 def test_fundamentals_available_but_hard_filter_failed_is_rejected():
     assert _dashboard_stage(candidate()) == "REJECT"
+
+
+def test_nonpositive_ttm_earnings_is_rejected_not_waiting_for_data():
+    row = candidate(Final="REJECT", **{"Fundamental Status": "NON_POSITIVE_TTM_EARNINGS", "PE": None})
+    assert _dashboard_stage(row) == "REJECT"
+    assert "P/E" not in _dashboard_stage_reason(row, "REJECT")

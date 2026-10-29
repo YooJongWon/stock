@@ -17,6 +17,7 @@ type Result = {
   technical_candidate_count?: number;
   candidate_count?: number;
   fundamental_unavailable?: number;
+  fundamental_nonpositive_earnings?: number;
   candidates?: Candidate[];
   technical_candidates?: Candidate[];
   waiting_candidates?: Candidate[];
@@ -334,6 +335,7 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
 
       {failed && <div className="alert error"><strong>최근 자동 실행 실패</strong><span>{runStatus.message || "새 결과를 만들지 못해 마지막 정상 결과를 유지하고 있습니다."}</span><small>시도: {localDate(runStatus.attempted_at)} · 기준일 {runStatus.reference_date || "—"}</small></div>}
       {stale && <div className="alert warning"><strong>데이터가 오래됐습니다</strong><span>마지막 정상 결과 이후 4일 이상 지났습니다. 최신 거래일 데이터인지 확인하세요.</span></div>}
+      {(result.fundamental_nonpositive_earnings ?? 0) > 0 && <div className="alert info"><strong>재무 조건에 따른 제외</strong><span>TTM 순이익이 0 이하인 {count(result.fundamental_nonpositive_earnings)}개 종목은 PER을 의미 있게 계산할 수 없어 매수 후보에서 제외했습니다. 이는 데이터 조회 실패가 아닙니다.</span></div>}
       {result.status === "degraded" && result.warnings?.map((warning, index) => <div className="alert warning" key={index}><strong>일부 데이터 확인 필요</strong><span>{warning}</span></div>)}
       {missing && <div className="alert info"><strong>아직 정상 실행 결과가 없습니다</strong><span>GitHub Actions에서 스크리너를 한 번 실행하면 이 화면에 결과가 표시됩니다.</span></div>}
 

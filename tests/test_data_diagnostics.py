@@ -19,3 +19,8 @@ def test_stale_price_is_categorized_separately():
 def test_network_timeouts_are_categorized():
     message = "yfinance: TimeoutError: connection timed out"
     assert _price_failure_category(message) == "network_timeout_or_connection"
+
+
+def test_nonpositive_price_is_reported_as_invalid_price_data():
+    message = "yfinance: RuntimeError: yfinance failed: ValueError: nonpositive price"
+    assert _price_failure_category(message) == "invalid_price_data"
