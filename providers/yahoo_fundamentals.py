@@ -154,6 +154,7 @@ class YahooFundamentalProvider:
             try:
                 statement = asset.income_stmt
                 if statement is not None and not getattr(statement, "empty", True):
+                    statement_errors.clear()
                     break
                 statement_errors.append("Yahoo annual income statement is empty")
             except Exception as exc:
