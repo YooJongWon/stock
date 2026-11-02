@@ -68,6 +68,19 @@ class FallbackFundamentalProvider:
             partial["fundamental_status"] = partial.get("fundamental_status") or (
                 "INCOMPLETE_FIELDS" if partial["fundamental_quality"] == "LOW" else "UNAVAILABLE"
             )
+            field_diagnostics = dict(partial.get("field_diagnostics") or {})
+            for field in missing:
+                field_diagnostics.setdefault(field, {})
+                field_diagnostics[field].setdefault(
+                    "reason",
+                    "SEC에서 필수 재무값을 찾지 못했고 Yahoo 보충 조회도 완료되지 않았습니다."
+                    if fallback_status == "WITHHELD"
+                    else "SEC와 Yahoo에서 사용할 수 있는 재무값을 확보하지 못했습니다.",
+                )
+                field_diagnostics[field]["yahoo_fallback_status"] = fallback_status
+                if fallback_error:
+                    field_diagnostics[field]["yahoo_fallback_error"] = fallback_error
+            partial["field_diagnostics"] = field_diagnostics
             partial["fundamental_sec_status"] = sec_status
             partial["fundamental_fallback_status"] = fallback_status
             partial["fundamental_fallback_error"] = fallback_error
@@ -121,6 +134,10 @@ class FallbackFundamentalProvider:
                 source = yahoo.get("fundamental_source") or "yfinance_fallback"
                 combined.update(yahoo)
 
+            field_diagnostics = dict(primary_result.get("field_diagnostics") or {}) if primary_result else {}
+            for field in yahoo_filled:
+                field_diagnostics.pop(field, None)
+            combined["field_diagnostics"] = field_diagnostics
             combined["fundamental_source"] = source
             combined["fundamental_sec_status"] = sec_status
             combined["fundamental_fallback_status"] = "SUCCESS"
