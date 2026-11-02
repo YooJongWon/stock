@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
-import re
 import time
 
 import requests
@@ -127,6 +126,7 @@ class _InlineXBRLParser(HTMLParser):
                 "unit_ref": values.get("unitref"),
                 "scale": values.get("scale", "0"),
                 "sign": values.get("sign"),
+                "format": values.get("format"),
                 "nil": values.get("xsi:nil") or values.get("nil"),
                 "text": [],
             }
@@ -212,14 +212,19 @@ class SECFundamentalProvider:
         raise RuntimeError("SEC companyfacts request exhausted retry attempts")
 
     @staticmethod
-    def _inline_number(raw, scale="0", sign=None):
-        value = "".join(str(raw or "").split()).replace(",", "").replace("$", "")
+    def _inline_number(raw, scale="0", sign=None, format_name=None):
+        value = "".join(str(raw or "").replace("\\xa0", " ").split()).replace("$", "")
         if not value or value in {"—", "-", "–"}:
             return None
         negative_parentheses = value.startswith("(") and value.endswith(")")
         if negative_parentheses:
             value = value[1:-1]
         value = value.replace("−", "-")
+        number_format = str(format_name or "").split(":")[-1].lower()
+        if "comma-decimal" in number_format or "numcommadecimal" in number_format:
+            value = value.replace(".", "").replace(",", ".")
+        else:
+            value = value.replace(",", "")
         try:
             number = Decimal(value)
             number *= Decimal(10) ** int(scale or 0)
@@ -311,7 +316,8 @@ class SECFundamentalProvider:
             if filed > ref or end > ref or (start and start > ref):
                 continue
             value = self._inline_number(
-                "".join(fact.get("text") or []), fact.get("scale"), fact.get("sign")
+                "".join(fact.get("text") or []), fact.get("scale"),
+                fact.get("sign"), fact.get("format"),
             )
             if value is None:
                 continue
@@ -334,7 +340,10 @@ class SECFundamentalProvider:
     def _extension_records(self, cik, ref, need_revenue, need_equity, need_shares):
         """Read point-in-time Inline XBRL facts from a small, targeted set of original SEC filings."""
         if not cik:
-            return {"revenue": [], "equity": [], "shares": [], "filings": [], "tags": {}}
+            return {
+                "revenue": [], "equity": [], "shares": [], "filings": [],
+                "tags": {}, "errors": ["SEC CIK를 찾지 못해 원본 공시를 조회할 수 없습니다."],
+            }
 
         payload = self._get_json(
             f"https://data.sec.gov/submissions/CIK{str(cik).zfill(10)}.json",
@@ -404,6 +413,7 @@ class SECFundamentalProvider:
             unique[row["accession"]] = row
         extracted = []
         used_filings = []
+        filing_errors = []
         for row in unique.values():
             try:
                 extracted.extend(self._inline_records_from_filing(
@@ -416,8 +426,11 @@ class SECFundamentalProvider:
                     "period": str(row["report_date"]) if row["report_date"] else None,
                     "accession": row["accession"],
                 })
-            except Exception:
-                # Original companyfacts remain usable; a filing-level failure is diagnostic only.
+            except Exception as exc:
+                # Original companyfacts remain usable; retain the filing error for diagnostics.
+                filing_errors.append(
+                    f"{row['form']} filed {row['filing_date']}: {type(exc).__name__}: {exc}"
+                )
                 continue
 
         extension = {
@@ -462,6 +475,7 @@ class SECFundamentalProvider:
             "shares": shares,
             "filings": used_filings,
             "tags": tags,
+            "errors": filing_errors,
         }
 
     @classmethod
@@ -904,9 +918,12 @@ class SECFundamentalProvider:
                 "extension_tags": (extension_info.get("tags") or {}).get("extension_names_seen", []),
                 "filings_checked": extension_info.get("filings", []),
             }
+        extension_errors = list(extension_info.get("errors") or [])
         if extension_info.get("error"):
+            extension_errors.append(extension_info["error"])
+        if extension_errors:
             for detail in field_diagnostics.values():
-                detail["filing_lookup_error"] = extension_info["error"]
+                detail["filing_lookup_error"] = "; ".join(extension_errors)[:1200]
 
         if market_cap is not None and latest_shares_record is not None and extension_info.get("shares"):
             market_cap_source = "SEC Inline XBRL filing"
