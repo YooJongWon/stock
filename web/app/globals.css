@@ -70,3 +70,47 @@
 @media(max-width:480px){
   .screen-flow-outcome-grid{grid-template-columns:1fr}
 }
+
+
+/* Fundamental data diagnostics */
+.diagnostics-page{padding-bottom:20px}
+.diagnostics-hero{padding:42px 0 24px}
+.diagnostics-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:0 0 24px}
+.diagnostic-summary-card{display:grid;gap:8px;min-width:0;padding:15px;border:1px solid var(--line);border-radius:10px;background:#0d141d}
+.diagnostic-summary-card>span{color:var(--muted);font-size:10px}
+.diagnostic-summary-card strong{color:#edf4fa;font:700 23px "DM Mono",monospace;letter-spacing:-.04em}
+.diagnostic-summary-card strong em{margin-left:4px;color:var(--muted);font:500 10px "Noto Sans KR",sans-serif}
+.diagnostic-summary-card small{color:#748396;font-size:9px;line-height:1.5}
+.diagnostics-panel{padding:20px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(145deg,#101923,#0c121a)}
+.diagnostics-heading{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:17px}
+.diagnostics-heading h2{margin:7px 0 5px;font-size:17px}
+.diagnostics-heading p{margin:0;color:var(--muted);font-size:11px}
+.diagnostics-heading .download{white-space:nowrap}
+.diagnostics-filters{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-bottom:15px}
+.diagnostics-filters label{display:grid;gap:6px;color:var(--muted);font-size:10px}
+.diagnostics-filters input,.diagnostics-filters select{width:100%;min-width:0;border:1px solid #2c3948;border-radius:7px;background:#0a1018;color:var(--text);padding:10px 11px;font:11px "Noto Sans KR",sans-serif;outline:none}
+.diagnostics-filters input:focus,.diagnostics-filters select:focus{border-color:var(--mint)}
+.diagnostics-table-wrap{width:100%;max-height:68vh;overflow:auto;border:1px solid #243141;border-radius:9px}
+.diagnostics-table{width:100%;min-width:940px;border-collapse:collapse;text-align:left}
+.diagnostics-table th{position:sticky;top:0;z-index:1;padding:12px;background:#151f2b;color:#92a3b5;font-size:10px;white-space:nowrap}
+.diagnostics-table td{padding:13px 12px;border-top:1px solid #202d3a;color:#c7d0dc;font-size:10px;vertical-align:top}
+.diagnostics-table td:first-child strong{display:block;color:var(--mint);font:700 12px "DM Mono",monospace}
+.diagnostics-table td:first-child small,.diagnostics-table td>small{display:block;margin-top:5px;color:#748396;font-size:9px;white-space:normal}
+.diagnostic-field-pills{display:flex;flex-wrap:wrap;gap:5px;max-width:190px}
+.diagnostic-field-pills span{padding:4px 6px;border:1px solid #5b4829;border-radius:5px;background:#221d13;color:#f0cf91;font-size:9px;white-space:nowrap}
+.diagnostic-detail summary{color:var(--mint);cursor:pointer;white-space:nowrap}
+.diagnostic-detail[open] summary{margin-bottom:9px}
+.diagnostic-detail-body{min-width:320px;max-width:480px;padding:10px;border:1px solid #2c3948;border-radius:8px;background:#0a1018;white-space:normal;line-height:1.7}
+.diagnostic-detail-body section{padding:7px 0;border-bottom:1px solid #202d3a}
+.diagnostic-detail-body section:last-of-type{border-bottom:0}
+.diagnostic-detail-body strong{color:#e7eef6}
+.diagnostic-detail-body p{margin:5px 0;color:#aab7c6;font-size:9px;overflow-wrap:anywhere}
+.diagnostic-detail-body b{color:#d6e0ea}
+.diagnostics-empty{padding:34px 18px;border:1px dashed #2a3644;border-radius:9px;text-align:center}
+.diagnostics-empty strong{color:#dce6f0;font-size:12px}
+.diagnostics-empty p{color:var(--muted);font-size:10px;line-height:1.7}
+.diagnostics-result-count{margin:10px 0 0;color:var(--muted);font-size:10px;text-align:right}
+.diagnostics-note{margin-top:15px;padding:12px;border:1px solid #283646;border-radius:8px;background:#0c141d;color:#8292a5;font-size:10px;line-height:1.8}
+@media(max-width:1000px){.diagnostics-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.diagnostics-filters{grid-template-columns:1fr 1fr}.diagnostics-filters label:first-child{grid-column:1/-1}}
+@media(max-width:600px){.diagnostics-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.diagnostic-summary-card{padding:12px}.diagnostic-summary-card strong{font-size:20px}.diagnostics-panel{padding:14px}.diagnostics-heading{align-items:flex-start;flex-direction:column}.diagnostics-heading .download{margin-top:0}.diagnostics-filters{grid-template-columns:1fr}.diagnostics-filters label:first-child{grid-column:auto}.diagnostics-hero{padding:34px 0 20px}}
