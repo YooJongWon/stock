@@ -3,7 +3,11 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from providers.yahoo_fundamentals import _five_year_revenue_cagr
+from providers.yahoo_fundamentals import (
+    FundamentalFallbackWithheldError,
+    YahooFundamentalProvider,
+    _five_year_revenue_cagr,
+)
 
 
 def test_yahoo_annual_revenue_computes_five_year_cagr():
@@ -42,3 +46,14 @@ def test_yahoo_annual_revenue_does_not_fabricate_growth_when_history_too_short()
 
     assert growth is None
     assert periods is None
+
+
+
+def test_point_in_time_guard_uses_a_distinct_withheld_exception(monkeypatch):
+    import providers.yahoo_fundamentals as yahoo_module
+
+    monkeypatch.setattr(yahoo_module, "current_market_date", lambda: None)
+    provider = YahooFundamentalProvider()
+
+    with pytest.raises(FundamentalFallbackWithheldError, match="fallback withheld"):
+        provider.get_fundamentals("ABC", "2026-10-28", 100.0)
