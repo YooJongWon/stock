@@ -171,24 +171,65 @@ def main(argv: list[str] | None = None) -> int:
                 "거래소 디렉터리를 사용해 스크리닝을 계속했으며, 이 항목만으로 종목을 제외하지 않았습니다."
                 + (f" 예시: {example_text}" if example_text else "")
             )
-        source_failures = int(stats.get("fundamental_source_failures", 0) or 0)
-        incomplete = int(stats.get("fundamental_incomplete", stats.get("fundamental_unavailable", 0)) or 0)
-        if source_failures:
-            examples = stats.get("fundamental_failure_examples") or []
+        no_usable_data = int(stats.get("fundamental_no_usable_data", stats.get("fundamental_source_failures", 0)) or 0)
+        if no_usable_data:
+            examples = stats.get("fundamental_source_failure_examples") or []
             example_text = "; ".join(
-                f"{item.get('ticker', '-')}: {item.get('error', '')}" for item in examples[:4]
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:4]
             )
             warnings.append(
-                f"SEC와 Yahoo 재무 공급자 모두 실패/UNAVAILABLE: {source_failures}종목."
+                f"필수 재무정보를 확보하지 못한 종목: {no_usable_data}종목."
                 + (f" 예시: {example_text}" if example_text else "")
             )
-        incomplete_only = incomplete
-        if incomplete_only:
+
+        incomplete = int(stats.get("fundamental_incomplete", 0) or 0)
+        if incomplete:
             missing_fields = stats.get("fundamental_missing_fields") or {}
             missing_text = ", ".join(f"{field}={count}" for field, count in sorted(missing_fields.items()))
+            examples = stats.get("fundamental_incomplete_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}"
+                + (f"({', '.join(item.get('missing_fields') or [])})" if item.get("missing_fields") else "")
+                for item in examples[:4]
+            )
             warnings.append(
-                f"재무 데이터 일부 누락으로 필수 필드를 모두 채우지 못한 종목: {incomplete_only}."
+                f"재무 데이터 일부 누락으로 필수 필드를 모두 채우지 못한 종목: {incomplete}."
                 + (f" 누락 필드 집계: {missing_text}." if missing_text else "")
+                + (f" 예시: {example_text}." if example_text else "")
+            )
+
+        sec_failures = int(stats.get("fundamental_sec_failures", 0) or 0)
+        if sec_failures:
+            examples = stats.get("fundamental_sec_failure_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:4]
+            )
+            warnings.append(
+                f"SEC 재무정보 조회 실패: {sec_failures}종목."
+                + (f" 예시: {example_text}" if example_text else "")
+            )
+
+        fallback_withheld = int(stats.get("fundamental_fallback_withheld", 0) or 0)
+        if fallback_withheld:
+            examples = stats.get("fundamental_fallback_withheld_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:4]
+            )
+            warnings.append(
+                f"기준일 검증으로 Yahoo 재무 보충 조회를 보류한 종목: {fallback_withheld}종목."
+                " 이는 API 실패가 아니라 공시 시점을 확인할 수 없는 스냅샷을 사용하지 않도록 한 조치입니다."
+                + (f" 예시: {example_text}" if example_text else "")
+            )
+
+        fallback_failures = int(stats.get("fundamental_fallback_failures", 0) or 0)
+        if fallback_failures:
+            examples = stats.get("fundamental_fallback_failure_examples") or []
+            example_text = "; ".join(
+                f"{item.get('ticker', '-')}: {item.get('reason', '')}" for item in examples[:4]
+            )
+            warnings.append(
+                f"Yahoo 재무 보충 조회 실제 실패: {fallback_failures}종목."
+                + (f" 예시: {example_text}" if example_text else "")
             )
 
         payload = {
@@ -224,6 +265,15 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_rejection_examples": stats.get("fundamental_rejection_examples", []),
             "mixed_source_fundamentals": stats.get("mixed_source_fundamentals", 0),
             "fundamental_missing_fields": stats.get("fundamental_missing_fields", {}),
+            "fundamental_no_usable_data": stats.get("fundamental_no_usable_data", stats.get("fundamental_source_failures", 0)),
+            "fundamental_source_failure_examples": stats.get("fundamental_source_failure_examples", []),
+            "fundamental_incomplete_examples": stats.get("fundamental_incomplete_examples", []),
+            "fundamental_sec_failures": stats.get("fundamental_sec_failures", 0),
+            "fundamental_sec_failure_examples": stats.get("fundamental_sec_failure_examples", []),
+            "fundamental_fallback_withheld": stats.get("fundamental_fallback_withheld", 0),
+            "fundamental_fallback_withheld_examples": stats.get("fundamental_fallback_withheld_examples", []),
+            "fundamental_fallback_failures": stats.get("fundamental_fallback_failures", 0),
+            "fundamental_fallback_failure_examples": stats.get("fundamental_fallback_failure_examples", []),
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
             "candidates": candidates,
