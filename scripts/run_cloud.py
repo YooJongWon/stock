@@ -145,6 +145,14 @@ def main(argv: list[str] | None = None) -> int:
         candidates = _load_dashboard_candidates(candidate_csv)
         technical_candidates = _load_dashboard_candidates(technical_candidate_csv)
         waiting_candidates = [candidate for candidate in technical_candidates if candidate.get("Stage") == "WAIT"]
+        fundamental_diagnostics = stats.get("fundamental_diagnostics") or []
+        if not isinstance(fundamental_diagnostics, list):
+            fundamental_diagnostics = []
+        diagnostics_csv = stage / "fundamental-diagnostics.csv"
+        import pandas as pd
+        pd.DataFrame(fundamental_diagnostics).to_csv(
+            diagnostics_csv, index=False, encoding="utf-8-sig"
+        )
 
         warnings = []
         price_failures = int(stats.get("price_history_failures", stats.get("data_failures", 0)) or 0)
@@ -274,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_fallback_withheld_examples": stats.get("fundamental_fallback_withheld_examples", []),
             "fundamental_fallback_failures": stats.get("fundamental_fallback_failures", 0),
             "fundamental_fallback_failure_examples": stats.get("fundamental_fallback_failure_examples", []),
+            "fundamental_diagnostics_count": len(fundamental_diagnostics),
+            "fundamental_diagnostics": fundamental_diagnostics,
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
             "candidates": candidates,
@@ -289,6 +299,12 @@ def main(argv: list[str] | None = None) -> int:
         temporary_csv = csv_path.with_suffix(".csv.tmp")
         shutil.copyfile(candidate_csv, temporary_csv)
         temporary_csv.replace(csv_path)
+
+        diagnostics_path = result_path.with_name("latest-fundamental-diagnostics.csv")
+        temporary_diagnostics = diagnostics_path.with_suffix(".csv.tmp")
+        shutil.copyfile(diagnostics_csv, temporary_diagnostics)
+        temporary_diagnostics.replace(diagnostics_path)
+
         status_path = result_path.with_name("latest-run-status.json")
         _atomic_write(status_path, json.dumps({
             "status": payload["status"],
