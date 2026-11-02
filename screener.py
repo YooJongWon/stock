@@ -63,9 +63,14 @@ class Screener:
         LOG.info("Reference date: %s",reference_date); LOG.info("Total universe: %d (%s)",len(members),source)
         stats={"universe_count":len(members),"universe_scanned_count":0,"technical_prefilter_count":0,
                "fundamental_candidate_count":0,"sec_success":0,"sec_api_success":0,"yfinance_fundamental_success":0,
-               "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_incomplete":0,
-               "fundamental_nonpositive_earnings":0,"fundamental_rejection_examples":[],
-               "mixed_source_fundamentals":0,"fundamental_missing_fields":{}, "fundamental_failure_examples":[],
+               "fundamental_unavailable":0,"fundamental_source_failures":0,"fundamental_no_usable_data":0,
+               "fundamental_incomplete":0,"fundamental_source_failure_examples":[],
+               "fundamental_incomplete_examples":[],"fundamental_sec_failures":0,
+               "fundamental_sec_failure_examples":[],"fundamental_fallback_withheld":0,
+               "fundamental_fallback_withheld_examples":[],"fundamental_fallback_failures":0,
+               "fundamental_fallback_failure_examples":[],"fundamental_nonpositive_earnings":0,
+               "fundamental_rejection_examples":[],"mixed_source_fundamentals":0,
+               "fundamental_missing_fields":{}, "fundamental_failure_examples":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
                "instrument_rejections":0,"instrument_lookup_examples":[],
                "data_failure_examples":[],"data_failure_categories":{},
@@ -158,6 +163,25 @@ class Screener:
                         ticker,metadata_warning)
                 stats["fundamental_candidate_count"]+=1
                 fundamental=self.fundamentals.get_fundamentals(ticker,member.get("cik"),reference_date,tech["price"])
+                sec_status=str(fundamental.get("fundamental_sec_status") or "")
+                fallback_status=str(fundamental.get("fundamental_fallback_status") or "")
+                fallback_error=str(fundamental.get("fundamental_fallback_error") or "")
+                if sec_status=="FAILED":
+                    stats["fundamental_sec_failures"]+=1
+                    if len(stats["fundamental_sec_failure_examples"])<12:
+                        stats["fundamental_sec_failure_examples"].append({
+                            "ticker":ticker,
+                            "reason":str(fundamental.get("error") or "SEC fundamentals lookup failed")[:500]})
+                if fallback_status=="WITHHELD":
+                    stats["fundamental_fallback_withheld"]+=1
+                    if len(stats["fundamental_fallback_withheld_examples"])<12:
+                        stats["fundamental_fallback_withheld_examples"].append({
+                            "ticker":ticker,"reason":fallback_error or "Point-in-time guard withheld Yahoo fallback"})
+                elif fallback_status=="FAILED":
+                    stats["fundamental_fallback_failures"]+=1
+                    if len(stats["fundamental_fallback_failure_examples"])<12:
+                        stats["fundamental_fallback_failure_examples"].append({
+                            "ticker":ticker,"reason":fallback_error or str(fundamental.get("error") or "Yahoo fallback failed")})
                 required_fields=("market_cap","pe","roe","sales_growth_5y")
                 fundamental_status=str(fundamental.get("fundamental_status") or "")
                 nonpositive_earnings=fundamental_status=="NON_POSITIVE_TTM_EARNINGS"
@@ -199,13 +223,22 @@ class Screener:
                     stats["yfinance_fundamental_success"]+=1
                 source_unavailable=(not nonpositive_earnings and fundamental.get("fundamental_quality")=="UNAVAILABLE")
                 if source_unavailable:
-                    # A missing provider payload is not the same as several independently
-                    # diagnosed field gaps. Keep those counters separate.
+                    # Count unusable financial data separately from the reason a fallback
+                    # was unavailable (withheld by policy versus an actual provider failure).
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_source_failures"]+=1
+                    stats["fundamental_no_usable_data"]+=1
+                    if len(stats["fundamental_source_failure_examples"])<12:
+                        stats["fundamental_source_failure_examples"].append({
+                            "ticker":ticker,"reason":str(
+                                fundamental.get("warning") or fundamental.get("error") or
+                                "No usable required fundamental fields")[:500]})
                 elif missing_fields:
                     stats["fundamental_unavailable"]+=1
                     stats["fundamental_incomplete"]+=1
+                    if len(stats["fundamental_incomplete_examples"])<12:
+                        stats["fundamental_incomplete_examples"].append({
+                            "ticker":ticker,"source":source,"missing_fields":missing_fields})
                     for key in missing_fields:
                         missing=stats["fundamental_missing_fields"]
                         missing[key]=missing.get(key,0)+1
@@ -232,6 +265,11 @@ class Screener:
                 if len(stats["fundamental_failure_examples"])<12:
                     stats["fundamental_failure_examples"].append({
                         "ticker":ticker,"source":"UNAVAILABLE","missing_fields":["market_cap","pe","roe","sales_growth_5y"],"error":error_text[:500]})
+                stats["fundamental_no_usable_data"]+=1
+                stats["fundamental_source_failures"]+=1
+                if len(stats["fundamental_source_failure_examples"])<12:
+                    stats["fundamental_source_failure_examples"].append({
+                        "ticker":ticker,"reason":error_text[:500]})
                 row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source})
                 row["Technical Prefilter Pass"]=True; row["Fundamental Error"]=error_text
                 rows.append(row)
@@ -250,7 +288,7 @@ class Screener:
         if universe_error: stats["universe_error"]=universe_error
         self._write(rows,stats)
         LOG.info("Price history failures: %d; instrument metadata warnings: %d",stats["price_history_failures"],stats["instrument_lookup_failures"])
-        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo/mixed %d; incomplete %d; provider failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_source_failures"])
+        LOG.info("Fundamental candidates: %d (SEC %d; Yahoo/mixed %d; incomplete %d; no usable data %d; SEC failures %d; Yahoo withheld %d; Yahoo failures %d)",stats["fundamental_candidate_count"],stats["sec_success"],stats["yfinance_fundamental_success"],stats["fundamental_incomplete"],stats["fundamental_no_usable_data"],stats["fundamental_sec_failures"],stats["fundamental_fallback_withheld"],stats["fundamental_fallback_failures"])
         LOG.info("Technical prefilter: %d",stats["technical_prefilter_count"])
         LOG.info("Final BUY/WATCH/REJECT: %d/%d/%d",buys,watches,stats["reject_count"])
         return rows,stats
