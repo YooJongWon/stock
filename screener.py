@@ -306,6 +306,24 @@ class Screener:
                 if len(stats["fundamental_source_failure_examples"])<12:
                     stats["fundamental_source_failure_examples"].append({
                         "ticker":ticker,"reason":error_text[:500]})
+                failed_fields=["market_cap","pe","roe","sales_growth_5y"]
+                stats["fundamental_diagnostics"].append({
+                    "ticker": ticker,
+                    "company_name": member.get("name"),
+                    "exchange": member.get("exchange"),
+                    "reference_date": str(reference_date),
+                    "source": "UNAVAILABLE",
+                    "quality": "UNAVAILABLE",
+                    "status": "UNAVAILABLE",
+                    "missing_fields": failed_fields,
+                    "field_diagnostics": {
+                        field: {"reason": "재무 데이터 수집 중 예외가 발생해 값을 확보하지 못했습니다.", "error": error_text[:500]}
+                        for field in failed_fields
+                    },
+                    "sec_status": "FAILED",
+                    "yahoo_status": "FAILED",
+                    "error": error_text[:500],
+                })
                 row=classify(ticker,tech,{"fundamental_quality":"UNAVAILABLE"},{**member,"data_source":data_source})
                 row["Technical Prefilter Pass"]=True; row["Fundamental Error"]=error_text
                 rows.append(row)
