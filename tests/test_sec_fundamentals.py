@@ -189,3 +189,47 @@ def test_sec_keeps_loss_making_company_metrics_and_marks_pe_not_applicable(monke
     assert result["roe"] < 0
     assert result["sales_growth_5y"] > 0
     assert "pe" not in result["missing_fields"]
+
+
+
+def test_inline_xbrl_parser_reads_contexts_and_numeric_facts():
+    from providers.sec_fundamentals import _InlineXBRLParser, SECFundamentalProvider
+
+    document = """
+    <html><body>
+      <xbrli:context id="FY2025">
+        <xbrli:entity><xbrli:identifier>0000000001</xbrli:identifier></xbrli:entity>
+        <xbrli:period><xbrli:startDate>2025-01-01</xbrli:startDate>
+        <xbrli:endDate>2025-12-31</xbrli:endDate></xbrli:period>
+      </xbrli:context>
+      <ix:nonFraction name="custom:NetSales" contextRef="FY2025"
+        unitRef="USD" scale="6">1,250</ix:nonFraction>
+    </body></html>
+    """
+    parser = _InlineXBRLParser()
+    parser.feed(document)
+
+    assert parser.contexts["FY2025"]["startdate"] == "2025-01-01"
+    assert parser.contexts["FY2025"]["enddate"] == "2025-12-31"
+    fact = parser.facts[0]
+    assert SECFundamentalProvider._inline_number(
+        "".join(fact["text"]), fact["scale"], fact["sign"]
+    ) == 1_250_000_000
+
+
+def test_inline_xbrl_extension_detection_excludes_non_revenue_and_weighted_shares():
+    from providers.sec_fundamentals import SECFundamentalProvider
+
+    assert SECFundamentalProvider._extension_kind("custom:NetSales", "revenue")
+    assert not SECFundamentalProvider._extension_kind("custom:CostOfSales", "revenue")
+    assert SECFundamentalProvider._extension_kind("custom:TotalEquity", "equity")
+    assert SECFundamentalProvider._extension_kind("custom:CommonSharesOutstanding", "shares")
+    assert not SECFundamentalProvider._extension_kind("custom:WeightedAverageShares", "shares")
+
+
+def test_inline_xbrl_number_handles_parentheses_and_negative_sign():
+    from providers.sec_fundamentals import SECFundamentalProvider
+
+    assert SECFundamentalProvider._inline_number("(1,200)", scale="3") == -1_200_000
+    assert SECFundamentalProvider._inline_number("1200", scale="3", sign="-") == -1_200_000
+    assert SECFundamentalProvider._inline_number("—") is None
