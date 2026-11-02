@@ -81,3 +81,22 @@ def test_complete_sec_fundamentals_skip_yahoo_fallback():
     assert result["fundamental_sec_status"] == "SUCCESS"
     assert result["fundamental_fallback_status"] == "NOT_NEEDED"
     assert result["fundamental_fallback_error"] is None
+
+
+
+class FailedSEC:
+    def get_fundamentals(self, cik, reference_date, price):
+        raise RuntimeError("SEC companyfacts timeout")
+
+
+def test_sec_error_and_yahoo_withheld_are_reported_as_two_different_states():
+    result = FallbackFundamentalProvider(
+        primary=FailedSEC(),
+        fallback=WithheldYahoo(),
+    ).get_fundamentals("ABC", "0000000001", "2026-10-28", 100.0)
+
+    assert result["fundamental_sec_status"] == "FAILED"
+    assert result["fundamental_fallback_status"] == "WITHHELD"
+    assert result["fundamental_quality"] == "UNAVAILABLE"
+    assert "SEC companyfacts timeout" in result["error"]
+    assert "withheld" in result["warning"].lower()
