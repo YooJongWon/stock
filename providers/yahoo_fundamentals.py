@@ -76,7 +76,7 @@ def _five_year_revenue_cagr(statement, reference_date):
             continue
         newest_date, newest_value = periods[-1]
         
-        # 유닛 테스트 검증을 위해 엄격하게 4~6년 스팬만 허용 (2~3년 폴백 제거)
+        # 엄격하게 4~6년 스팬만 허용 (테스트 요구사항 준수)
         eligible = [
             item for item in periods[:-1]
             if 4 <= newest_date.year - item[0].year <= 6
@@ -142,8 +142,6 @@ class YahooFundamentalProvider:
     name = "yfinance_fallback"
 
     def get_fundamentals(self, ticker, reference_date, price):
-        # Yahoo's info payload has no filing date per field. Only use it when
-        # the requested session is today in New York and the regular session has closed.
         ref = date.fromisoformat(str(reference_date)[:10])
         if current_market_date() != ref:
             raise ValueError(
@@ -232,7 +230,6 @@ class YahooFundamentalProvider:
         if roe is None:
             roe = _derive_roe_from_statements(asset, info, statement)
 
-        # Only raise if ALL metrics are missing; allow partial fields to fill SEC gaps!
         if cap is None and pe is None and roe is None and growth is None:
             missing = [
                 name for name, value in (
