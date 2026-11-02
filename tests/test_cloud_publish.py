@@ -154,3 +154,52 @@ def test_cloud_diagnostics_keep_counts_and_examples_in_their_own_categories(isol
     assert "1종목" in fallback_failure_warning and "FAIL1" in fallback_failure_warning
     assert result["fundamental_fallback_withheld"] == 3
     assert result["fundamental_fallback_failures"] == 1
+
+
+
+def test_cloud_publishes_fundamental_diagnostics_json_and_csv(isolated_publish, monkeypatch):
+    diagnostic = {
+        "ticker": "ABC",
+        "company_name": "Alpha Beta Corp",
+        "exchange": "NASDAQ",
+        "reference_date": REFERENCE_DATE,
+        "source": "SEC",
+        "quality": "LOW",
+        "status": "INCOMPLETE_FIELDS",
+        "missing_fields": ["sales_growth_5y"],
+        "field_diagnostics": {
+            "sales_growth_5y": {
+                "reason": "연간 매출 이력이 부족합니다.",
+                "attempted_tags": ["RevenueFromContractWithCustomerExcludingAssessedTax"],
+                "extension_tags": ["custom:NetSales"],
+                "filings_checked": [{"form": "10-K", "filed": "2026-02-15", "period": "2025-12-31"}],
+            }
+        },
+        "sec_status": "SUCCESS",
+        "yahoo_status": "WITHHELD",
+        "extension_filings": [{"form": "10-K", "filed": "2026-02-15", "period": "2025-12-31"}],
+        "filing_date": "2026-02-15",
+        "revenue_period_end": None,
+        "error": None,
+        "warning": "Yahoo fallback withheld",
+    }
+
+    class DiagnosticScreener(StubScreener):
+        stats = {
+            **StubScreener.stats,
+            "fundamental_diagnostics": [diagnostic],
+        }
+
+    monkeypatch.setattr(screener, "Screener", DiagnosticScreener)
+    assert run_cloud.main([]) == 0
+
+    result = json.loads((isolated_publish / "latest-results.json").read_text(encoding="utf-8"))
+    assert result["fundamental_diagnostics_count"] == 1
+    assert result["fundamental_diagnostics"][0]["ticker"] == "ABC"
+    assert result["fundamental_diagnostics"][0]["field_diagnostics"]["sales_growth_5y"]["extension_tags"] == ["custom:NetSales"]
+
+    csv_path = isolated_publish / "latest-fundamental-diagnostics.csv"
+    assert csv_path.is_file()
+    csv_frame = pd.read_csv(csv_path, encoding="utf-8-sig")
+    assert csv_frame.loc[0, "ticker"] == "ABC"
+    assert "sales_growth_5y" in csv_frame.loc[0, "missing_fields"]
