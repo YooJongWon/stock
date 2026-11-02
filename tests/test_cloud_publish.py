@@ -89,3 +89,68 @@ def test_scheduled_repeat_skips_without_replacing_existing_result(isolated_publi
     monkeypatch.setattr(screener, "Screener", MustNotRun)
     assert run_cloud.main(["--skip-unchanged"]) == 0
     assert json.loads(result_file.read_text(encoding="utf-8"))["saved"] == "old"
+
+
+
+def test_cloud_diagnostics_keep_counts_and_examples_in_their_own_categories(isolated_publish, monkeypatch):
+    class DiagnosticScreener(StubScreener):
+        stats = {
+            **StubScreener.stats,
+            "fundamental_no_usable_data": 2,
+            "fundamental_source_failures": 2,
+            "fundamental_source_failure_examples": [
+                {"ticker": "SRC1", "reason": "No usable required fundamental fields"},
+                {"ticker": "SRC2", "reason": "No usable required fundamental fields"},
+            ],
+            "fundamental_incomplete": 44,
+            "fundamental_missing_fields": {"roe": 18, "sales_growth_5y": 25},
+            "fundamental_incomplete_examples": [
+                {"ticker": "INC1", "missing_fields": ["roe"]},
+                {"ticker": "INC2", "missing_fields": ["sales_growth_5y"]},
+                {"ticker": "INC3", "missing_fields": ["roe", "sales_growth_5y"]},
+                {"ticker": "INC4", "missing_fields": ["market_cap"]},
+            ],
+            "fundamental_sec_failures": 1,
+            "fundamental_sec_failure_examples": [
+                {"ticker": "SECERR", "reason": "SEC API timeout"},
+            ],
+            "fundamental_fallback_withheld": 3,
+            "fundamental_fallback_withheld_examples": [
+                {"ticker": "HOLD1", "reason": "reference date is not the current New York market date"},
+            ],
+            "fundamental_fallback_failures": 1,
+            "fundamental_fallback_failure_examples": [
+                {"ticker": "FAIL1", "reason": "Yahoo API timeout"},
+            ],
+            # This legacy mixed list intentionally contains unrelated tickers.
+            "fundamental_failure_examples": [
+                {"ticker": "SRC1", "error": "source failure"},
+                {"ticker": "INC1", "error": "missing roe"},
+                {"ticker": "INC2", "error": "missing growth"},
+                {"ticker": "INC3", "error": "missing two fields"},
+            ],
+        }
+
+    monkeypatch.setattr(screener, "Screener", DiagnosticScreener)
+    assert run_cloud.main([]) == 0
+    result = json.loads((isolated_publish / "latest-results.json").read_text(encoding="utf-8"))
+    warnings = result["warnings"]
+
+    unavailable_warning = next(item for item in warnings if item.startswith("필수 재무정보를 확보하지 못한"))
+    incomplete_warning = next(item for item in warnings if item.startswith("재무 데이터 일부 누락"))
+    sec_warning = next(item for item in warnings if item.startswith("SEC 재무정보 조회 실패"))
+    withheld_warning = next(item for item in warnings if item.startswith("기준일 검증으로 Yahoo"))
+    fallback_failure_warning = next(item for item in warnings if item.startswith("Yahoo 재무 보충 조회 실제 실패"))
+
+    assert "2종목" in unavailable_warning
+    assert "SRC1" in unavailable_warning and "SRC2" in unavailable_warning
+    assert "INC1" not in unavailable_warning and "INC2" not in unavailable_warning
+    assert "44" in incomplete_warning
+    assert "INC1(roe)" in incomplete_warning and "INC2(sales_growth_5y)" in incomplete_warning
+    assert "SRC1" not in incomplete_warning
+    assert "1종목" in sec_warning and "SECERR" in sec_warning
+    assert "3종목" in withheld_warning and "HOLD1" in withheld_warning
+    assert "API 실패가 아니라" in withheld_warning
+    assert "1종목" in fallback_failure_warning and "FAIL1" in fallback_failure_warning
+    assert result["fundamental_fallback_withheld"] == 3
+    assert result["fundamental_fallback_failures"] == 1
