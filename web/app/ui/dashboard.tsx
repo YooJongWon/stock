@@ -547,8 +547,58 @@ type CalculatorInputs = {
   stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
 };
 
+const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
+const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
+  total: "14000", stockCount: "5", cashRatio: "17", firstBuyRatio: "60",
+  stopLossRatio: "-5", firstTargetRatio: "6", finalTargetRatio: "10",
+};
+
 function InvestmentCalculator() {
-  const [input, setInput] = useState<CalculatorInputs>({ total: "14000", stockCount: "5", cashRatio: "17", firstBuyRatio: "60", stopLossRatio: "-5", firstTargetRatio: "6", finalTargetRatio: "10" });
+  const [input, setInput] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
+  const [storageReady, setStorageReady] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CALCULATOR_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<CalculatorInputs>;
+        const restored = { ...DEFAULT_CALCULATOR_INPUTS };
+        (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
+          const value = parsed[key];
+          if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
+            restored[key] = value;
+          }
+        });
+        setInput(restored);
+        setSaved(true);
+      }
+    } catch {
+      // Storage may be unavailable (private browsing or browser policy); the calculator remains usable.
+    } finally {
+      setStorageReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      window.localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(input));
+      setSaved(true);
+    } catch {
+      setSaved(false);
+    }
+  }, [input, storageReady]);
+
+  const resetInputs = () => {
+    setInput(DEFAULT_CALCULATOR_INPUTS);
+    try {
+      window.localStorage.removeItem(CALCULATOR_STORAGE_KEY);
+      setSaved(false);
+    } catch {
+      setSaved(false);
+    }
+  };
   const get = (key: keyof CalculatorInputs) => Number.parseFloat(input[key]) || 0;
   const total = Math.max(0, get("total"));
   const count = Math.max(1, Math.min(100, Math.floor(get("stockCount"))));
@@ -577,7 +627,7 @@ function InvestmentCalculator() {
     <div className="hero calculator-hero"><div className="eyebrow">POSITION SIZING</div><h1>미국주식 스윙 투자 계산기</h1><p>총 투자금과 운용 기준을 입력하면 종목별 목표 금액, 매수 금액, 손절·익절 예상액을 계산합니다.</p></div>
     <div className="calculator-layout">
       <section className="calculator-card input-card">
-        <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>운용 기준</h2></div><span>입력값</span></div>
+        <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>운용 기준</h2></div><div className="calculator-storage-actions"><span className="calculator-save-status" role="status">{!storageReady ? "저장값 확인 중…" : saved ? "✓ 자동 저장됨" : "기본값 사용 중"}</span><button type="button" className="calculator-reset-button" onClick={resetInputs}>기본값 초기화</button></div></div>
         <div className="calculator-inputs">{fields.map(({ key, label, suffix, ...limits }) => <label className="calculator-field" key={key}><span>{label}</span><div className="calculator-input-wrap"><input type="number" inputMode="decimal" value={input[key]} onChange={(event) => set(key, event.target.value)} {...limits} aria-label={label} /><em>{suffix}</em></div></label>)}</div>
         <p className="calculator-note">종목당 목표 비중은 현금 목표를 제외한 투자금 기준으로 종목 수에 따라 나눕니다.</p>
       </section>
