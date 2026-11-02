@@ -50,6 +50,9 @@ jobs:
           if [[ -f web/public/data/latest-candidates.csv ]]; then
             git add web/public/data/latest-candidates.csv
           fi
+          if [[ -f web/public/data/latest-fundamental-diagnostics.csv ]]; then
+            git add web/public/data/latest-fundamental-diagnostics.csv
+          fi
           if git diff --cached --quiet; then
             echo "Dashboard data did not change."
           else
