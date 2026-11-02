@@ -18,6 +18,9 @@ type Result = {
   candidate_count?: number;
   fundamental_unavailable?: number;
   fundamental_nonpositive_earnings?: number;
+  fundamental_diagnostics_count?: number;
+  fundamental_diagnostics?: FundamentalDiagnostic[];
+  fundamental_missing_fields?: Record<string, number>;
   candidates?: Candidate[];
   technical_candidates?: Candidate[];
   waiting_candidates?: Candidate[];
@@ -25,6 +28,38 @@ type Result = {
 };
 
 type RunStatus = { status: string; attempted_at: string | null; reference_date: string | null; message: string | null };
+type FundamentalDiagnostic = {
+  ticker: string;
+  company_name?: string | null;
+  exchange?: string | null;
+  reference_date: string;
+  source?: string | null;
+  quality?: string | null;
+  status?: string | null;
+  missing_fields: string[];
+  field_diagnostics?: Record<string, {
+    reason?: string;
+    attempted_tags?: string[];
+    extension_tags?: string[];
+    filing_lookup_error?: string;
+    yahoo_fallback_status?: string;
+    yahoo_fallback_error?: string;
+    filings_checked?: { form?: string; filed?: string; period?: string | null; accession?: string }[];
+  }>;
+  sec_status?: string;
+  yahoo_status?: string;
+  sec_tags?: Record<string, unknown>;
+  extension_filings?: { form?: string; filed?: string; period?: string | null; accession?: string }[];
+  filing_date?: string | null;
+  ttm_period_end?: string | null;
+  equity_period_end?: string | null;
+  shares_period_end?: string | null;
+  shares_filing_date?: string | null;
+  revenue_period_end?: string | null;
+  error?: string | null;
+  warning?: string | null;
+  statement_error?: string | null;
+};
 
 function count(value: number | undefined) {
   return (typeof value === "number" && Number.isFinite(value) ? value : 0).toLocaleString("ko-KR");
@@ -273,7 +308,7 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
 }
 
 export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
-  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator">("screener");
+  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals">("screener");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
@@ -304,11 +339,12 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
         <nav className="menu-tabs" aria-label="주 메뉴" role="tablist">
           <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스크리너</button>
           <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => setActiveMenu("calculator")}>스윙 투자 계산기</button>
+          <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
-      {activeMenu === "calculator" ? <InvestmentCalculator /> : <>
+      {activeMenu === "calculator" ? <InvestmentCalculator /> : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
@@ -380,6 +416,130 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
       </>}
     </main>
   );
+}
+
+type DiagnosticFieldKey = "market_cap" | "pe" | "roe" | "sales_growth_5y";
+const DIAGNOSTIC_FIELD_LABELS: Record<DiagnosticFieldKey, string> = {
+  market_cap: "시가총액",
+  pe: "PER",
+  roe: "ROE",
+  sales_growth_5y: "5년 매출 성장률",
+};
+
+function FundamentalDiagnostics({ result }: { result: Result }) {
+  const diagnostics = result.fundamental_diagnostics ?? [];
+  const [query, setQuery] = useState("");
+  const [fieldFilter, setFieldFilter] = useState<"all" | DiagnosticFieldKey>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "WITHHELD" | "FAILED" | "SUCCESS" | "NOT_NEEDED">("all");
+
+  const filtered = diagnostics.filter((item) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const matchesQuery = !normalizedQuery
+      || item.ticker.toLowerCase().includes(normalizedQuery)
+      || String(item.company_name ?? "").toLowerCase().includes(normalizedQuery);
+    const matchesField = fieldFilter === "all" || item.missing_fields.includes(fieldFilter);
+    const matchesStatus = statusFilter === "all"
+      || (statusFilter === "WITHHELD" ? item.yahoo_status === "WITHHELD"
+        : statusFilter === "FAILED" ? item.yahoo_status === "FAILED" || item.sec_status === "FAILED"
+          : statusFilter === "SUCCESS" ? item.yahoo_status === "SUCCESS"
+            : item.yahoo_status === "NOT_NEEDED");
+    return matchesQuery && matchesField && matchesStatus;
+  });
+
+  const counts: Record<DiagnosticFieldKey, number> = {
+    market_cap: 0, pe: 0, roe: 0, sales_growth_5y: 0,
+  };
+  diagnostics.forEach((item) => item.missing_fields.forEach((field) => {
+    if (field in counts) counts[field as DiagnosticFieldKey] += 1;
+  }));
+
+  const downloadUrl = "/data/latest-fundamental-diagnostics.csv";
+  const statusLabel = (item: FundamentalDiagnostic) => {
+    if (item.yahoo_status === "WITHHELD") return "Yahoo 보충 보류";
+    if (item.yahoo_status === "FAILED" || item.sec_status === "FAILED") return "데이터 제공자 오류";
+    if (item.missing_fields.length) return "필드 미확인";
+    return "확인 필요";
+  };
+
+  return <main className="diagnostics-page">
+    <section className="hero diagnostics-hero">
+      <div className="eyebrow">FUNDAMENTAL DATA QUALITY</div>
+      <h1>재무 데이터 진단</h1>
+      <p>기술 사전 필터를 통과한 종목 중 필수 재무 필드가 비어 있는 원인과 SEC 공시 근거를 확인합니다.</p>
+    </section>
+
+    <section className="diagnostics-summary">
+      <article className="diagnostic-summary-card"><span>재무 진단 대상</span><strong>{count(result.fundamental_diagnostics_count ?? diagnostics.length)}<em>종목</em></strong><small>최종 매수 기준을 임의로 변경하지 않습니다.</small></article>
+      {(Object.keys(DIAGNOSTIC_FIELD_LABELS) as DiagnosticFieldKey[]).map((field) =>
+        <article className="diagnostic-summary-card" key={field}>
+          <span>{DIAGNOSTIC_FIELD_LABELS[field]} 누락</span>
+          <strong>{count(counts[field])}<em>건</em></strong>
+          <small>종목별 중복 누락 포함</small>
+        </article>
+      )}
+    </section>
+
+    <section className="diagnostics-panel">
+      <div className="diagnostics-heading">
+        <div><div className="eyebrow">DIAGNOSTIC RECORDS</div><h2>종목별 상세 진단</h2>
+          <p>기준일 이후 공시나 확인되지 않은 추정값은 재무 지표에 사용하지 않습니다.</p>
+        </div>
+        <a className="download" href={downloadUrl} download>진단 CSV 다운로드 <span>↓</span></a>
+      </div>
+
+      <div className="diagnostics-filters">
+        <label><span>종목 검색</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="티커 또는 회사명" /></label>
+        <label><span>누락 필드</span><select value={fieldFilter} onChange={(event) => setFieldFilter(event.target.value as typeof fieldFilter)}>
+          <option value="all">전체 필드</option>
+          {(Object.keys(DIAGNOSTIC_FIELD_LABELS) as DiagnosticFieldKey[]).map((field) => <option value={field} key={field}>{DIAGNOSTIC_FIELD_LABELS[field]}</option>)}
+        </select></label>
+        <label><span>조회 상태</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <option value="all">전체 상태</option><option value="WITHHELD">Yahoo 보충 보류</option><option value="FAILED">제공자 오류</option><option value="SUCCESS">Yahoo 보충 성공</option><option value="NOT_NEEDED">Yahoo 불필요</option>
+        </select></label>
+      </div>
+
+      {diagnostics.length === 0 ? <div className="diagnostics-empty">
+        <strong>아직 재무 진단 데이터가 없습니다.</strong>
+        <p>새 스크리너 실행부터 종목별 필드 누락 사유와 SEC 원본 공시 진단이 저장됩니다.</p>
+      </div> : filtered.length === 0 ? <div className="diagnostics-empty"><strong>검색 조건에 맞는 종목이 없습니다.</strong></div> : <>
+        <div className="diagnostics-table-wrap">
+          <table className="diagnostics-table">
+            <thead><tr><th>티커</th><th>누락 필드</th><th>출처</th><th>SEC / Yahoo</th><th>진단 근거</th></tr></thead>
+            <tbody>{filtered.map((item) => <tr key={item.ticker}>
+              <td><strong>{item.ticker}</strong><small>{item.company_name || "회사명 미확인"}</small></td>
+              <td><div className="diagnostic-field-pills">{item.missing_fields.map((field) =>
+                <span key={field}>{DIAGNOSTIC_FIELD_LABELS[field as DiagnosticFieldKey] ?? field}</span>
+              )}</div></td>
+              <td>{item.source || "UNAVAILABLE"}<small>{item.quality || "품질 미분류"}</small></td>
+              <td>{item.sec_status || "—"} / {item.yahoo_status || "—"}<small>{statusLabel(item)}</small></td>
+              <td><details className="diagnostic-detail">
+                <summary>공시·오류 상세 보기</summary>
+                <div className="diagnostic-detail-body">
+                  {item.missing_fields.map((field) => {
+                    const detail = item.field_diagnostics?.[field];
+                    return <section key={field}>
+                      <strong>{DIAGNOSTIC_FIELD_LABELS[field as DiagnosticFieldKey] ?? field}</strong>
+                      <p>{detail?.reason || "필드 누락 원인을 추가로 수집하지 못했습니다."}</p>
+                      {detail?.attempted_tags?.length ? <p><b>표준 XBRL 태그:</b> {detail.attempted_tags.join(", ")}</p> : null}
+                      {detail?.extension_tags?.length ? <p><b>확인된 확장 태그:</b> {detail.extension_tags.join(", ")}</p> : null}
+                      {detail?.filings_checked?.length ? <p><b>조회한 공시:</b> {detail.filings_checked.map((filing) => `${filing.form || "공시"} · 제출 ${filing.filed || "—"} · 기간 ${filing.period || "—"}`).join(" / ")}</p> : null}
+                      {detail?.yahoo_fallback_error ? <p><b>Yahoo 보충 오류:</b> {detail.yahoo_fallback_error}</p> : null}
+                      {detail?.filing_lookup_error ? <p><b>SEC 원문 조회 오류:</b> {detail.filing_lookup_error}</p> : null}
+                    </section>;
+                  })}
+                  <p><b>SEC 공시 날짜:</b> {item.filing_date || "—"} · <b>TTM 기간 종료:</b> {item.ttm_period_end || "—"}</p>
+                  <p><b>주식 수 공시:</b> {item.shares_filing_date || "—"} · <b>매출 기간:</b> {item.revenue_period_end || "—"}</p>
+                  {item.error ? <p><b>수집 오류:</b> {item.error}</p> : null}
+                </div>
+              </details></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <p className="diagnostics-result-count">{count(filtered.length)} / {count(diagnostics.length)} 종목 표시</p>
+      </>}
+      <div className="diagnostics-note">진단 대상은 기술 사전 필터를 통과해 재무 조회까지 진행한 종목입니다. 전체 상장 종목의 모든 재무 누락을 의미하지 않으며, 매수·준비·제외 판정 기준은 기존 설정 그대로 적용됩니다.</div>
+    </section>
+  </main>;
 }
 
 type CalculatorInputs = {
