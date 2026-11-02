@@ -461,7 +461,7 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
     return "확인 필요";
   };
 
-  return <main className="diagnostics-page">
+  return <section className="diagnostics-page">
     <section className="hero diagnostics-hero">
       <div className="eyebrow">FUNDAMENTAL DATA QUALITY</div>
       <h1>재무 데이터 진단</h1>
@@ -539,7 +539,7 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
       </>}
       <div className="diagnostics-note">진단 대상은 기술 사전 필터를 통과해 재무 조회까지 진행한 종목입니다. 전체 상장 종목의 모든 재무 누락을 의미하지 않으며, 매수·준비·제외 판정 기준은 기존 설정 그대로 적용됩니다.</div>
     </section>
-  </main>;
+  </section>;
 }
 
 type CalculatorInputs = {
