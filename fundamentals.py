@@ -4,7 +4,10 @@ from __future__ import annotations
 import logging
 
 from providers.sec_fundamentals import SECFundamentalProvider
-from providers.yahoo_fundamentals import YahooFundamentalProvider
+from providers.yahoo_fundamentals import (
+    FundamentalFallbackWithheldError,
+    YahooFundamentalProvider,
+)
 
 LOG = logging.getLogger(__name__)
 REQUIRED_FIELDS = ("market_cap", "pe", "roe", "sales_growth_5y")
@@ -18,20 +21,31 @@ class FallbackFundamentalProvider:
     def get_fundamentals(self, ticker, cik, reference_date, price):
         errors = []
         primary_result = None
+        sec_status = "FAILED"
+
         try:
             if not cik:
                 raise ValueError("SEC CIK missing for ticker")
             result = self.primary.get_fundamentals(cik, reference_date, price)
             if isinstance(result, dict):
                 primary_result = result
-                # A nonpositive TTM net income is a real financial condition, not a
-                # provider outage. P/E is legitimately undefined in this case, so do
-                # not try to overwrite it with an undated Yahoo snapshot.
+                sec_status = "SUCCESS"
+                # Nonpositive earnings are a real financial condition, not a provider outage.
                 if result.get("fundamental_status") == "NON_POSITIVE_TTM_EARNINGS":
-                    return result
+                    return {
+                        **result,
+                        "fundamental_sec_status": sec_status,
+                        "fundamental_fallback_status": "NOT_NEEDED",
+                        "fundamental_fallback_error": None,
+                    }
                 missing = [field for field in REQUIRED_FIELDS if result.get(field) is None]
                 if result.get("fundamental_quality") != "UNAVAILABLE" and not missing:
-                    return result
+                    return {
+                        **result,
+                        "fundamental_sec_status": sec_status,
+                        "fundamental_fallback_status": "NOT_NEEDED",
+                        "fundamental_fallback_error": None,
+                    }
                 if missing:
                     errors.append("SEC missing required fields: " + ", ".join(missing))
                 else:
@@ -40,6 +54,34 @@ class FallbackFundamentalProvider:
                 errors.append("SEC returned an unexpected result")
         except Exception as exc:
             errors.append(f"SEC: {type(exc).__name__}: {exc}")
+
+        def partial_result(fallback_status, fallback_error):
+            partial = dict(primary_result or {})
+            missing = [field for field in REQUIRED_FIELDS if partial.get(field) is None]
+            for field in REQUIRED_FIELDS:
+                partial.setdefault(field, None)
+            partial["missing_fields"] = missing
+            partial["fundamental_source"] = "SEC" if primary_result else None
+            partial["fundamental_quality"] = (
+                "LOW" if any(partial.get(field) is not None for field in REQUIRED_FIELDS) else "UNAVAILABLE"
+            )
+            partial["fundamental_status"] = partial.get("fundamental_status") or (
+                "INCOMPLETE_FIELDS" if partial["fundamental_quality"] == "LOW" else "UNAVAILABLE"
+            )
+            partial["fundamental_sec_status"] = sec_status
+            partial["fundamental_fallback_status"] = fallback_status
+            partial["fundamental_fallback_error"] = fallback_error
+            if fallback_status == "WITHHELD":
+                partial["warning"] = (
+                    "Yahoo fallback withheld by the point-in-time date guard. Missing: "
+                    + ", ".join(missing)
+                )
+            else:
+                partial["warning"] = (
+                    "Yahoo fallback failed; SEC fields preserved. Missing: " + ", ".join(missing)
+                )
+            partial["error"] = "; ".join(errors) or None
+            return partial
 
         try:
             yahoo = self.fallback.get_fundamentals(ticker, reference_date, price)
@@ -52,7 +94,7 @@ class FallbackFundamentalProvider:
                     combined[field] = yahoo[field]
                     yahoo_filled.append(field)
 
-            # Cross-derive P/E if market_cap was filled by Yahoo and SEC had positive TTM net income
+            # Cross-derive P/E only when SEC has positive TTM net income.
             if (
                 combined.get("pe") is None
                 and combined.get("market_cap") is not None
@@ -63,7 +105,6 @@ class FallbackFundamentalProvider:
                 if "pe" not in yahoo_filled:
                     yahoo_filled.append("pe")
 
-            # Preserve SEC as the primary source, but disclose when Yahoo filled a gap.
             if primary_result:
                 source = "SEC+Yahoo" if yahoo_filled else "SEC"
                 if yahoo_filled:
@@ -81,6 +122,9 @@ class FallbackFundamentalProvider:
                 combined.update(yahoo)
 
             combined["fundamental_source"] = source
+            combined["fundamental_sec_status"] = sec_status
+            combined["fundamental_fallback_status"] = "SUCCESS"
+            combined["fundamental_fallback_error"] = None
             diagnostics = list(errors)
             for field in ("warning", "statement_error"):
                 value = yahoo.get(field)
@@ -105,26 +149,8 @@ class FallbackFundamentalProvider:
                 combined["fundamental_status"] = "AVAILABLE"
                 combined["warning"] = None
             return combined
+        except FundamentalFallbackWithheldError as exc:
+            return partial_result("WITHHELD", str(exc))
         except Exception as exc:
             errors.append(f"Yahoo: {type(exc).__name__}: {exc}")
-            if primary_result:
-                partial = dict(primary_result)
-                missing = [field for field in REQUIRED_FIELDS if partial.get(field) is None]
-                partial["missing_fields"] = missing
-                partial["fundamental_source"] = "SEC"
-                partial["fundamental_quality"] = (
-                    "LOW" if any(partial.get(field) is not None for field in REQUIRED_FIELDS) else "UNAVAILABLE"
-                )
-                partial["warning"] = "Yahoo fallback failed; SEC fields preserved. Missing: " + ", ".join(missing)
-                partial["error"] = "; ".join(errors)
-                return partial
-
-        return {
-            "market_cap": None,
-            "pe": None,
-            "roe": None,
-            "sales_growth_5y": None,
-            "fundamental_source": None,
-            "fundamental_quality": "UNAVAILABLE",
-            "error": "; ".join(errors),
-        }
+            return partial_result("FAILED", str(exc))
