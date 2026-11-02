@@ -71,6 +71,7 @@ class Screener:
                "fundamental_fallback_failure_examples":[],"fundamental_nonpositive_earnings":0,
                "fundamental_rejection_examples":[],"mixed_source_fundamentals":0,
                "fundamental_missing_fields":{}, "fundamental_failure_examples":[],
+               "fundamental_diagnostics":[],
                "data_failures":0,"price_history_failures":0,"instrument_lookup_failures":0,
                "instrument_rejections":0,"instrument_lookup_examples":[],
                "data_failure_examples":[],"data_failure_categories":{},
@@ -243,6 +244,42 @@ class Screener:
                         missing=stats["fundamental_missing_fields"]
                         missing[key]=missing.get(key,0)+1
                 if not complete and not nonpositive_earnings:
+                    diagnostic_fields = {}
+                    provider_diagnostics = fundamental.get("field_diagnostics") or {}
+                    for field in missing_fields:
+                        detail = dict(provider_diagnostics.get(field) or {})
+                        if not detail.get("reason"):
+                            if fallback_status == "WITHHELD":
+                                detail["reason"] = "Yahoo 재무 보충이 기준일 검증으로 보류됐습니다."
+                            elif fallback_status == "FAILED":
+                                detail["reason"] = "Yahoo 재무 보충 조회가 실패했습니다."
+                            else:
+                                detail["reason"] = "SEC 공시에서 해당 필드에 필요한 데이터를 확인하지 못했습니다."
+                        diagnostic_fields[field] = detail
+                    stats["fundamental_diagnostics"].append({
+                        "ticker": ticker,
+                        "company_name": member.get("name"),
+                        "exchange": member.get("exchange"),
+                        "reference_date": str(reference_date),
+                        "source": source,
+                        "quality": fundamental.get("fundamental_quality"),
+                        "status": fundamental.get("fundamental_status"),
+                        "missing_fields": missing_fields,
+                        "field_diagnostics": diagnostic_fields,
+                        "sec_status": sec_status,
+                        "yahoo_status": fallback_status,
+                        "sec_tags": fundamental.get("tags") or {},
+                        "extension_filings": fundamental.get("extension_filings") or [],
+                        "filing_date": fundamental.get("filing_date"),
+                        "ttm_period_end": fundamental.get("ttm_period_end"),
+                        "equity_period_end": fundamental.get("equity_period_end"),
+                        "shares_period_end": fundamental.get("shares_period_end"),
+                        "shares_filing_date": fundamental.get("shares_filing_date"),
+                        "revenue_period_end": fundamental.get("revenue_period_end"),
+                        "error": fundamental.get("error"),
+                        "warning": fundamental.get("warning"),
+                        "statement_error": fundamental.get("statement_error"),
+                    })
                     reason=str(fundamental.get("error") or fundamental.get("warning") or "No provider error detail")
                     if fundamental.get("warning"):
                         reason += "; " + str(fundamental["warning"])
@@ -266,7 +303,6 @@ class Screener:
                     stats["fundamental_failure_examples"].append({
                         "ticker":ticker,"source":"UNAVAILABLE","missing_fields":["market_cap","pe","roe","sales_growth_5y"],"error":error_text[:500]})
                 stats["fundamental_no_usable_data"]+=1
-                stats["fundamental_source_failures"]+=1
                 if len(stats["fundamental_source_failure_examples"])<12:
                     stats["fundamental_source_failure_examples"].append({
                         "ticker":ticker,"reason":error_text[:500]})
