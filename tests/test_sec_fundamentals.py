@@ -233,3 +233,4 @@ def test_inline_xbrl_number_handles_parentheses_and_negative_sign():
     assert SECFundamentalProvider._inline_number("(1,200)", scale="3") == -1_200_000
     assert SECFundamentalProvider._inline_number("1200", scale="3", sign="-") == -1_200_000
     assert SECFundamentalProvider._inline_number("—") is None
+    assert SECFundamentalProvider._inline_number("1.234,56", format_name="ixt:num-comma-decimal") == 1234.56
