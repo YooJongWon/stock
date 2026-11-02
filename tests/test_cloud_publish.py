@@ -203,3 +203,5 @@ def test_cloud_publishes_fundamental_diagnostics_json_and_csv(isolated_publish, 
     csv_frame = pd.read_csv(csv_path, encoding="utf-8-sig")
     assert csv_frame.loc[0, "ticker"] == "ABC"
     assert "sales_growth_5y" in csv_frame.loc[0, "missing_fields"]
+    assert csv_frame.loc[0, "sales_growth_5y_reason"] == "연간 매출 이력이 부족합니다."
+    assert "RevenueFromContractWithCustomerExcludingAssessedTax" in csv_frame.loc[0, "sales_growth_5y_attempted_tags"]
