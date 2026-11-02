@@ -52,6 +52,17 @@ class FallbackFundamentalProvider:
                     combined[field] = yahoo[field]
                     yahoo_filled.append(field)
 
+            # Cross-derive P/E if market_cap was filled by Yahoo and SEC had positive TTM net income
+            if (
+                combined.get("pe") is None
+                and combined.get("market_cap") is not None
+                and combined.get("ttm_net_income") is not None
+                and float(combined["ttm_net_income"]) > 0
+            ):
+                combined["pe"] = float(combined["market_cap"]) / float(combined["ttm_net_income"])
+                if "pe" not in yahoo_filled:
+                    yahoo_filled.append("pe")
+
             # Preserve SEC as the primary source, but disclose when Yahoo filled a gap.
             if primary_result:
                 source = "SEC+Yahoo" if yahoo_filled else "SEC"
@@ -78,8 +89,11 @@ class FallbackFundamentalProvider:
             if yahoo.get("error"):
                 diagnostics.append(f"Yahoo: {yahoo['error']}")
             combined["error"] = "; ".join(dict.fromkeys(diagnostics)) or None
+
             missing_after_fallback = [field for field in REQUIRED_FIELDS if combined.get(field) is None]
+            combined["missing_fields"] = missing_after_fallback
             if missing_after_fallback:
+                combined["fundamental_status"] = "INCOMPLETE_FIELDS"
                 combined["fundamental_quality"] = "LOW" if any(
                     combined.get(field) is not None for field in REQUIRED_FIELDS
                 ) else "UNAVAILABLE"
@@ -87,12 +101,16 @@ class FallbackFundamentalProvider:
                     "Required fundamental fields still missing after fallback: "
                     + ", ".join(missing_after_fallback)
                 )
+            else:
+                combined["fundamental_status"] = "AVAILABLE"
+                combined["warning"] = None
             return combined
         except Exception as exc:
             errors.append(f"Yahoo: {type(exc).__name__}: {exc}")
             if primary_result:
                 partial = dict(primary_result)
                 missing = [field for field in REQUIRED_FIELDS if partial.get(field) is None]
+                partial["missing_fields"] = missing
                 partial["fundamental_source"] = "SEC"
                 partial["fundamental_quality"] = (
                     "LOW" if any(partial.get(field) is not None for field in REQUIRED_FIELDS) else "UNAVAILABLE"
