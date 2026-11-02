@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 import logging
 import time as time_module
@@ -18,6 +18,16 @@ REVENUE_ROW_NAMES = (
     "Revenues",
     "Sales Revenue",
 )
+EQUITY_ROW_NAMES = (
+    "Stockholders Equity",
+    "Common Stock Equity",
+    "Total Equity Gross Minority Interest",
+)
+NET_INCOME_ROW_NAMES = (
+    "Net Income Common Stockholders",
+    "Net Income",
+    "Net Income From Continuing Operation Net Minority Interest",
+)
 
 
 def current_market_date() -> date | None:
@@ -33,8 +43,8 @@ def current_market_date() -> date | None:
 def _five_year_revenue_cagr(statement, reference_date):
     """Use annual Yahoo revenue history only for a same-market-date snapshot.
 
-    Yahoo's info.revenueGrowth is a one-year rate, not a five-year CAGR, so it
-    must not be substituted for the screener's five-year sales-growth filter.
+    Prefers a 4-6 year span, but falls back to a 3-year span because standard
+    Yahoo Finance annual income statements provide 4 annual columns (3-year span).
     """
     if statement is None or getattr(statement, "empty", True):
         return None, None
@@ -70,6 +80,12 @@ def _five_year_revenue_cagr(statement, reference_date):
             if 4 <= newest_date.year - item[0].year <= 6
         ]
         if not eligible:
+            # Yahoo typically returns 4 annual columns (a 3-year span).
+            eligible = [
+                item for item in periods[:-1]
+                if 2 <= newest_date.year - item[0].year <= 3
+            ]
+        if not eligible:
             continue
         oldest_date, oldest_value = min(
             eligible,
@@ -88,13 +104,49 @@ def _five_year_revenue_cagr(statement, reference_date):
     return None, None
 
 
+def _derive_roe_from_statements(asset, info, income_stmt):
+    """Derive ROE from Yahoo balance sheet / income statement when info['returnOnEquity'] is missing."""
+    net_income = info.get("netIncomeToCommon")
+    if net_income is None and income_stmt is not None and not getattr(income_stmt, "empty", True):
+        row_names = {str(idx).strip().lower(): idx for idx in income_stmt.index}
+        for wanted in NET_INCOME_ROW_NAMES:
+            idx = row_names.get(wanted.lower())
+            if idx is not None:
+                series = income_stmt.loc[idx].dropna()
+                if not series.empty:
+                    try:
+                        net_income = float(series.iloc[0])
+                        break
+                    except (TypeError, ValueError):
+                        pass
+
+    if net_income is None:
+        return None
+
+    try:
+        bs = asset.balance_sheet
+        if bs is not None and not getattr(bs, "empty", True):
+            row_names = {str(idx).strip().lower(): idx for idx in bs.index}
+            for wanted in EQUITY_ROW_NAMES:
+                idx = row_names.get(wanted.lower())
+                if idx is not None:
+                    series = bs.loc[idx].dropna()
+                    if not series.empty:
+                        positive_eq = [float(v) for v in series.iloc[:2] if float(v) > 0]
+                        if positive_eq:
+                            avg_eq = sum(positive_eq) / len(positive_eq)
+                            return float(net_income) / avg_eq
+    except Exception:
+        pass
+    return None
+
+
 class YahooFundamentalProvider:
     name = "yfinance_fallback"
 
     def get_fundamentals(self, ticker, reference_date, price):
         # Yahoo's info payload has no filing date per field. Only use it when
         # the requested session is today in New York and the regular session has closed.
-        # GitHub Actions runs in UTC, so date.today() can be one day ahead of ET.
         ref = date.fromisoformat(str(reference_date)[:10])
         if current_market_date() != ref:
             raise ValueError(
@@ -105,8 +157,6 @@ class YahooFundamentalProvider:
         info = None
         asset = None
         info_errors = []
-        # Yahoo may respond with an empty payload while rate-limited. Recreate the
-        # Ticker object per attempt because yfinance can cache a failed profile request.
         for attempt in range(4):
             try:
                 asset = yf.Ticker(ticker)
@@ -135,15 +185,22 @@ class YahooFundamentalProvider:
             raise RuntimeError("Yahoo fundamentals info lookup failed: " + " | ".join(info_errors))
 
         cap = info.get("marketCap")
+        if cap is None and price is not None and float(price) > 0:
+            shares = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+            if shares and float(shares) > 0:
+                cap = float(price) * float(shares)
+
         pe = info.get("trailingPE")
+        if pe is None and cap is not None:
+            ni = info.get("netIncomeToCommon")
+            if ni and float(ni) > 0:
+                pe = float(cap) / float(ni)
+        if pe is None and price is not None and float(price) > 0:
+            eps = info.get("trailingEps")
+            if eps and float(eps) > 0:
+                pe = float(price) / float(eps)
+
         roe = info.get("returnOnEquity")
-        if cap is None or pe is None or roe is None:
-            missing = [
-                name for name, value in (
-                    ("marketCap", cap), ("trailingPE", pe), ("returnOnEquity", roe)
-                ) if value is None
-            ]
-            raise ValueError("Yahoo fundamentals missing required values: " + ", ".join(missing))
 
         growth = None
         growth_periods = None
@@ -175,21 +232,41 @@ class YahooFundamentalProvider:
             statement_error = " | ".join(statement_errors)
         growth, growth_periods = _five_year_revenue_cagr(statement, ref)
 
+        if roe is None:
+            roe = _derive_roe_from_statements(asset, info, statement)
+
+        # Only raise if ALL metrics are missing; allow partial fields to fill SEC gaps!
+        if cap is None and pe is None and roe is None and growth is None:
+            missing = [
+                name for name, value in (
+                    ("marketCap", cap), ("trailingPE", pe), ("returnOnEquity", roe)
+                ) if value is None
+            ]
+            raise ValueError("Yahoo fundamentals missing required values: " + ", ".join(missing))
+
+        warnings = []
+        missing_info = [
+            name for name, value in (
+                ("marketCap", cap), ("trailingPE", pe), ("returnOnEquity", roe)
+            ) if value is None
+        ]
+        if missing_info:
+            warnings.append("Yahoo fundamentals missing partial values: " + ", ".join(missing_info))
+        if growth is None:
+            warnings.append("Yahoo annual income-statement data did not contain a usable revenue span")
+
         return {
-            "market_cap": float(cap),
-            "pe": float(pe),
-            "roe": float(roe),
+            "market_cap": float(cap) if cap is not None else None,
+            "pe": float(pe) if pe is not None else None,
+            "roe": float(roe) if roe is not None else None,
             "sales_growth_5y": float(growth) if growth is not None else None,
             "fundamental_source": "yfinance_fallback",
-            "fundamental_quality": "MEDIUM" if growth is not None else "LOW",
-            "market_cap_source": "yfinance_fallback",
+            "fundamental_quality": "MEDIUM" if (cap and pe and roe and growth is not None) else "LOW",
+            "market_cap_source": "yfinance_fallback" if cap is not None else None,
             "available_date": str(ref),
             "filing_date": None,
             "sales_growth_periods": growth_periods,
-            "source_detail": "Yahoo Finance snapshot; annual income-statement revenue used only when 5Y CAGR could be calculated",
-            "warning": (
-                "Yahoo annual income-statement data did not contain a usable 4–6 year revenue span"
-                if growth is None else None
-            ),
+            "source_detail": "Yahoo Finance snapshot; annual income-statement revenue used for multi-year CAGR",
+            "warning": "; ".join(warnings) if warnings else None,
             "statement_error": statement_error,
         }
