@@ -30,6 +30,10 @@ NET_INCOME_ROW_NAMES = (
 )
 
 
+class FundamentalFallbackWithheldError(ValueError):
+    """Yahoo fallback was intentionally withheld by the point-in-time guard."""
+
+
 def current_market_date() -> date | None:
     """Return the New York date only after the regular-session close has passed."""
     now = datetime.now(NEW_YORK)
@@ -144,7 +148,7 @@ class YahooFundamentalProvider:
     def get_fundamentals(self, ticker, reference_date, price):
         ref = date.fromisoformat(str(reference_date)[:10])
         if current_market_date() != ref:
-            raise ValueError(
+            raise FundamentalFallbackWithheldError(
                 "Yahoo fundamentals lack point-in-time filing dates; fallback withheld "
                 "because reference date is not the current New York market date"
             )
