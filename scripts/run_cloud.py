@@ -150,7 +150,44 @@ def main(argv: list[str] | None = None) -> int:
             fundamental_diagnostics = []
         diagnostics_csv = stage / "fundamental-diagnostics.csv"
         import pandas as pd
-        pd.DataFrame(fundamental_diagnostics).to_csv(
+        diagnostic_csv_rows = []
+        diagnostic_columns = [
+            "ticker", "company_name", "exchange", "reference_date", "source",
+            "quality", "status", "sec_status", "yahoo_status", "missing_fields",
+            "error", "warning", "filing_date", "ttm_period_end", "equity_period_end",
+            "shares_period_end", "shares_filing_date", "revenue_period_end",
+        ]
+        for field in ("market_cap", "pe", "roe", "sales_growth_5y"):
+            diagnostic_columns.extend([
+                f"{field}_reason", f"{field}_attempted_tags",
+                f"{field}_extension_tags", f"{field}_filings_checked",
+                f"{field}_yahoo_error", f"{field}_sec_error",
+            ])
+        for item in fundamental_diagnostics:
+            row = {
+                key: item.get(key)
+                for key in (
+                    "ticker", "company_name", "exchange", "reference_date", "source",
+                    "quality", "status", "sec_status", "yahoo_status", "error",
+                    "warning", "filing_date", "ttm_period_end", "equity_period_end",
+                    "shares_period_end", "shares_filing_date", "revenue_period_end",
+                )
+            }
+            row["missing_fields"] = "; ".join(item.get("missing_fields") or [])
+            field_details = item.get("field_diagnostics") or {}
+            for field in ("market_cap", "pe", "roe", "sales_growth_5y"):
+                detail = field_details.get(field) or {}
+                row[f"{field}_reason"] = detail.get("reason")
+                row[f"{field}_attempted_tags"] = "; ".join(detail.get("attempted_tags") or [])
+                row[f"{field}_extension_tags"] = "; ".join(detail.get("extension_tags") or [])
+                row[f"{field}_filings_checked"] = "; ".join(
+                    f"{filing.get('form') or 'filing'}:{filing.get('filed') or '-'}:{filing.get('period') or '-'}"
+                    for filing in detail.get("filings_checked") or []
+                )
+                row[f"{field}_yahoo_error"] = detail.get("yahoo_fallback_error")
+                row[f"{field}_sec_error"] = detail.get("filing_lookup_error") or detail.get("error")
+            diagnostic_csv_rows.append(row)
+        pd.DataFrame(diagnostic_csv_rows, columns=diagnostic_columns).to_csv(
             diagnostics_csv, index=False, encoding="utf-8-sig"
         )
 
