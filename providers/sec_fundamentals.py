@@ -213,7 +213,7 @@ class SECFundamentalProvider:
 
     @staticmethod
     def _inline_number(raw, scale="0", sign=None, format_name=None):
-        value = "".join(str(raw or "").replace("\\xa0", " ").split()).replace("$", "")
+        value = "".join(str(raw or "").replace("\u00a0", " ").split()).replace("$", "")
         if not value or value in {"—", "-", "–"}:
             return None
         negative_parentheses = value.startswith("(") and value.endswith(")")
