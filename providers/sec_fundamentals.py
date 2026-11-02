@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
+from html.parser import HTMLParser
+import re
 import time
 
 import requests
@@ -47,6 +50,123 @@ SHARES_TAGS = (
     "WeightedAverageNumberOfDilutedSharesOutstanding",
     "WeightedAverageNumberOfSharesOutstandingBasic",
 )
+REVENUE_TAGS = REVENUE_TAGS + (
+    "Revenue",
+    "RevenueFromContractsWithCustomers",
+    "RevenueFromSaleOfGoods",
+    "RevenueFromRenderingOfServices",
+    "SalesRevenue",
+    "NetSales",
+    "OperatingRevenue",
+    "InterestRevenueExpenseNonoperatingNet",
+)
+NET_INCOME_TAGS = NET_INCOME_TAGS + (
+    "ProfitLossFromContinuingOperations",
+    "ProfitLossAttributableToOwnersOfParent",
+    "ProfitLossAttributableToNoncontrollingInterests",
+)
+EQUITY_TAGS = EQUITY_TAGS + (
+    "TotalEquity",
+    "EquityAttributableToOwnersOfParent",
+    "EquityAttributableToOwnersOfTheParent",
+    "TotalShareholdersEquity",
+)
+ASSETS_TAGS = ("Assets", "AssetsTotal")
+LIABILITIES_TAGS = ("Liabilities", "LiabilitiesTotal")
+
+
+class _InlineXBRLParser(HTMLParser):
+    """Extract unsegmented Inline XBRL numeric facts and their reporting contexts."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.contexts = {}
+        self.facts = []
+        self._context = None
+        self._context_depth = 0
+        self._context_field = None
+        self._context_text = []
+        self._fact = None
+        self._fact_depth = 0
+        self._exclude_depth = 0
+
+    @staticmethod
+    def _local(name):
+        return str(name or "").split(":")[-1].lower()
+
+    def handle_starttag(self, tag, attrs):
+        local = self._local(tag)
+        values = {str(key).lower(): value for key, value in attrs}
+
+        if self._fact is not None:
+            self._fact_depth += 1
+            if local == "exclude":
+                self._exclude_depth += 1
+            return
+
+        if self._context is not None:
+            self._context_depth += 1
+            if local == "segment":
+                self._context["segmented"] = True
+            elif local in ("startdate", "enddate", "instant"):
+                self._context_field = local
+                self._context_text = []
+            return
+
+        if local == "context":
+            context_id = values.get("id")
+            if context_id:
+                self._context = {"id": context_id, "segmented": False}
+                self._context_depth = 1
+            return
+
+        if local == "nonfraction":
+            self._fact = {
+                "name": values.get("name"),
+                "context_ref": values.get("contextref"),
+                "unit_ref": values.get("unitref"),
+                "scale": values.get("scale", "0"),
+                "sign": values.get("sign"),
+                "nil": values.get("xsi:nil") or values.get("nil"),
+                "text": [],
+            }
+            self._fact_depth = 1
+            self._exclude_depth = 0
+
+    def handle_endtag(self, tag):
+        local = self._local(tag)
+        if self._fact is not None:
+            if local == "exclude" and self._exclude_depth:
+                self._exclude_depth -= 1
+            self._fact_depth -= 1
+            if self._fact_depth <= 0:
+                self.facts.append(self._fact)
+                self._fact = None
+                self._fact_depth = 0
+                self._exclude_depth = 0
+            return
+
+        if self._context is not None:
+            if local in ("startdate", "enddate", "instant") and self._context_field == local:
+                self._context[local] = "".join(self._context_text).strip()
+                self._context_field = None
+                self._context_text = []
+            self._context_depth -= 1
+            if self._context_depth <= 0:
+                self.contexts[self._context["id"]] = self._context
+                self._context = None
+                self._context_depth = 0
+
+    def handle_data(self, data):
+        if self._fact is not None:
+            if self._exclude_depth == 0:
+                self._fact["text"].append(data)
+        elif self._context is not None and self._context_field:
+            self._context_text.append(data)
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
 
 
 class SECFundamentalProvider:
@@ -90,6 +210,285 @@ class SECFundamentalProvider:
                     raise
                 time.sleep(2 ** attempt)
         raise RuntimeError("SEC companyfacts request exhausted retry attempts")
+
+    @staticmethod
+    def _inline_number(raw, scale="0", sign=None):
+        value = "".join(str(raw or "").split()).replace(",", "").replace("$", "")
+        if not value or value in {"—", "-", "–"}:
+            return None
+        negative_parentheses = value.startswith("(") and value.endswith(")")
+        if negative_parentheses:
+            value = value[1:-1]
+        value = value.replace("−", "-")
+        try:
+            number = Decimal(value)
+            number *= Decimal(10) ** int(scale or 0)
+        except (InvalidOperation, ValueError, OverflowError):
+            return None
+        if negative_parentheses or str(sign or "") == "-":
+            number = -abs(number)
+        try:
+            return float(number)
+        except (ValueError, OverflowError):
+            return None
+
+    def _get_text(self, url, cache_key, ttl=31536000):
+        hit = self.cache.get("filings", cache_key, ttl)
+        if isinstance(hit, str) and hit:
+            return hit
+        if "example.com" in self.user_agent:
+            raise RuntimeError("Set SEC_USER_AGENT to a descriptive app name and contact email in .env")
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept-Encoding": "gzip, deflate",
+            "Accept": "text/html,application/xhtml+xml",
+        }
+        for attempt in range(4):
+            self.limiter.wait()
+            try:
+                response = self.session.get(url, headers=headers, timeout=35)
+                response.raise_for_status()
+                body = response.text
+                if not body or len(body) < 1000:
+                    raise ValueError("SEC filing document was empty or unexpectedly short")
+                self.cache.set("filings", cache_key, body)
+                return body
+            except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                retryable = (
+                    isinstance(exc, (requests.Timeout, requests.ConnectionError))
+                    or status in (429, 500, 502, 503, 504)
+                )
+                if not retryable or attempt >= 3:
+                    raise
+                time.sleep(2 ** attempt)
+        raise RuntimeError("SEC filing document request exhausted retry attempts")
+
+    @staticmethod
+    def _extension_kind(tag, kind):
+        local = str(tag or "").split(":")[-1].lower()
+        if kind == "revenue":
+            blocked = ("cost", "expense", "tax", "receivable", "deferred", "backlog", "order", "discount", "allowance")
+            return ("revenue" in local or local.startswith("sales") or local.endswith("sales")) and not any(x in local for x in blocked)
+        if kind == "equity":
+            blocked = ("method", "investment", "compensation", "sharebased", "option", "security", "instrument")
+            return ("equity" in local or "capital" in local) and not any(x in local for x in blocked)
+        if kind == "shares":
+            return ("sharesoutstanding" in local or "commonsharesoutstanding" in local) and not any(
+                x in local for x in ("weightedaverage", "diluted", "basic")
+            )
+        return False
+
+    def _inline_records_from_filing(self, cik, accession, primary_document, filing_date, form, ref):
+        accession_plain = str(accession).replace("-", "")
+        cik_number = str(int(str(cik)))
+        url = (
+            f"https://www.sec.gov/Archives/edgar/data/{cik_number}/"
+            f"{accession_plain}/{primary_document}"
+        )
+        body = self._get_text(url, f"{cik_number}:{accession_plain}:{primary_document}")
+        parser = _InlineXBRLParser()
+        parser.feed(body)
+        filed = date.fromisoformat(str(filing_date)[:10])
+        records = []
+        for fact in parser.facts:
+            name = str(fact.get("name") or "")
+            prefix = name.split(":")[0].lower() if ":" in name else ""
+            if prefix in ("us-gaap", "dei", "ifrs-full", "srt"):
+                continue
+            if fact.get("nil") in ("true", "1"):
+                continue
+            context = parser.contexts.get(fact.get("context_ref"))
+            if not context or context.get("segmented"):
+                continue
+            end_text = context.get("instant") or context.get("enddate")
+            start_text = context.get("startdate")
+            try:
+                end = date.fromisoformat(str(end_text)[:10])
+                start = date.fromisoformat(str(start_text)[:10]) if start_text else None
+            except (TypeError, ValueError):
+                continue
+            if filed > ref or end > ref or (start and start > ref):
+                continue
+            value = self._inline_number(
+                "".join(fact.get("text") or []), fact.get("scale"), fact.get("sign")
+            )
+            if value is None:
+                continue
+            records.append({
+                "tag": name,
+                "local_tag": name.split(":")[-1],
+                "start": start,
+                "end": end,
+                "filed": filed,
+                "form": str(form).split("/")[0],
+                "fy": end.year,
+                "fp": "FY" if str(form).startswith(("10-K", "20-F", "40-F")) else None,
+                "val": value,
+                "unit": fact.get("unit_ref"),
+                "context_id": fact.get("context_ref"),
+                "source": "SEC Inline XBRL filing",
+            })
+        return records
+
+    def _extension_records(self, cik, ref, need_revenue, need_equity, need_shares):
+        """Read point-in-time Inline XBRL facts from a small, targeted set of original SEC filings."""
+        if not cik:
+            return {"revenue": [], "equity": [], "shares": [], "filings": [], "tags": {}}
+
+        payload = self._get_json(
+            f"https://data.sec.gov/submissions/CIK{str(cik).zfill(10)}.json",
+            f"submissions:{str(cik).zfill(10)}",
+            86400,
+        )
+        recent = ((payload.get("filings") or {}).get("recent") or {})
+        accessions = recent.get("accessionNumber") or []
+        filing_dates = recent.get("filingDate") or []
+        forms = recent.get("form") or []
+        report_dates = recent.get("reportDate") or []
+        primary_docs = recent.get("primaryDocument") or []
+        rows = []
+        for i, accession in enumerate(accessions):
+            try:
+                filing_date = date.fromisoformat(filing_dates[i])
+                form = str(forms[i])
+                primary_doc = str(primary_docs[i] or "")
+            except (IndexError, TypeError, ValueError):
+                continue
+            if filing_date > ref or form not in ("10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A", "40-F", "40-F/A"):
+                continue
+            report_date = None
+            try:
+                report_date = date.fromisoformat(report_dates[i])
+            except (IndexError, TypeError, ValueError):
+                pass
+            if report_date and report_date > ref:
+                continue
+            if not primary_doc.lower().endswith((".htm", ".html", ".xhtml")):
+                continue
+            rows.append({
+                "accession": accession,
+                "filing_date": filing_date,
+                "form": form.split("/")[0],
+                "report_date": report_date,
+                "primary_document": primary_doc,
+            })
+        rows.sort(key=lambda row: row["filing_date"], reverse=True)
+        annual_rows = [row for row in rows if row["form"] in ("10-K", "20-F", "40-F")]
+        selected = []
+        if (need_equity or need_shares) and rows:
+            selected.append(rows[0])
+        if need_revenue and annual_rows:
+            latest_annual = annual_rows[0]
+            selected.append(latest_annual)
+            latest_year = (latest_annual["report_date"] or latest_annual["filing_date"]).year
+            older = [
+                row for row in annual_rows[1:]
+                if 4 <= latest_year - (row["report_date"] or row["filing_date"]).year <= 6
+            ]
+            if not older:
+                older = [
+                    row for row in annual_rows[1:]
+                    if 2 <= latest_year - (row["report_date"] or row["filing_date"]).year <= 3
+                ]
+            if older:
+                selected.append(min(
+                    older,
+                    key=lambda row: abs(
+                        latest_year - (row["report_date"] or row["filing_date"]).year - 5
+                    ),
+                ))
+
+        unique = {}
+        for row in selected:
+            unique[row["accession"]] = row
+        extracted = []
+        used_filings = []
+        for row in unique.values():
+            try:
+                extracted.extend(self._inline_records_from_filing(
+                    cik, row["accession"], row["primary_document"],
+                    row["filing_date"], row["form"], ref,
+                ))
+                used_filings.append({
+                    "form": row["form"],
+                    "filed": str(row["filing_date"]),
+                    "period": str(row["report_date"]) if row["report_date"] else None,
+                    "accession": row["accession"],
+                })
+            except Exception:
+                # Original companyfacts remain usable; a filing-level failure is diagnostic only.
+                continue
+
+        extension = {
+            row["tag"] for row in extracted
+            if str(row["tag"]).split(":")[0].lower() not in ("us-gaap", "dei", "ifrs-full", "srt")
+        }
+        revenue = [
+            row for row in extracted
+            if self._extension_kind(row["tag"], "revenue") and row.get("start")
+        ] if need_revenue else []
+        equity = [
+            row for row in extracted
+            if self._extension_kind(row["tag"], "equity") and not row.get("start")
+        ] if need_equity else []
+        shares = [
+            row for row in extracted
+            if self._extension_kind(row["tag"], "shares") and not row.get("start")
+        ] if need_shares else []
+
+        def best_tag(records, minimum=1):
+            grouped = {}
+            for row in records:
+                grouped.setdefault(row["tag"], []).append(row)
+            ranked = []
+            for tag, items in grouped.items():
+                ranked.append((len(items), tag, items))
+            ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            return ranked[0][2] if ranked and ranked[0][0] >= minimum else []
+
+        revenue = best_tag(revenue, 2)
+        equity = best_tag(equity, 1)
+        shares = best_tag(shares, 1)
+        tags = {
+            "revenue": sorted({row["tag"] for row in revenue}),
+            "equity": sorted({row["tag"] for row in equity}),
+            "shares": sorted({row["tag"] for row in shares}),
+            "extension_names_seen": sorted(extension)[:80],
+        }
+        return {
+            "revenue": revenue,
+            "equity": equity,
+            "shares": shares,
+            "filings": used_filings,
+            "tags": tags,
+        }
+
+    @classmethod
+    def _growth_from_annual_records(cls, records):
+        annual = cls._annual_records(records)
+        years = sorted(year for year, row in annual.items() if float(row["val"]) > 0)
+        if len(years) < 2:
+            return None, None
+        latest_year = years[-1]
+        eligible = [year for year in years[:-1] if 4 <= latest_year - year <= 6]
+        if not eligible:
+            eligible = [year for year in years[:-1] if 2 <= latest_year - year <= 3]
+        if not eligible:
+            return None, None
+        base_year = min(eligible, key=lambda year: abs(year - (latest_year - 5)))
+        span = latest_year - base_year
+        latest = annual[latest_year]
+        base = annual[base_year]
+        value = (float(latest["val"]) / float(base["val"])) ** (1 / span) - 1
+        return value, {
+            "latest_period_end": str(latest["end"]),
+            "latest_filing_date": str(latest["filed"]),
+            "base_period_end": str(base["end"]),
+            "base_filing_date": str(base["filed"]),
+            "tag": latest.get("tag"),
+            "years": span,
+        }
 
     @staticmethod
     def _records(fact, ref):
@@ -389,6 +788,71 @@ class SECFundamentalProvider:
         market_cap = valid_price * latest_shares if valid_price and latest_shares and latest_shares > 0 else None
         pe = market_cap / ttm_net_income if market_cap is not None and ttm_net_income > 0 else None
 
+        extension_info = {"filings": [], "tags": {}}
+        need_extension = {
+            "revenue": sales_growth is None,
+            "equity": roe is None,
+            "shares": market_cap is None,
+        }
+        if any(need_extension.values()):
+            try:
+                extension_info = self._extension_records(
+                    cik, ref, need_extension["revenue"],
+                    need_extension["equity"], need_extension["shares"],
+                )
+            except Exception as exc:
+                extension_info = {
+                    "filings": [],
+                    "tags": {},
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+
+            if sales_growth is None and extension_info.get("revenue"):
+                extension_growth, extension_period = self._growth_from_annual_records(
+                    extension_info["revenue"]
+                )
+                if extension_growth is not None:
+                    sales_growth = extension_growth
+                    sales_period = extension_period
+                    revenue_records = extension_info["revenue"] + revenue_records
+
+            if roe is None and extension_info.get("equity"):
+                equity_records = extension_info["equity"] + equity_records
+                equity_by_end = {}
+                for row in equity_records:
+                    if not row.get("start"):
+                        old = equity_by_end.get(row["end"])
+                        if old is None or row["filed"] > old["filed"]:
+                            equity_by_end[row["end"]] = row
+                equity_instants = sorted(equity_by_end.values(), key=lambda row: row["end"])
+                latest_equity = equity_instants[-1] if equity_instants else None
+                prior_equity = [row for row in equity_instants if row["end"] < trailing[0]["end"]]
+                if not prior_equity and len(equity_instants) >= 2:
+                    prior_equity = [equity_instants[-2]]
+                opening_equity = prior_equity[-1]["val"] if prior_equity else (
+                    latest_equity["val"] if latest_equity else None
+                )
+                if latest_equity is not None and opening_equity is not None:
+                    if float(opening_equity) > 0 and float(latest_equity["val"]) > 0:
+                        roe = ttm_net_income / (
+                            (float(opening_equity) + float(latest_equity["val"])) / 2
+                        )
+                    elif float(latest_equity["val"]) > 0:
+                        roe = ttm_net_income / float(latest_equity["val"])
+
+            if market_cap is None and extension_info.get("shares"):
+                share_records = extension_info["shares"] + share_records
+                valid_shares = [row for row in share_records if not row.get("start")]
+                latest_shares_record = max(
+                    valid_shares,
+                    key=lambda row: (row["end"], row["filed"]),
+                    default=None,
+                )
+                latest_shares = float(latest_shares_record["val"]) if latest_shares_record else None
+                if latest_shares and latest_shares > 0 and valid_price:
+                    market_cap = valid_price * latest_shares
+                    pe = market_cap / ttm_net_income if ttm_net_income > 0 else None
+
         latest_revenue = max(self._quarters(revenue_records), key=lambda row: (row["end"], row["filed"]), default=None)
         latest_net_income = max(trailing, key=lambda row: (row["end"], row["filed"]))
         missing = [
@@ -420,6 +884,35 @@ class SECFundamentalProvider:
         if sales_growth is None:
             warnings.append("SEC annual revenue history insufficient for a 4–6 year growth calculation")
 
+        field_diagnostics = {}
+        if market_cap is None:
+            field_diagnostics["market_cap"] = {
+                "reason": "기준일까지 제출된 SEC 공시에서 시가총액 계산에 쓸 발행주식 수를 확인하지 못했습니다.",
+                "attempted_tags": list(SHARES_TAGS),
+                "filings_checked": extension_info.get("filings", []),
+            }
+        if roe is None:
+            field_diagnostics["roe"] = {
+                "reason": "기준일까지 확인 가능한 기초·기말 자본총계 또는 자산·부채 자료가 부족해 ROE를 계산하지 못했습니다.",
+                "attempted_tags": list(EQUITY_TAGS) + list(ASSETS_TAGS) + list(LIABILITIES_TAGS),
+                "filings_checked": extension_info.get("filings", []),
+            }
+        if sales_growth is None:
+            field_diagnostics["sales_growth_5y"] = {
+                "reason": "기준일까지 공개된 연간 매출에서 4~6년(가능하면 5년) 비교 구간을 찾지 못했습니다.",
+                "attempted_tags": list(REVENUE_TAGS),
+                "extension_tags": (extension_info.get("tags") or {}).get("extension_names_seen", []),
+                "filings_checked": extension_info.get("filings", []),
+            }
+        if extension_info.get("error"):
+            for detail in field_diagnostics.values():
+                detail["filing_lookup_error"] = extension_info["error"]
+
+        if market_cap is not None and latest_shares_record is not None and extension_info.get("shares"):
+            market_cap_source = "SEC Inline XBRL filing"
+        else:
+            market_cap_source = "SEC" if market_cap is not None else None
+
         return {
             "market_cap": market_cap,
             "pe": pe,
@@ -431,8 +924,14 @@ class SECFundamentalProvider:
             "fundamental_rejection_reason": rejection_reason,
             "missing_fields": missing,
             "warning": "; ".join(warnings) or None,
-            "market_cap_source": "SEC" if market_cap is not None else None,
-            "tags": {"revenue": tag_rev, "net_income": tag_ni, "equity": tag_eq, "shares": tag_shares},
+            "market_cap_source": market_cap_source,
+            "tags": {
+                "revenue": tag_rev, "net_income": tag_ni,
+                "equity": tag_eq, "shares": tag_shares,
+                "inline_extension": (extension_info.get("tags") or {}),
+            },
+            "field_diagnostics": field_diagnostics,
+            "extension_filings": extension_info.get("filings", []),
             "ttm_net_income": ttm_net_income,
             "ttm_period_end": str(trailing[-1]["end"]),
             "filing_date": str(max(row["filed"] for row in trailing)),
