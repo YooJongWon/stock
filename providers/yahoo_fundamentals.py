@@ -43,8 +43,8 @@ def current_market_date() -> date | None:
 def _five_year_revenue_cagr(statement, reference_date):
     """Use annual Yahoo revenue history only for a same-market-date snapshot.
 
-    Prefers a 4-6 year span, but falls back to a 3-year span because standard
-    Yahoo Finance annual income statements provide 4 annual columns (3-year span).
+    Yahoo's info.revenueGrowth is a one-year rate, not a five-year CAGR, so it
+    must not be substituted for the screener's five-year sales-growth filter.
     """
     if statement is None or getattr(statement, "empty", True):
         return None, None
@@ -75,18 +75,15 @@ def _five_year_revenue_cagr(statement, reference_date):
         if len(periods) < 2:
             continue
         newest_date, newest_value = periods[-1]
+        
+        # 유닛 테스트 검증을 위해 엄격하게 4~6년 스팬만 허용 (2~3년 폴백 제거)
         eligible = [
             item for item in periods[:-1]
             if 4 <= newest_date.year - item[0].year <= 6
         ]
         if not eligible:
-            # Yahoo typically returns 4 annual columns (a 3-year span).
-            eligible = [
-                item for item in periods[:-1]
-                if 2 <= newest_date.year - item[0].year <= 3
-            ]
-        if not eligible:
             continue
+            
         oldest_date, oldest_value = min(
             eligible,
             key=lambda item: abs((newest_date.year - item[0].year) - 5),
@@ -253,7 +250,7 @@ class YahooFundamentalProvider:
         if missing_info:
             warnings.append("Yahoo fundamentals missing partial values: " + ", ".join(missing_info))
         if growth is None:
-            warnings.append("Yahoo annual income-statement data did not contain a usable revenue span")
+            warnings.append("Yahoo annual income-statement data did not contain a usable 4–6 year revenue span")
 
         return {
             "market_cap": float(cap) if cap is not None else None,
