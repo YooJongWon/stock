@@ -19,6 +19,9 @@ REVENUE_TAGS = (
     "SalesRevenueGoodsNet",
     "OperatingRevenues",
     "RevenuesNetOfInterestExpense",
+    "TotalRevenuesAndOtherIncome",
+    "InterestAndDividendIncomeOperating",
+    "RealEstateRevenueNet",
 )
 NET_INCOME_TAGS = (
     "NetIncomeLoss",
@@ -33,8 +36,17 @@ EQUITY_TAGS = (
     "StockholdersEquityIncludingPortionAttributableToParent",
     "PartnersCapital",
     "PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest",
+    "CommonStockholdersEquity",
+    "MembersEquity",
 )
-SHARES_TAGS = ("EntityCommonStockSharesOutstanding", "CommonStockSharesOutstanding")
+ASSETS_TAGS = ("Assets",)
+LIABILITIES_TAGS = ("Liabilities",)
+SHARES_TAGS = (
+    "EntityCommonStockSharesOutstanding",
+    "CommonStockSharesOutstanding",
+    "WeightedAverageNumberOfDilutedSharesOutstanding",
+    "WeightedAverageNumberOfSharesOutstandingBasic",
+)
 
 
 class SECFundamentalProvider:
@@ -91,18 +103,32 @@ class SECFundamentalProvider:
                 try:
                     filed = date.fromisoformat(item["filed"])
                     end = date.fromisoformat(item["end"])
+                    form = item.get("form", "")
                     if (
                         filed <= ref
                         and end <= ref
-                        and item.get("form") in ("10-K", "10-Q", "20-F", "40-F")
+                        and form in ("10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A", "40-F", "40-F/A")
                     ):
-                        unit_records.append({**item, "filed": filed, "end": end, "unit": unit})
+                        norm_form = form.split("/")[0]
+                        unit_records.append({**item, "form": norm_form, "filed": filed, "end": end, "unit": unit})
                 except (ValueError, KeyError, TypeError):
                     continue
             if unit_records:
                 out.extend(unit_records)
                 break
         return out
+
+    @classmethod
+    def _merged_records(cls, facts, tags, ref):
+        """Merge records across all matching tags so tag transitions don't break multi-year history."""
+        merged = []
+        for namespace in ("us-gaap", "dei", "ifrs-full"):
+            namespace_facts = facts.get(namespace, {})
+            for tag in tags:
+                fact = namespace_facts.get(tag)
+                if fact:
+                    merged.extend(cls._records(fact, ref))
+        return merged
 
     @staticmethod
     def _quarters(records):
@@ -179,7 +205,7 @@ class SECFundamentalProvider:
     def _best_fact(cls, facts, tags, ref, kind):
         """Select the tag with the most usable history instead of the first tag present."""
         best = None
-        for namespace in ("us-gaap", "dei"):
+        for namespace in ("us-gaap", "dei", "ifrs-full"):
             namespace_facts = facts.get(namespace, {})
             for priority, tag in enumerate(tags):
                 fact = namespace_facts.get(tag)
@@ -225,8 +251,6 @@ class SECFundamentalProvider:
                 days = (row["end"] - start_date).days
             except (TypeError, ValueError, KeyError):
                 continue
-            # Use the reported period length and annual filing form; fp=FY is not
-            # consistently present for every issuer/fact tag in companyfacts.
             if 330 <= days <= 400:
                 old = annual.get(row["end"].year)
                 if old is None or row["filed"] > old["filed"]:
@@ -246,31 +270,74 @@ class SECFundamentalProvider:
         tag_eq, eq_obj = self._best_fact(facts, EQUITY_TAGS, ref, "instant")
         tag_shares, shares_obj = self._best_fact(facts, SHARES_TAGS, ref, "instant")
 
-        revenue_records = self._records(rev_obj, ref)
+        # Use primary tag records first, supplemented by merged records across all candidate tags
+        revenue_records = self._records(rev_obj, ref) + self._merged_records(facts, REVENUE_TAGS, ref)
         net_income_records = self._records(ni_obj, ref)
-        equity_records = self._records(eq_obj, ref)
-        share_records = self._records(shares_obj, ref)
+        if len(self._quarters(net_income_records)) < 4:
+            net_income_records = self._merged_records(facts, NET_INCOME_TAGS, ref)
+        equity_records = self._records(eq_obj, ref) + self._merged_records(facts, EQUITY_TAGS, ref)
+        share_records = self._records(shares_obj, ref) or self._merged_records(facts, SHARES_TAGS, ref)
+
         net_income_quarters = self._quarters(net_income_records)
+        trailing = None
+        ttm_net_income = None
 
-        if len(net_income_quarters) < 4:
-            raise ValueError("SEC has fewer than four usable discrete net-income quarters")
-        trailing = net_income_quarters[-4:]
-        if (trailing[-1]["end"] - trailing[0]["end"]).days > 430:
-            raise ValueError("SEC TTM periods are not contiguous enough")
+        if len(net_income_quarters) >= 4:
+            candidate_trailing = net_income_quarters[-4:]
+            if (candidate_trailing[-1]["end"] - candidate_trailing[0]["end"]).days <= 430:
+                trailing = candidate_trailing
+                ttm_net_income = sum(row["quarter_value"] for row in trailing)
 
-        ttm_net_income = sum(row["quarter_value"] for row in trailing)
+        # Fallback for 20-F/40-F foreign issuers (e.g., AER) or companies without 4 discrete quarters
+        if ttm_net_income is None:
+            annual_ni = self._annual_records(net_income_records)
+            if annual_ni:
+                latest_ni_yr = max(annual_ni)
+                latest_ni_row = annual_ni[latest_ni_yr]
+                ttm_net_income = float(latest_ni_row["val"])
+                start_dt = (
+                    date.fromisoformat(latest_ni_row["start"])
+                    if isinstance(latest_ni_row.get("start"), str)
+                    else latest_ni_row.get("start", latest_ni_row["end"])
+                )
+                trailing = [{**latest_ni_row, "period_start": start_dt, "quarter_value": ttm_net_income}]
+            else:
+                if len(net_income_quarters) < 4:
+                    raise ValueError("SEC has fewer than four usable discrete net-income quarters")
+                raise ValueError("SEC TTM periods are not contiguous enough")
+
         nonpositive_earnings = ttm_net_income <= 0
 
-        equity_instants = sorted(
-            (row for row in equity_records if not row.get("start")),
-            key=lambda row: row["end"],
-        )
+        # Build instant equity series; fall back to Assets - Liabilities if direct Equity tags are absent
+        equity_by_end = {}
+        for row in equity_records:
+            if not row.get("start"):
+                old = equity_by_end.get(row["end"])
+                if old is None or row["filed"] > old["filed"]:
+                    equity_by_end[row["end"]] = row
+
+        if len(equity_by_end) < 2:
+            asset_records = self._merged_records(facts, ASSETS_TAGS, ref)
+            liab_records = self._merged_records(facts, LIABILITIES_TAGS, ref)
+            assets_by_end = {r["end"]: r for r in asset_records if not r.get("start")}
+            liabs_by_end = {r["end"]: r for r in liab_records if not r.get("start")}
+            for end_dt in set(assets_by_end) & set(liabs_by_end):
+                if end_dt not in equity_by_end:
+                    a_row, l_row = assets_by_end[end_dt], liabs_by_end[end_dt]
+                    equity_by_end[end_dt] = {
+                        **a_row,
+                        "val": float(a_row["val"]) - float(l_row["val"]),
+                    }
+
+        equity_instants = sorted(equity_by_end.values(), key=lambda row: row["end"])
         latest_equity = equity_instants[-1] if equity_instants else None
         prior_equity = [
             row for row in equity_instants
             if row["end"] < trailing[0]["end"]
         ]
-        opening_equity = prior_equity[-1]["val"] if prior_equity else None
+        if not prior_equity and len(equity_instants) >= 2:
+            prior_equity = [equity_instants[-2]]
+        opening_equity = prior_equity[-1]["val"] if prior_equity else (latest_equity["val"] if latest_equity else None)
 
         roe = None
         if (
@@ -282,19 +349,21 @@ class SECFundamentalProvider:
             roe = ttm_net_income / (
                 (float(opening_equity) + float(latest_equity["val"])) / 2
             )
+        elif latest_equity is not None and float(latest_equity["val"]) > 0:
+            roe = ttm_net_income / float(latest_equity["val"])
 
         annual_revenue = self._annual_records(revenue_records)
-        years = sorted(annual_revenue)
+        years = sorted(y for y, r in annual_revenue.items() if float(r["val"]) > 0)
         sales_growth = None
         sales_period = None
-        if years:
+        if len(years) >= 2:
             latest_year = years[-1]
-            base_year = min(years, key=lambda year: abs(year - (latest_year - 5)))
-            if (
-                4 <= latest_year - base_year <= 6
-                and float(annual_revenue[base_year]["val"]) > 0
-                and float(annual_revenue[latest_year]["val"]) > 0
-            ):
+            # 1st priority: 4-6 year span; 2nd priority: 3-year span fallback
+            eligible_bases = [y for y in years[:-1] if 4 <= latest_year - y <= 6]
+            if not eligible_bases:
+                eligible_bases = [y for y in years[:-1] if 2 <= latest_year - y <= 3]
+            if eligible_bases:
+                base_year = min(eligible_bases, key=lambda year: abs(year - (latest_year - 5)))
                 year_span = latest_year - base_year
                 sales_growth = (
                     float(annual_revenue[latest_year]["val"])
@@ -309,6 +378,8 @@ class SECFundamentalProvider:
                 }
 
         valid_shares = [row for row in share_records if not row.get("start")]
+        if not valid_shares:
+            valid_shares = share_records
         latest_shares_record = max(
             valid_shares,
             key=lambda row: (row["end"], row["filed"]),
