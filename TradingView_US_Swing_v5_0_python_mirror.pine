@@ -1,0 +1,268 @@
+//@version=6
+indicator("미국주식 스윙 v5.0 · Python 기술 로직 미러", overlay=true, max_labels_count=300)
+
+// ============================================================================
+// Python canonical mirror
+// 기준 저장소: YooJongWon/stock
+// 기준 파일: config.py, indicators.py, scoring.py, screener.py
+//
+// 중요:
+// - 이 스크립트는 웹사이트 Python 스크리너의 기술 지표/점수/기술 사전필터를
+//   TradingView 차트에서 최대한 동일한 수식과 임계값으로 재현합니다.
+// - 웹사이트의 최종 BUY / READY / WAIT / REJECT에는 SEC/Yahoo 재무 데이터가
+//   필요합니다. Pine Script는 웹사이트의 해당 시점 재무 스냅샷을 직접 읽지
+//   못하므로 최종 재무 판정을 흉내 내거나 보장하지 않습니다.
+// - 따라서 이 스크립트의 "기술적 매수 후보"는 웹사이트 최종 BUY 확정이 아닙니다.
+// - 웹사이트와 같은 기준일의 확정된 1D 봉으로 비교해야 합니다.
+// - SPY 데이터 공급원/수정주가/거래량 공급원 차이로 소수점 수준 차이가 날 수 있습니다.
+// - 시장환경은 Python classify()와 동일하게 BUY 차단조건이 아닌 참고 지표입니다.
+// ============================================================================
+
+// ============================================================================
+// 1. 고정 전략 설정 — config.py SETTINGS와 동기화
+//    사용자가 여기 값을 바꾸면 웹사이트와의 수식 일치가 깨질 수 있습니다.
+// ============================================================================
+int EMA_TREND_LEN = 20
+int EMA_ENTRY_LEN = 10
+int SMA_PULLBACK_LEN = 50
+int SMA_LONG_LEN = 200
+int RSI_LEN = 14
+int ATR_LEN = 14
+int ROC_LEN = 63
+int AVG_VOLUME_LEN = 30
+int AVG_DOLLAR_VOLUME_LEN = 30
+
+float RSI_MIN = 55.0
+float RSI_MAX = 68.0
+float ATR_STOP_MULT = 1.5
+float MAX_STOP_LOSS_PCT = 5.0
+float PULLBACK_ATR_MAX = 0.25
+float VOLUME_DRYUP_RATIO = 0.90
+float VOLUME_EXPANSION_RATIO = 1.10
+float PRICE_MIN = 10.0
+float AVG_VOLUME_MIN = 1000000.0
+float AVG_DOLLAR_VOLUME_MIN = 30000000.0
+int SCORE_BUY_MIN = 7
+int SCORE_WATCH_MIN = 6
+
+// ============================================================================
+// 2. 표시 설정
+// ============================================================================
+string GROUP_DISPLAY = "화면 표시"
+bool showDashboard = input.bool(true, "우측 대시보드 표시", group=GROUP_DISPLAY)
+bool showStructureLabels = input.bool(true, "눌림/거래량 이벤트 표시", group=GROUP_DISPLAY)
+bool showSignalLabels = input.bool(true, "준비/기술적 매수 라벨 표시", group=GROUP_DISPLAY)
+bool showMovingAverages = input.bool(true, "이동평균 표시", group=GROUP_DISPLAY)
+
+// ============================================================================
+// 3. 기준 시간봉 / OHLCV 지표
+//    Python: technical_snapshot()의 EMA/SMA/RSI/ATR/ROC/거래량 계산과 대응
+// ============================================================================
+bool isDaily = timeframe.isdaily and timeframe.multiplier == 1
+bool confirmedDailyBar = isDaily and barstate.isconfirmed
+
+float ema20 = ta.ema(close, EMA_TREND_LEN)
+float ema10 = ta.ema(close, EMA_ENTRY_LEN)
+float sma50 = ta.sma(close, SMA_PULLBACK_LEN)
+float sma200 = ta.sma(close, SMA_LONG_LEN)
+float rsi14 = ta.rsi(close, RSI_LEN)
+float atr14 = ta.atr(ATR_LEN)
+float stockRoc63 = ta.roc(close, ROC_LEN)
+float avgVolume20 = ta.sma(volume, 20)
+float avgVolume30 = ta.sma(volume, AVG_VOLUME_LEN)
+float avgDollarVolume30 = ta.sma(close * volume, AVG_DOLLAR_VOLUME_LEN)
+
+// ============================================================================
+// 4. SPY 시장환경 / 상대강도
+//    Python: spy_market_regime() 및 technical_snapshot()의 spy_roc63 비교
+// ============================================================================
+[spyClose, spySma50, spySma200, spySma50_5dAgo, spyRoc63] = request.security(
+     "AMEX:SPY",
+     "D",
+     [close, ta.sma(close, 50), ta.sma(close, 200), ta.sma(close, 50)[5], ta.roc(close, ROC_LEN)],
+     gaps=barmerge.gaps_off,
+     lookahead=barmerge.lookahead_off
+)
+
+bool marketBull = spyClose > spySma200 and spySma50 > spySma200 and spySma50 > spySma50_5dAgo
+string marketRegime = marketBull ? "상승장" : "위험구간"
+float relativeStrength = stockRoc63 - spyRoc63
+bool relativeStrengthOK = not na(relativeStrength) and relativeStrength > 0
+
+// ============================================================================
+// 5. 추세 / 눌림 / 거래량 / 캔들 — indicators.py와 동일한 조건
+// ============================================================================
+bool trendStack = ema20 > sma50 and sma50 > sma200
+bool sma50Rising = sma50 > sma50[5]
+
+bool pullbackBar = low <= sma50 + atr14 * PULLBACK_ATR_MAX and close >= sma50 - atr14 * PULLBACK_ATR_MAX
+bool pullbackRecentRaw = pullbackBar or pullbackBar[1] or pullbackBar[2]
+// Python은 최근 3봉 중 눌림이 있었고, 최신 종가가 SMA50 - 0.25*ATR 이상인지 재검증합니다.
+bool pullbackRecent = pullbackRecentRaw and close >= sma50 - atr14 * PULLBACK_ATR_MAX
+
+bool dryBar = volume < avgVolume20 * VOLUME_DRYUP_RATIO
+bool dryupRecent = dryBar or dryBar[1] or dryBar[2]
+bool volumeExpansion = volume > avgVolume20 * VOLUME_EXPANSION_RATIO
+
+float barRange = high - low
+float bodyRatio = barRange > 0 ? math.abs(close - open) / barRange : 0.0
+float closePosition = barRange > 0 ? (close - low) / barRange : 0.0
+bool strongBullCandle = close > open and barRange > 0 and bodyRatio >= 0.40 and closePosition >= 0.60 and close > high[1]
+
+// ============================================================================
+// 6. 거리 / 손절폭 / 가격 계획
+// ============================================================================
+float distanceFrom50ATR = atr14 > 0 ? (close - sma50) / atr14 : na
+float atrStopPrice = close - atr14 * ATR_STOP_MULT
+float atrStopPct = close > 0 ? atr14 * ATR_STOP_MULT / close * 100.0 : na
+float oneRPlan = close - atrStopPrice
+float twoRTarget = close + oneRPlan * 2.0
+bool distanceOK = not na(distanceFrom50ATR) and distanceFrom50ATR >= 0 and distanceFrom50ATR <= 2.0
+bool atrStopOK = not na(atrStopPct) and atrStopPct <= MAX_STOP_LOSS_PCT
+bool rsiOK = not na(rsi14) and rsi14 >= RSI_MIN and rsi14 < RSI_MAX
+
+// ============================================================================
+// 7. 점수 — scoring.py score_snapshot()와 동일한 가중치
+// ============================================================================
+int score =
+     (trendStack ? 2 : 0) +
+     (sma50Rising ? 1 : 0) +
+     (relativeStrengthOK ? 2 : 0) +
+     (pullbackRecent ? 2 : 0) +
+     (strongBullCandle ? 1 : 0) +
+     (volumeExpansion ? 1 : 0) +
+     (rsiOK ? 1 : 0)
+
+// ============================================================================
+// 8. Python 스크리너 기술 사전필터 / 최종 기술 BUY 조건
+//    screener.py tech_candidate 및 scoring.py BUY 조건에서 재무검사만 제외
+// ============================================================================
+bool technicalCore =
+     close >= PRICE_MIN and
+     not na(avgVolume30) and avgVolume30 >= AVG_VOLUME_MIN and
+     not na(avgDollarVolume30) and avgDollarVolume30 >= AVG_DOLLAR_VOLUME_MIN and
+     trendStack and
+     sma50Rising and
+     relativeStrengthOK
+
+// Python screener.py의 기술 사전필터와 같은 기준: 점수 6점 이상
+bool technicalPrefilter = confirmedDailyBar and technicalCore and score >= SCORE_WATCH_MIN
+
+// scoring.py의 BUY 필수 기술 조건을 그대로 적용합니다.
+// Market Regime BULL은 Python과 동일하게 hard gate에서 제외합니다.
+bool technicalBuyCandidate =
+     confirmedDailyBar and
+     close >= PRICE_MIN and
+     not na(avgVolume30) and avgVolume30 >= AVG_VOLUME_MIN and
+     not na(avgDollarVolume30) and avgDollarVolume30 >= AVG_DOLLAR_VOLUME_MIN and
+     trendStack and
+     sma50Rising and
+     relativeStrengthOK and
+     rsiOK and
+     pullbackRecent and
+     dryupRecent and
+     volumeExpansion and
+     strongBullCandle and
+     distanceOK and
+     atrStopOK and
+     score >= SCORE_BUY_MIN
+
+// 웹사이트 WATCH(화면의 준비)는 재무 데이터가 정상 확인된 뒤 판정됩니다.
+// 여기서는 그 재무 확인 이전의 기술적 준비 후보만 표시합니다.
+bool technicalReadyCandidate = technicalPrefilter and not technicalBuyCandidate
+
+// 웹사이트의 Final BUY/READY/WAIT/REJECT는 재무 스냅샷이 필요하므로 여기서 단정하지 않습니다.
+string technicalStatus =
+     not isDaily ? "1D 차트 필요" :
+     not barstate.isconfirmed ? "장중 · 미확정" :
+     technicalBuyCandidate ? "기술적 매수 후보" :
+     technicalReadyCandidate ? "준비 후보" :
+     "기술 사전필터 미통과"
+
+// ============================================================================
+// 9. 차트 표시
+// ============================================================================
+plot(showMovingAverages ? ema20 : na, title="EMA 20", color=color.new(color.teal, 0), linewidth=2)
+plot(showMovingAverages ? sma50 : na, title="SMA 50", color=color.new(color.orange, 0), linewidth=2)
+plot(showMovingAverages ? sma200 : na, title="SMA 200", color=color.new(color.blue, 0), linewidth=2)
+
+plotshape(showStructureLabels and pullbackBar, title="50일선 눌림", text="눌림", style=shape.diamond, location=location.belowbar, color=color.orange, textcolor=color.orange, size=size.tiny)
+plotshape(showStructureLabels and dryBar, title="거래량 감소", text="감소", style=shape.circle, location=location.belowbar, color=color.blue, textcolor=color.blue, size=size.tiny)
+plotshape(showStructureLabels and volumeExpansion, title="거래량 증가", text="증가", style=shape.triangleup, location=location.abovebar, color=color.green, textcolor=color.green, size=size.tiny)
+
+bool readyEvent = technicalReadyCandidate and not technicalReadyCandidate[1]
+bool technicalBuyEvent = technicalBuyCandidate and not technicalBuyCandidate[1]
+plotshape(showSignalLabels and readyEvent, title="기술적 준비 후보 발생", text="준비", style=shape.labelup, location=location.belowbar, color=color.yellow, textcolor=color.black, size=size.tiny)
+plotshape(showSignalLabels and technicalBuyEvent, title="기술적 매수 후보 발생", text="기술매수", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.tiny)
+
+// 기준 종가의 진입/손절/목표 계획입니다. 실제 다음 거래일 체결가가 아닙니다.
+plot(technicalPrefilter ? close : na, title="기준 종가 / 진입 추정", color=color.new(color.gray, 35), style=plot.style_linebr)
+plot(technicalPrefilter ? atrStopPrice : na, title="초기 손절 계획", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+plot(technicalPrefilter ? twoRTarget : na, title="2R 목표 계획", color=color.new(color.green, 0), linewidth=2, style=plot.style_linebr)
+
+// ============================================================================
+// 10. 대시보드 도우미
+// ============================================================================
+f_yes(bool value) => value ? "YES" : "NO"
+f_num(float value) => na(value) ? "—" : str.tostring(value, "#.##")
+f_bg(bool value) => value ? color.new(color.green, 80) : color.new(color.red, 80)
+
+var table dashboard = table.new(position.top_right, 2, 23, bgcolor=color.white, frame_color=color.gray, frame_width=1, border_color=color.gray, border_width=1)
+
+if barstate.islast and showDashboard
+    color statusBg = technicalBuyCandidate ? color.new(color.green, 45) : technicalReadyCandidate ? color.new(color.yellow, 35) : color.new(color.gray, 85)
+    table.cell(dashboard, 0, 0, "미국주식 스윙", bgcolor=color.new(color.silver, 20), text_color=color.black, text_formatting=text.format_bold)
+    table.cell(dashboard, 1, 0, "Python Mirror v5.0", bgcolor=color.new(color.silver, 20), text_color=color.black, text_formatting=text.format_bold)
+
+    table.cell(dashboard, 0, 1, "기술 판정", bgcolor=color.new(color.silver, 75), text_color=color.black)
+    table.cell(dashboard, 1, 1, technicalStatus, bgcolor=statusBg, text_color=color.black, text_formatting=text.format_bold)
+    table.cell(dashboard, 0, 2, "웹 최종 판정", bgcolor=color.new(color.silver, 75), text_color=color.black)
+    table.cell(dashboard, 1, 2, "웹사이트 재무 판정 필요", bgcolor=color.new(color.orange, 78), text_color=color.black)
+
+    table.cell(dashboard, 0, 3, "시장환경", text_color=color.black)
+    table.cell(dashboard, 1, 3, marketRegime, bgcolor=marketBull ? color.new(color.green, 78) : color.new(color.red, 75), text_color=color.black)
+    table.cell(dashboard, 0, 4, "추세 배열 EMA20>SMA50>SMA200", text_color=color.black)
+    table.cell(dashboard, 1, 4, f_yes(trendStack), bgcolor=f_bg(trendStack), text_color=color.black)
+    table.cell(dashboard, 0, 5, "50일선 상승", text_color=color.black)
+    table.cell(dashboard, 1, 5, f_yes(sma50Rising), bgcolor=f_bg(sma50Rising), text_color=color.black)
+    table.cell(dashboard, 0, 6, "SPY 대비 상대강도", text_color=color.black)
+    table.cell(dashboard, 1, 6, f_num(relativeStrength) + "%", bgcolor=f_bg(relativeStrengthOK), text_color=color.black)
+    table.cell(dashboard, 0, 7, "50일선 눌림", text_color=color.black)
+    table.cell(dashboard, 1, 7, f_yes(pullbackRecent), bgcolor=f_bg(pullbackRecent), text_color=color.black)
+    table.cell(dashboard, 0, 8, "거래량 감소(최근 3봉)", text_color=color.black)
+    table.cell(dashboard, 1, 8, f_yes(dryupRecent), bgcolor=f_bg(dryupRecent), text_color=color.black)
+    table.cell(dashboard, 0, 9, "거래량 증가", text_color=color.black)
+    table.cell(dashboard, 1, 9, f_yes(volumeExpansion), bgcolor=f_bg(volumeExpansion), text_color=color.black)
+    table.cell(dashboard, 0, 10, "강한 반등봉", text_color=color.black)
+    table.cell(dashboard, 1, 10, f_yes(strongBullCandle), bgcolor=f_bg(strongBullCandle), text_color=color.black)
+    table.cell(dashboard, 0, 11, "RSI14", text_color=color.black)
+    table.cell(dashboard, 1, 11, f_num(rsi14), bgcolor=f_bg(rsiOK), text_color=color.black)
+    table.cell(dashboard, 0, 12, "평균 거래량 30일", text_color=color.black)
+    table.cell(dashboard, 1, 12, f_num(avgVolume30), bgcolor=f_bg(not na(avgVolume30) and avgVolume30 >= AVG_VOLUME_MIN), text_color=color.black)
+    table.cell(dashboard, 0, 13, "평균 거래대금 30일", text_color=color.black)
+    table.cell(dashboard, 1, 13, "$" + f_num(avgDollarVolume30), bgcolor=f_bg(not na(avgDollarVolume30) and avgDollarVolume30 >= AVG_DOLLAR_VOLUME_MIN), text_color=color.black)
+    table.cell(dashboard, 0, 14, "ATR 손절폭", text_color=color.black)
+    table.cell(dashboard, 1, 14, f_num(atrStopPct) + "%", bgcolor=f_bg(atrStopOK), text_color=color.black)
+    table.cell(dashboard, 0, 15, "50일선 이격", text_color=color.black)
+    table.cell(dashboard, 1, 15, f_num(distanceFrom50ATR) + " ATR", bgcolor=f_bg(distanceOK), text_color=color.black)
+    table.cell(dashboard, 0, 16, "점수", text_color=color.black)
+    table.cell(dashboard, 1, 16, str.tostring(score) + " / 10", bgcolor=score >= SCORE_BUY_MIN ? color.new(color.green, 75) : score >= SCORE_WATCH_MIN ? color.new(color.yellow, 55) : color.new(color.red, 78), text_color=color.black, text_formatting=text.format_bold)
+    table.cell(dashboard, 0, 17, "기술 사전필터", text_color=color.black)
+    table.cell(dashboard, 1, 17, f_yes(technicalPrefilter), bgcolor=f_bg(technicalPrefilter), text_color=color.black)
+    table.cell(dashboard, 0, 18, "가격 $10 이상", text_color=color.black)
+    table.cell(dashboard, 1, 18, f_yes(close >= PRICE_MIN), bgcolor=f_bg(close >= PRICE_MIN), text_color=color.black)
+    table.cell(dashboard, 0, 19, "진입 추정 기준 종가", text_color=color.black)
+    table.cell(dashboard, 1, 19, f_num(close), text_color=color.black)
+    table.cell(dashboard, 0, 20, "초기 손절 계획", text_color=color.black)
+    table.cell(dashboard, 1, 20, f_num(atrStopPrice), text_color=color.black)
+    table.cell(dashboard, 0, 21, "2R 목표 계획", text_color=color.black)
+    table.cell(dashboard, 1, 21, f_num(twoRTarget), text_color=color.black)
+    table.cell(dashboard, 0, 22, "기준 봉", text_color=color.black)
+    table.cell(dashboard, 1, 22, str.format_time(time_close, "yyyy-MM-dd", "America/New_York"), text_color=color.black)
+
+// ============================================================================
+// 11. 알림 — 모두 기술 조건 기준. 재무 확정 BUY 알림이 아닙니다.
+// ============================================================================
+alertcondition(readyEvent, title="기술적 준비 후보", message="기술 사전필터 통과: 재무 조건은 웹사이트에서 확인하세요.")
+alertcondition(technicalBuyEvent, title="기술적 매수 후보", message="모든 기술적 매수 조건 충족: 최종 BUY 여부는 웹사이트 재무 판정 확인이 필요합니다.")
+alertcondition(barstate.isconfirmed and isDaily and not marketBull, title="시장 위험구간", message="SPY 시장환경이 위험구간입니다. Python 스크리너와 동일하게 참고 경고이며 BUY 차단조건은 아닙니다.")
