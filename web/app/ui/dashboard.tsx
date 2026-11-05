@@ -698,9 +698,6 @@ function InvestmentCalculator() {
     <footer><span>설정값은 이 브라우저에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
 }
-료, 환율 및 갭 위험을 확인하세요.</span></footer>
-  </section>;
-}
 
 function CandidateModal({ modal, onClose }: { modal: DashboardModal | null; onClose: () => void }) {
   if (!modal) return null;
