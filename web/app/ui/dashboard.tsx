@@ -636,6 +636,7 @@ function InvestmentCalculator() {
     { key: "cashRatio", label: "현금 비중 목표", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "firstBuyRatio", label: "1차 매수 비중", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "stopLossRatio", label: "손절 기준", suffix: "%", min: -100, max: 0, step: 1 },
+    { key: "finalTargetRatio", label: "3차 익절 기준", suffix: "%", min: 0, step: 1 },
     { key: "firstEntryPrice", label: "1차 매수가", suffix: "USD", min: 0, step: 0.01 },
   ];
   const sellPlan = [
