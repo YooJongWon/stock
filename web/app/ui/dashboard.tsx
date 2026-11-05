@@ -545,12 +545,14 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
 type CalculatorInputs = {
   total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
   stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
+  firstEntryPrice: string;
 };
 
 const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "17", firstBuyRatio: "60",
-  stopLossRatio: "-5", firstTargetRatio: "6", finalTargetRatio: "10",
+  stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
+  firstEntryPrice: "100",
 };
 
 function InvestmentCalculator() {
@@ -574,7 +576,7 @@ function InvestmentCalculator() {
         setSaved(true);
       }
     } catch {
-      // Storage may be unavailable (private browsing or browser policy); the calculator remains usable.
+      // Storage may be unavailable; the calculator remains usable.
     } finally {
       setStorageReady(true);
     }
@@ -604,14 +606,28 @@ function InvestmentCalculator() {
   const count = Math.max(1, Math.min(100, Math.floor(get("stockCount"))));
   const cashPct = Math.min(100, Math.max(0, get("cashRatio"))) / 100;
   const firstPct = Math.min(100, Math.max(0, get("firstBuyRatio"))) / 100;
+  const secondPct = 1 - firstPct;
   const stopPct = Math.min(0, Math.max(-100, get("stopLossRatio"))) / 100;
   const firstTargetPct = Math.max(0, get("firstTargetRatio")) / 100;
+  const secondTargetPct = 0.09;
   const finalTargetPct = Math.max(0, get("finalTargetRatio")) / 100;
+  const firstEntryPrice = Math.max(0, get("firstEntryPrice"));
+  const secondEntryPrice = firstEntryPrice * 1.05;
   const cash = total * cashPct;
   const stockPool = total - cash;
   const perStock = stockPool / count;
-  const addPct = 1 - firstPct;
+  const firstBuyAmount = perStock * firstPct;
+  const secondBuyAmount = perStock * secondPct;
+  const firstShares = firstEntryPrice > 0 ? firstBuyAmount / firstEntryPrice : 0;
+  const secondShares = secondEntryPrice > 0 ? secondBuyAmount / secondEntryPrice : 0;
+  const totalShares = firstShares + secondShares;
+  const averagePrice = totalShares > 0 ? perStock / totalShares : 0;
+  const stopPrice = averagePrice * (1 + stopPct);
+  const target8Price = averagePrice * (1 + firstTargetPct);
+  const target9Price = averagePrice * (1 + secondTargetPct);
+  const target10Price = averagePrice * (1 + finalTargetPct);
   const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(n);
+  const price = (n: number) => n > 0 ? "$" + n.toFixed(2) : "—";
   const percent = (n: number) => (n * 100).toFixed(0) + "%";
   const set = (key: keyof CalculatorInputs, value: string) => setInput((old) => ({ ...old, [key]: value }));
   const fields: { key: keyof CalculatorInputs; label: string; suffix: string; min?: number; max?: number; step?: number }[] = [
@@ -620,54 +636,68 @@ function InvestmentCalculator() {
     { key: "cashRatio", label: "현금 비중 목표", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "firstBuyRatio", label: "1차 매수 비중", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "stopLossRatio", label: "손절 기준", suffix: "%", min: -100, max: 0, step: 1 },
-    { key: "firstTargetRatio", label: "1차 익절 기준", suffix: "%", min: 0, step: 1 },
-    { key: "finalTargetRatio", label: "최종 익절 기준", suffix: "%", min: 0, step: 1 },
+    { key: "firstEntryPrice", label: "1차 매수가", suffix: "USD", min: 0, step: 0.01 },
   ];
+  const sellPlan = [
+    { label: "1차 익절", rate: firstTargetPct, ratio: 0.4, target: target8Price },
+    { label: "2차 익절", rate: secondTargetPct, ratio: 0.3, target: target9Price },
+    { label: "3차 익절", rate: finalTargetPct, ratio: 0.3, target: target10Price },
+  ];
+  const expectedProfit = sellPlan.reduce((sum, item) => sum + totalShares * item.ratio * (averagePrice * (1 + item.rate) - averagePrice), 0);
+  const lossAtStop = totalShares * (stopPrice - averagePrice);
+
   return <section className="calculator-page" aria-label="스윙 투자 계산기">
-    <div className="hero calculator-hero"><div className="eyebrow">POSITION SIZING</div><h1>미국주식 스윙 투자 계산기</h1><p>총 투자금과 운용 기준을 입력하면 종목별 목표 금액, 매수 금액, 손절·익절 예상액을 계산합니다.</p></div>
+    <div className="hero calculator-hero"><div className="eyebrow">POSITION SIZING</div><h1>미국주식 스윙 투자 계산기</h1><p>2회 분할매수와 3회 분할매도, 평균 매수가 기준 손절·목표가를 계산합니다.</p></div>
     <div className="calculator-layout">
       <section className="calculator-card input-card">
         <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>운용 기준</h2></div><div className="calculator-storage-actions"><span className="calculator-save-status" role="status">{!storageReady ? "저장값 확인 중…" : saved ? "✓ 자동 저장됨" : "기본값 사용 중"}</span><button type="button" className="calculator-reset-button" onClick={resetInputs}>기본값 초기화</button></div></div>
         <div className="calculator-inputs">{fields.map(({ key, label, suffix, ...limits }) => <label className="calculator-field" key={key}><span>{label}</span><div className="calculator-input-wrap"><input type="number" inputMode="decimal" value={input[key]} onChange={(event) => set(key, event.target.value)} {...limits} aria-label={label} /><em>{suffix}</em></div></label>)}</div>
-        <p className="calculator-note">종목당 목표 비중은 현금 목표를 제외한 투자금 기준으로 종목 수에 따라 나눕니다.</p>
+        <div className="calculator-note">
+          <strong>고정 매매 원칙</strong><br />
+          1차 매수 {percent(firstPct)} · 2차 매수 {percent(secondPct)} (1차 매수가 대비 +5% 상승 후 상승 추세 확인 시)<br />
+          손절 {input.stopLossRatio || "-5"}% · 익절 +8% 40% / +9% 30% / +10% 30%<br />
+          2차 매수 체결 시 실제 평균 매수가를 기준으로 손절·익절 가격을 다시 계산합니다.
+        </div>
       </section>
       <section className="calculator-card summary-card-large">
-        <div className="calculator-section-title"><div><div className="eyebrow">AUTOMATIC SUMMARY</div><h2>자동 요약</h2></div><span>USD</span></div>
+        <div className="calculator-section-title"><div><div className="eyebrow">AUTOMATIC SUMMARY</div><h2>종목당 자동 계산</h2></div><span>USD</span></div>
         <div className="calc-summary-grid">
-          <article><span>현금 목표 금액</span><strong>{money(cash)}</strong><small>총 투자금의 {percent(cashPct)}</small></article>
-          <article><span>주식 투자 목표액</span><strong>{money(stockPool)}</strong><small>현금 목표 제외</small></article>
-          <article><span>종목당 목표액</span><strong>{money(perStock)}</strong><small>목표 비중 {percent(1 / count)} · {count}종목</small></article>
-          <article><span>종목당 1차 매수액</span><strong>{money(perStock * firstPct)}</strong><small>목표액의 {percent(firstPct)}</small></article>
-          <article><span>종목당 추가 매수 여력</span><strong>{money(perStock * addPct)}</strong><small>목표액의 {percent(addPct)}</small></article>
-          <article className="negative"><span>종목당 손절 시 손실액</span><strong>{money(perStock * stopPct)}</strong><small>손절 기준 {input.stopLossRatio || "0"}%</small></article>
-          <article className="positive"><span>종목당 1차 익절 예상액</span><strong>{money(perStock * firstTargetPct)}</strong><small>1차 익절 기준 {input.firstTargetRatio || "0"}%</small></article>
-          <article className="positive"><span>종목당 최종 익절 예상액</span><strong>{money(perStock * finalTargetPct)}</strong><small>최종 익절 기준 {input.finalTargetRatio || "0"}%</small></article>
+          <article><span>종목당 목표 투자액</span><strong>{money(perStock)}</strong><small>현금 목표 제외 · {count}종목 기준</small></article>
+          <article><span>1차 매수 금액 ({percent(firstPct)})</span><strong>{money(firstBuyAmount)}</strong><small>1차 매수가 {price(firstEntryPrice)}</small></article>
+          <article><span>2차 매수 금액 ({percent(secondPct)})</span><strong>{money(secondBuyAmount)}</strong><small>2차 기준가 {price(secondEntryPrice)} (+5%)</small></article>
+          <article><span>2회 매수 후 평균 매수가</span><strong>{price(averagePrice)}</strong><small>두 차수 매수금액과 주식 수 반영</small></article>
+          <article className="negative"><span>손절 가격 ({input.stopLossRatio || "-5"}%)</span><strong>{price(stopPrice)}</strong><small>평균 매수가 기준 예상 손실 {money(lossAtStop)}</small></article>
+          <article className="positive"><span>전체 분할매도 예상 수익</span><strong>{money(expectedProfit)}</strong><small>세 차례 매도 비중과 목표가 반영</small></article>
         </div>
       </section>
     </div>
     <section className="calculator-card allocation-card">
-      <div className="calculator-section-title"><div><div className="eyebrow">CAPITAL ALLOCATION</div><h2>권장 자금 배분 예시</h2><p>종목 수는 기본 종목 수에 따라 자동 계산됩니다.</p></div></div>
-      <div className="allocation-table-wrap"><table className="allocation-table">
-        <thead><tr><th>구분</th><th>종목 수</th><th>종목당 목표 금액</th><th>총 금액</th><th>총 투자금 대비 비중</th></tr></thead>
-        <tbody>{Array.from({ length: count }, (_, i) => <tr key={i}><td>종목 {String.fromCharCode(65 + (i % 26))}{i >= 26 ? Math.floor(i / 26) : ""}</td><td>1</td><td>{money(perStock)}</td><td>{money(perStock)}</td><td>{percent(total ? perStock / total : 0)}</td></tr>)}
-          <tr className="cash-row"><td>현금</td><td>—</td><td>—</td><td>{money(cash)}</td><td>{percent(cashPct)}</td></tr><tr className="total-row"><td>합계</td><td>{count}</td><td>—</td><td>{money(stockPool + cash)}</td><td>{percent(total ? 1 : 0)}</td></tr>
+      <div className="calculator-section-title"><div><div className="eyebrow">ENTRY PLAN</div><h2>2회 분할매수 계획</h2><p>2차 매수는 가격 도달만으로 실행하지 않고 추세를 확인합니다.</p></div></div>
+      <div className="allocation-table-wrap"><table className="allocation-table strategy-table">
+        <thead><tr><th>차수</th><th>배정 비중</th><th>매수 금액</th><th>기준 가격</th><th>실행 조건</th></tr></thead>
+        <tbody>
+          <tr><td>1차 매수</td><td>{percent(firstPct)}</td><td>{money(firstBuyAmount)}</td><td>{price(firstEntryPrice)}</td><td>스크리너 매수 후보 중 차트 확인 후 진입</td></tr>
+          <tr><td>2차 매수</td><td>{percent(secondPct)}</td><td>{money(secondBuyAmount)}</td><td>{price(secondEntryPrice)}</td><td>1차 매수가 대비 +5% 도달 및 상승 추세 유지 확인</td></tr>
+          <tr className="total-row"><td>합계</td><td>100%</td><td>{money(perStock)}</td><td>—</td><td>종목당 목표 투자액 이내</td></tr>
         </tbody>
       </table></div>
     </section>
     <section className="calculator-card strategy-card">
-      <div className="calculator-section-title"><div><div className="eyebrow">ENTRY & EXIT PLAN</div><h2>매수 / 매도 전략</h2><p>종목당 목표 금액 기준 예상 손익입니다.</p></div></div>
+      <div className="calculator-section-title"><div><div className="eyebrow">EXIT PLAN</div><h2>3회 분할매도 계획</h2><p>매도 목표 수익률은 2회 매수 후 평균 매수가 기준입니다.</p></div></div>
       <div className="allocation-table-wrap"><table className="allocation-table strategy-table">
-        <thead><tr><th>구분</th><th>기준</th><th>종목당 금액 예시</th><th>예상 손익(USD)</th><th>비고</th></tr></thead>
+        <thead><tr><th>차수</th><th>목표 수익률</th><th>매도 비중</th><th>목표 매도가</th><th>예상 실현 손익</th></tr></thead>
         <tbody>
-          <tr><td>신규 종목 1차 매수</td><td>{percent(firstPct)}</td><td>{money(perStock * firstPct)}</td><td>{money(perStock * firstPct)}</td><td>목표 금액 범위 안에서 조절</td></tr>
-          <tr><td>추가 매수</td><td>{percent(addPct)}</td><td>{money(perStock * addPct)}</td><td>{money(perStock * addPct)}</td><td>추세 확인 후 조건 충족 시</td></tr>
-          <tr className="loss-row"><td>손절</td><td>{input.stopLossRatio || "0"}%</td><td>{money(perStock)}</td><td>{money(perStock * stopPct)}</td><td>기계적으로 실행, 미련 없이</td></tr>
-          <tr className="profit-row"><td>1차 익절</td><td>{input.firstTargetRatio || "0"}%</td><td>{money(perStock)}</td><td>{money(perStock * firstTargetPct)}</td><td>일부 익절 고려</td></tr>
-          <tr className="profit-row"><td>최종 익절</td><td>{input.finalTargetRatio || "0"}%</td><td>{money(perStock)}</td><td>{money(perStock * finalTargetPct)}</td><td>목표 도달 시 나머지 정리</td></tr>
+          {sellPlan.map((item) => <tr className="profit-row" key={item.label}><td>{item.label}</td><td>+{percent(item.rate)}</td><td>{percent(item.ratio)}</td><td>{price(item.target)}</td><td>{money(totalShares * item.ratio * (item.target - averagePrice))}</td></tr>)}
+          <tr className="total-row"><td>합계</td><td>—</td><td>100%</td><td>—</td><td>{money(expectedProfit)}</td></tr>
+          <tr className="loss-row"><td>전량 손절</td><td>{input.stopLossRatio || "-5"}%</td><td>100%</td><td>{price(stopPrice)}</td><td>{money(lossAtStop)}</td></tr>
         </tbody>
       </table></div>
+      <p className="calculator-note">예상 손익은 수수료·환전 비용·세금 및 가격 갭을 제외한 단순 계산입니다. 실제 2차 매수 여부는 차트 추세와 거래량을 확인해 결정하세요.</p>
     </section>
-    <footer><span>입력한 운용 기준에 따른 단순 계산 예시입니다.</span><span>실제 매매 전 주가, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
+    <footer><span>설정값은 이 브라우저에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
+  </section>;
+}
+료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
 }
 
