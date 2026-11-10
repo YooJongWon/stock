@@ -550,9 +550,8 @@ type CalculatorInputs = {
 
 const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
-  total: "14000", stockCount: "5", cashRatio: "17", firstBuyRatio: "60",
+  total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
-  firstEntryPrice: "100",
 };
 
 function InvestmentCalculator() {
@@ -572,6 +571,8 @@ function InvestmentCalculator() {
             restored[key] = value;
           }
         });
+        // Migrate the previous default reserve from 17% to the updated 5% policy.
+        if (parsed.cashRatio === "17") restored.cashRatio = "5";
         setInput(restored);
         setSaved(true);
       }
@@ -633,7 +634,7 @@ function InvestmentCalculator() {
   const fields: { key: keyof CalculatorInputs; label: string; suffix: string; min?: number; max?: number; step?: number }[] = [
     { key: "total", label: "총 투자금", suffix: "USD", min: 0, step: 100 },
     { key: "stockCount", label: "기본 종목 수", suffix: "종목", min: 1, max: 100, step: 1 },
-    { key: "cashRatio", label: "현금 비중 목표", suffix: "%", min: 0, max: 100, step: 1 },
+    { key: "cashRatio", label: "별도 현금 보유 비중", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "firstBuyRatio", label: "1차 매수 비중", suffix: "%", min: 0, max: 100, step: 1 },
     { key: "stopLossRatio", label: "손절 기준", suffix: "%", min: -100, max: 0, step: 1 },
     { key: "finalTargetRatio", label: "3차 익절 기준", suffix: "%", min: 0, step: 1 },
@@ -655,8 +656,9 @@ function InvestmentCalculator() {
         <div className="calculator-inputs">{fields.map(({ key, label, suffix, ...limits }) => <label className="calculator-field" key={key}><span>{label}</span><div className="calculator-input-wrap"><input type="number" inputMode="decimal" value={input[key]} onChange={(event) => set(key, event.target.value)} {...limits} aria-label={label} /><em>{suffix}</em></div></label>)}</div>
         <div className="calculator-note">
           <strong>고정 매매 원칙</strong><br />
+          별도 현금 {input.cashRatio || "0"}%는 예비 자금으로 유지하고, 종목별 목표 금액 안에 2차 매수 대기금 40%를 포함합니다.<br />
           1차 매수 {percent(firstPct)} · 2차 매수 {percent(secondPct)} (1차 매수가 대비 +5% 상승 후 상승 추세 확인 시)<br />
-          손절 {input.stopLossRatio || "-5"}% · 익절 +8% 40% / +9% 30% / +10% 30%<br />
+          하락 시 물타기하지 않으며, 손절 {input.stopLossRatio || "-5"}% · 익절 +8% 40% / +9% 30% / +10% 30%<br />
           2차 매수 체결 시 실제 평균 매수가를 기준으로 손절·익절 가격을 다시 계산합니다.
         </div>
       </section>
