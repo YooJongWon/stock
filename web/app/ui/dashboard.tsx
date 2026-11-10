@@ -552,6 +552,7 @@ const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
+  firstEntryPrice: "",
 };
 
 function InvestmentCalculator() {
