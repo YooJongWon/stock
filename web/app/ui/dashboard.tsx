@@ -545,14 +545,14 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
 type CalculatorInputs = {
   total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
   stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
-  firstEntryPrice: string;
+  firstEntryPrice: string; secondEntryRisePct: string;
 };
 
 const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
-  firstEntryPrice: "",
+  firstEntryPrice: "", secondEntryRisePct: "4",
 };
 
 function InvestmentCalculator() {
@@ -614,7 +614,12 @@ function InvestmentCalculator() {
   const secondTargetPct = 0.09;
   const finalTargetPct = Math.max(0, get("finalTargetRatio")) / 100;
   const firstEntryPrice = Math.max(0, get("firstEntryPrice"));
-  const secondEntryPrice = firstEntryPrice * 1.05;
+  // 2차 진입은 +3~5% 범위에서 사용자가 차트 지지 확인 후 선택합니다.
+  // 계산 예시는 기본 +4%이며, 입력값은 범위 밖으로 벗어나지 않게 제한합니다.
+  const secondEntryRisePct = Math.min(5, Math.max(3, get("secondEntryRisePct")));
+  const secondEntryPrice = firstEntryPrice * (1 + secondEntryRisePct / 100);
+  const secondEntryMinPrice = firstEntryPrice * 1.03;
+  const secondEntryMaxPrice = firstEntryPrice * 1.05;
   const cash = total * cashPct;
   const stockPool = total - cash;
   const perStock = stockPool / count;
@@ -640,6 +645,7 @@ function InvestmentCalculator() {
     { key: "stopLossRatio", label: "손절 기준", suffix: "%", min: -100, max: 0, step: 1 },
     { key: "finalTargetRatio", label: "3차 익절 기준", suffix: "%", min: 0, step: 1 },
     { key: "firstEntryPrice", label: "1차 매수가", suffix: "USD", min: 0, step: 0.01 },
+    { key: "secondEntryRisePct", label: "2차 매수 상승률", suffix: "%", min: 3, max: 5, step: 0.5 },
   ];
   const sellPlan = [
     { label: "1차 익절", rate: firstTargetPct, ratio: 0.4, target: target8Price },
@@ -658,7 +664,8 @@ function InvestmentCalculator() {
         <div className="calculator-note">
           <strong>고정 매매 원칙</strong><br />
           별도 현금 {input.cashRatio || "0"}%는 예비 자금으로 유지하고, 종목별 목표 금액 안에 2차 매수 대기금 40%를 포함합니다.<br />
-          1차 매수 {percent(firstPct)} · 2차 매수 {percent(secondPct)} (1차 매수가 대비 +5% 상승 후 상승 추세 확인 시)<br />
+          1차 매수 {percent(firstPct)} · 2차 매수 {percent(secondPct)} (1차 매수가 대비 +3~5% 구간에서 지지 확인 후 선택)<br />
+          2차 매수는 기본 +4%를 계산 예시로 사용하며, 상승 추세 유지·지지 확인이 없거나 급등으로 이격이 크면 보류합니다.<br />
           하락 시 물타기하지 않으며, 손절 {input.stopLossRatio || "-5"}% · 익절 +8% 40% / +9% 30% / +10% 30%<br />
           2차 매수 체결 시 실제 평균 매수가를 기준으로 손절·익절 가격을 다시 계산합니다.
         </div>
@@ -668,7 +675,7 @@ function InvestmentCalculator() {
         <div className="calc-summary-grid">
           <article><span>종목당 목표 투자액</span><strong>{money(perStock)}</strong><small>현금 목표 제외 · {count}종목 기준</small></article>
           <article><span>1차 매수 금액 ({percent(firstPct)})</span><strong>{money(firstBuyAmount)}</strong><small>1차 매수가 {price(firstEntryPrice)}</small></article>
-          <article><span>2차 매수 금액 ({percent(secondPct)})</span><strong>{money(secondBuyAmount)}</strong><small>2차 기준가 {price(secondEntryPrice)} (+5%)</small></article>
+          <article><span>2차 매수 금액 ({percent(secondPct)})</span><strong>{money(secondBuyAmount)}</strong><small>진입 구간 {price(secondEntryMinPrice)}~{price(secondEntryMaxPrice)} · 예시 {price(secondEntryPrice)} (+{secondEntryRisePct.toFixed(1)}%)</small></article>
           <article><span>2회 매수 후 평균 매수가</span><strong>{price(averagePrice)}</strong><small>두 차수 매수금액과 주식 수 반영</small></article>
           <article className="negative"><span>손절 가격 ({input.stopLossRatio || "-5"}%)</span><strong>{price(stopPrice)}</strong><small>평균 매수가 기준 예상 손실 {money(lossAtStop)}</small></article>
           <article className="positive"><span>전체 분할매도 예상 수익</span><strong>{money(expectedProfit)}</strong><small>세 차례 매도 비중과 목표가 반영</small></article>
@@ -676,12 +683,12 @@ function InvestmentCalculator() {
       </section>
     </div>
     <section className="calculator-card allocation-card">
-      <div className="calculator-section-title"><div><div className="eyebrow">ENTRY PLAN</div><h2>2회 분할매수 계획</h2><p>2차 매수는 가격 도달만으로 실행하지 않고 추세를 확인합니다.</p></div></div>
+      <div className="calculator-section-title"><div><div className="eyebrow">ENTRY PLAN</div><h2>2회 분할매수 계획</h2><p>2차 매수는 +3~5% 구간에서 상승 추세와 지지를 확인한 경우에만 실행합니다.</p></div></div>
       <div className="allocation-table-wrap"><table className="allocation-table strategy-table">
         <thead><tr><th>차수</th><th>배정 비중</th><th>매수 금액</th><th>기준 가격</th><th>실행 조건</th></tr></thead>
         <tbody>
           <tr><td>1차 매수</td><td>{percent(firstPct)}</td><td>{money(firstBuyAmount)}</td><td>{price(firstEntryPrice)}</td><td>스크리너 매수 후보 중 차트 확인 후 진입</td></tr>
-          <tr><td>2차 매수</td><td>{percent(secondPct)}</td><td>{money(secondBuyAmount)}</td><td>{price(secondEntryPrice)}</td><td>1차 매수가 대비 +5% 도달 및 상승 추세 유지 확인</td></tr>
+          <tr><td>2차 매수</td><td>{percent(secondPct)}</td><td>{money(secondBuyAmount)}</td><td>{price(secondEntryMinPrice)}~{price(secondEntryMaxPrice)}<br />예시 {price(secondEntryPrice)}</td><td>+3~5% 구간에서 20일선 또는 돌파 저항선 지지, 저점 상승 확인. 급등·이격 과다 또는 지지 실패 시 보류</td></tr>
           <tr className="total-row"><td>합계</td><td>100%</td><td>{money(perStock)}</td><td>—</td><td>종목당 목표 투자액 이내</td></tr>
         </tbody>
       </table></div>
@@ -696,7 +703,7 @@ function InvestmentCalculator() {
           <tr className="loss-row"><td>전량 손절</td><td>{input.stopLossRatio || "-5"}%</td><td>100%</td><td>{price(stopPrice)}</td><td>{money(lossAtStop)}</td></tr>
         </tbody>
       </table></div>
-      <p className="calculator-note">예상 손익은 수수료·환전 비용·세금 및 가격 갭을 제외한 단순 계산입니다. 실제 2차 매수 여부는 차트 추세와 거래량을 확인해 결정하세요.</p>
+      <p className="calculator-note">예상 손익은 수수료·환전 비용·세금 및 가격 갭을 제외한 단순 계산입니다. 2차 매수는 +3~5% 도달만으로 실행하지 말고, 20일선 또는 돌파 저항선 지지와 저점 상승을 확인하세요. 거래량 과열·이격 과다·지지 실패 시에는 40%를 현금으로 남겨둡니다.</p>
     </section>
     <footer><span>설정값은 이 브라우저에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
