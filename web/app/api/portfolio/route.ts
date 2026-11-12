@@ -11,6 +11,8 @@ type Position = {
   firstBuyAmount: number;
   secondBuyAmount: number;
   legacyInvestedAmount: number;
+  firstBuyPrice: number | null;
+  secondBuyPrice: number | null;
   buyStage: number;
   sellStage: number;
   exitStatus: "active" | "stopped" | "completed";
@@ -104,6 +106,8 @@ function normalizeStoredPositions(value: unknown): Position[] {
       firstBuyAmount,
       secondBuyAmount,
       legacyInvestedAmount,
+      firstBuyPrice: Number(row.firstBuyPrice) > 0 ? Number(row.firstBuyPrice) : null,
+      secondBuyPrice: Number(row.secondBuyPrice) > 0 ? Number(row.secondBuyPrice) : null,
       buyStage,
       sellStage,
       exitStatus,
@@ -122,6 +126,8 @@ function validPositions(value: unknown): Position[] | null {
     const firstBuyAmount = Number(row.firstBuyAmount);
     const secondBuyAmount = Number(row.secondBuyAmount);
     const legacyInvestedAmount = Number(row.legacyInvestedAmount ?? 0);
+    const firstBuyPrice = row.firstBuyPrice === undefined || row.firstBuyPrice === null || row.firstBuyPrice === "" ? null : Number(row.firstBuyPrice);
+    const secondBuyPrice = row.secondBuyPrice === undefined || row.secondBuyPrice === null || row.secondBuyPrice === "" ? null : Number(row.secondBuyPrice);
     const buyStage = Number(row.buyStage);
     const sellStage = Number(row.sellStage);
     const exitStatus = row.exitStatus;
@@ -129,11 +135,13 @@ function validPositions(value: unknown): Position[] | null {
         !Number.isFinite(firstBuyAmount) || firstBuyAmount < 0 ||
         !Number.isFinite(secondBuyAmount) || secondBuyAmount < 0 ||
         !Number.isFinite(legacyInvestedAmount) || legacyInvestedAmount < 0 ||
+        (firstBuyPrice !== null && (!Number.isFinite(firstBuyPrice) || firstBuyPrice <= 0)) ||
+        (secondBuyPrice !== null && (!Number.isFinite(secondBuyPrice) || secondBuyPrice <= 0)) ||
         !Number.isInteger(buyStage) || buyStage < 0 || buyStage > 2 ||
         !Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3 ||
         !["active", "stopped", "completed"].includes(String(exitStatus)) ||
-        (buyStage < 1 && (firstBuyAmount > 0 || secondBuyAmount > 0)) ||
-        (buyStage < 2 && (secondBuyAmount > 0 || sellStage > 0)) ||
+        (buyStage < 1 && (firstBuyAmount > 0 || secondBuyAmount > 0 || firstBuyPrice !== null || secondBuyPrice !== null)) ||
+        (buyStage < 2 && (secondBuyAmount > 0 || secondBuyPrice !== null || sellStage > 0)) ||
         (exitStatus !== "active" && exitStatus !== "stopped" && exitStatus !== "completed")) return null;
 
     normalized.push({
@@ -143,6 +151,8 @@ function validPositions(value: unknown): Position[] | null {
       firstBuyAmount,
       secondBuyAmount,
       legacyInvestedAmount,
+      firstBuyPrice,
+      secondBuyPrice,
       buyStage,
       sellStage,
       exitStatus,
