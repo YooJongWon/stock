@@ -144,7 +144,12 @@
 .portfolio-cash-row{display:grid;grid-template-columns:minmax(200px,320px) 1fr;align-items:end;gap:16px}
 .portfolio-field{display:grid;gap:7px;min-width:0;color:var(--muted);font-size:10px}
 .portfolio-field input{width:100%;min-width:0;border:1px solid #2c3948;border-radius:7px;background:#0a1018;color:var(--text);padding:10px 11px;font:12px "DM Mono",monospace;outline:none}
-.portfolio-field input:focus{border-color:var(--mint)}
+.portfolio-field input:focus,.portfolio-field select:focus{border-color:var(--mint)}
+.portfolio-field select{width:100%;min-width:0;border:1px solid #2c3948;border-radius:7px;background:#0a1018;color:var(--text);padding:10px 11px;font:11px "Noto Sans KR",sans-serif;outline:none}
+.portfolio-stage-display{display:grid;gap:6px;min-width:150px}
+.portfolio-stage-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:5px 8px;border:1px solid;border-radius:6px;font:10px "Noto Sans KR",sans-serif;white-space:nowrap}
+.portfolio-stage-badge.buy{border-color:#31536d;background:#102131;color:#a9d8ff}
+.portfolio-stage-badge.sell{border-color:#654a30;background:#261b12;color:#ffd09a}
 .portfolio-save-area{display:flex;align-items:center;justify-content:flex-end;gap:12px}
 .portfolio-save-area>span,.portfolio-bottom-actions>span{color:var(--muted);font-size:10px;line-height:1.6}
 .portfolio-position-form,.portfolio-edit-form{padding:15px;border:1px solid #263443;border-radius:9px;background:#0b121a}
