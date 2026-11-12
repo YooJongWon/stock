@@ -19,10 +19,11 @@ type BuyStageEditor = { positionId: string; stage: 1 | 2 };
 type CalculatorInputs = {
   total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
   stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
+  secondEntryRisePct: string;
 };
 type CalculatorPlan = {
   total: number; stockCount: number; perStockAmount: number; firstBuyAmount: number;
-  secondBuyAmount: number; stopLossRatio: number;
+  secondBuyAmount: number; stopLossRatio: number; secondEntryRisePct: number;
   sellTargets: { label: string; returnPct: number; sellPct: number }[];
 };
 type TickerSearchResult = { symbol: string; name: string; exchange: string };
@@ -31,6 +32,7 @@ type PortfolioData = { cashBalance: number; positions: Position[]; calculatorInp
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
+  secondEntryRisePct: "4",
 };
 const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "" };
 const totalInvested = (position: Position) =>
@@ -52,6 +54,7 @@ function buildCalculatorPlan(input: Partial<CalculatorInputs> | null | undefined
     firstBuyAmount: perStockAmount * firstRatio,
     secondBuyAmount: perStockAmount * (1 - firstRatio),
     stopLossRatio: Math.min(0, Math.max(-100, read("stopLossRatio", DEFAULT_CALCULATOR_INPUTS.stopLossRatio))),
+    secondEntryRisePct: Math.min(5, Math.max(3, read("secondEntryRisePct", DEFAULT_CALCULATOR_INPUTS.secondEntryRisePct))),
     sellTargets: [
       { label: "1차 매도", returnPct: Math.max(0, read("firstTargetRatio", DEFAULT_CALCULATOR_INPUTS.firstTargetRatio)), sellPct: 40 },
       { label: "2차 매도", returnPct: 9, sellPct: 30 },
@@ -501,10 +504,11 @@ export default function PortfolioManager() {
       </div>
       <div className="portfolio-plan-amounts">
         <div><small>1차 매수 권장</small><strong>{usd(plan.firstBuyAmount)}</strong></div>
-        <div><small>2차 매수 권장</small><strong>{usd(plan.secondBuyAmount)}</strong></div>
+        <div><small>2차 매수 기본 배정</small><strong>{usd(plan.secondBuyAmount)}</strong></div>
+        <div><small>2차 매수 진입 기준</small><strong>+3~5% · 설정 +{plan.secondEntryRisePct.toFixed(1)}%</strong></div>
         <div><small>손절 / 익절 목표</small><strong>{plan.stopLossRatio}% · +{plan.sellTargets.map((item) => item.returnPct).join("% / +")}%</strong></div>
       </div>
-      <p>권장 금액은 계산기 설정에서 자동으로 가져옵니다. 실제 체결 금액이 다르면 매수 입력창에서 수정할 수 있습니다.</p>
+      <p>1차·2차 기본 배정은 계산기 기준입니다. 종목별 2차 추가 추천금액은 종목당 목표 투자금에서 해당 종목의 실제 누적 매수금액을 뺀 차액으로 자동 조정됩니다.</p>
     </section>
 
     <section className="portfolio-panel">
@@ -533,6 +537,7 @@ export default function PortfolioManager() {
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
           const remainingBudget = Math.max(0, plan.perStockAmount - invested);
+          const overBudget = Math.max(0, invested - plan.perStockAmount);
           const exitBasisAmount = item.buyStage >= 2 ? invested : plan.perStockAmount;
           const exitBasisLabel = item.buyStage >= 2 ? "실제 누적 매수금 기준" : "종목당 목표금액 기준";
           return <article className="portfolio-position-card" key={item.id}>
@@ -553,10 +558,18 @@ export default function PortfolioManager() {
                     : <span className="portfolio-stage-locked">진행 불가</span>}
                 </div>
                 <div className={`portfolio-buy-step ${item.buyStage >= 2 ? "done" : item.buyStage === 1 ? "current" : "locked"}`}>
-                  <div><strong>2차 매수</strong><small>추가 권장 {usd(item.buyStage >= 1 ? remainingBudget : plan.secondBuyAmount)}</small></div>
+                  <div><strong>2차 매수</strong><small>실제 1차 금액 반영 후 추가 권장 {usd(item.buyStage >= 1 ? remainingBudget : plan.secondBuyAmount)}</small></div>
                   {item.buyStage >= 2 ? <span className="portfolio-step-done">완료 · {usd(item.secondBuyAmount)}</span>
-                    : item.buyStage === 1 && isActive ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 2)}>2차 매수 · 추가 {usd(remainingBudget)}</button>
-                    : <span className="portfolio-stage-locked">1차 매수 완료 후 활성화</span>}
+                    : item.buyStage === 1 && isActive && remainingBudget > 0
+                      ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 2)}>2차 매수 · 추가 {usd(remainingBudget)}</button>
+                      : item.buyStage === 1 && isActive
+                        ? <span className="portfolio-stage-locked">목표 투자금 도달 · 추가 매수 보류</span>
+                        : <span className="portfolio-stage-locked">1차 매수 완료 후 활성화</span>}
+                  <div className="portfolio-buy-trigger-note">
+                    **진입 기준:** 1차 매수가 대비 +3~5% 상승 구간 (현재 계산기 설정 예시 +{plan.secondEntryRisePct.toFixed(1)}%)
+                    <small>상승 추세 유지 · 20일선 또는 돌파 저항선 지지 · 저점 상승 확인 후 진입</small>
+                  </div>
+                  {item.buyStage === 1 && overBudget > 0 && <div className="portfolio-over-budget-note">종목당 목표 투자금을 {usd(overBudget)} 초과했습니다. 추가 매수는 권장하지 않습니다.</div>}
                 </div>
                 <div className="portfolio-budget-progress">
                   <div><span>종목당 목표금액</span><strong>{usd(plan.perStockAmount)}</strong></div>
@@ -619,9 +632,15 @@ export default function PortfolioManager() {
               <div><small>{buyStageEditor.stage}차 권장 매수금</small><strong>{usd(recommended)}</strong></div>
               {buyStageEditor.stage === 2 && <div><small>현재까지 매수한 금액</small><strong>{usd(totalInvested(item))}</strong></div>}
             </div>
+            {buyStageEditor.stage === 2 && <div className="portfolio-buy-trigger-modal">
+              <strong>2차 진입 기준 · +3~5% 상승 구간</strong>
+              <span>현재 계산기 설정 예시 +{plan.secondEntryRisePct.toFixed(1)}%</span>
+              <small>상승 추세 유지, 20일선 또는 돌파 저항선 지지, 저점 상승을 확인하세요. 상승률 도달만으로 매수하지 않습니다.</small>
+            </div>}
             <NumericField label="실제 매수 금액 (USD)" value={buyAmountInput} onChange={setBuyAmountInput} step="0.01" />
             <p className="portfolio-modal-hint">계산기 권장 추가금액을 기본값으로 채웠습니다. 실제 매수할 금액에 맞게 수정한 뒤 완료 처리하세요.</p>
             {Number(buyAmountInput) > recommended && recommended > 0 && <p className="portfolio-modal-warning">계산기 기준 권장 추가금액보다 큽니다. 종목당 배정금액을 초과하는지 확인하세요.</p>}
+            {buyStageEditor.stage === 2 && recommended <= 0 && <p className="portfolio-modal-warning">종목당 목표 투자금에 이미 도달했습니다. 추가 매수를 권장하지 않습니다.</p>}
             {buyStageError && <p className="portfolio-error">{buyStageError}</p>}
             <div className="portfolio-row-actions">
               <button className="portfolio-primary" type="submit">{buyStageEditor.stage}차 매수 완료</button>
