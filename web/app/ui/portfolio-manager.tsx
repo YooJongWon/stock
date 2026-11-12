@@ -5,19 +5,18 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 type Position = {
   id: string;
   ticker: string;
-  companyName: string;
   shares: number;
   avgPrice: number;
-  currentPrice: number;
   note: string;
   buyStage: number | null;
   sellStage: number | null;
 };
 type PositionDraft = Omit<Position, "id">;
+type TickerSearchResult = { symbol: string; name: string; exchange: string };
 type PortfolioData = { cashBalance: number; positions: Position[] };
 
 const EMPTY_DRAFT: PositionDraft = {
-  ticker: "", companyName: "", shares: 0, avgPrice: 0, currentPrice: 0, note: "",
+  ticker: "", shares: 0, avgPrice: 0, note: "",
   buyStage: 1, sellStage: 0,
 };
 const BUY_STAGE_OPTIONS = [
@@ -64,6 +63,95 @@ function StageField({ label, value, onChange, options }: {
   </label>;
 }
 
+function TickerSearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<TickerSearchResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!open || term.length < 2) {
+      setResults([]);
+      setSearching(false);
+      setSearchError("");
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearching(true);
+      setSearchError("");
+      try {
+        const response = await fetch(`/api/portfolio/ticker-search?q=${encodeURIComponent(term)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = await response.json() as { results?: TickerSearchResult[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || "종목 검색에 실패했습니다.");
+        setResults(Array.isArray(payload.results) ? payload.results : []);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setResults([]);
+        setSearchError(caught instanceof Error ? caught.message : "검색 서비스에 연결하지 못했습니다.");
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, open]);
+
+  const choose = (result: TickerSearchResult) => {
+    setQuery(result.symbol);
+    onChange(result.symbol);
+    setOpen(false);
+    setResults([]);
+  };
+
+  return <label className="portfolio-field ticker-search-field">
+    <span>티커 검색 (회사명 또는 티커)</span>
+    <input
+      type="text"
+      value={query}
+      placeholder="예: Apple 또는 AAPL"
+      autoComplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded={open && query.trim().length >= 2}
+      onFocus={() => setOpen(true)}
+      onChange={(event) => {
+        setQuery(event.target.value);
+        onChange(event.target.value);
+        setOpen(true);
+      }}
+      onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+    />
+    {open && query.trim().length >= 2 && <div className="ticker-search-results" role="listbox">
+      {searching ? <div className="ticker-search-message">종목 검색 중…</div>
+        : searchError ? <div className="ticker-search-message">{searchError}</div>
+        : results.length ? results.map((result) => <button
+          type="button"
+          role="option"
+          aria-selected={false}
+          key={result.symbol}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => choose(result)}
+        >
+          <strong>{result.symbol}</strong>
+          <span>{result.name}</span>
+          <small>{result.exchange}</small>
+        </button>)
+        : <div className="ticker-search-message">검색 결과가 없습니다. 티커를 직접 입력할 수도 있습니다.</div>}
+    </div>}
+    <small className="ticker-search-hint">검색 결과에서 종목을 선택하면 티커만 저장됩니다.</small>
+  </label>;
+}
+
 export default function PortfolioManager() {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,7 +180,11 @@ export default function PortfolioManager() {
       const data = payload as PortfolioData;
       setCashBalance(String(data.cashBalance ?? 0));
       setPositions(Array.isArray(data.positions) ? data.positions.map((item) => ({
-        ...item,
+        id: item.id,
+        ticker: item.ticker,
+        shares: item.shares,
+        avgPrice: item.avgPrice,
+        note: item.note || "",
         buyStage: typeof item.buyStage === "number" && Number.isInteger(item.buyStage) && item.buyStage >= 1 && item.buyStage <= 2 ? item.buyStage : null,
         sellStage: typeof item.sellStage === "number" && Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : null,
       })) : []);
@@ -109,15 +201,13 @@ export default function PortfolioManager() {
 
   const totals = useMemo(() => {
     const cost = positions.reduce((sum, item) => sum + item.shares * item.avgPrice, 0);
-    const priced = positions.filter((item) => item.currentPrice > 0);
-    const marketValue = priced.reduce((sum, item) => sum + item.shares * item.currentPrice, 0);
-    const profit = priced.reduce((sum, item) => sum + item.shares * (item.currentPrice - item.avgPrice), 0);
-    const pricedCost = priced.reduce((sum, item) => sum + item.shares * item.avgPrice, 0);
     const cash = Math.max(0, Number(cashBalance) || 0);
-    const totalAssets = cash + marketValue;
     return {
-      cost, marketValue, profit, returnPct: pricedCost > 0 ? profit / pricedCost * 100 : 0,
-      cash, totalAssets, cashPct: totalAssets > 0 ? cash / totalAssets * 100 : 0,
+      cost,
+      cash,
+      positionCount: positions.length,
+      firstBuyCount: positions.filter((item) => item.buyStage === 1).length,
+      secondBuyCount: positions.filter((item) => item.buyStage === 2).length,
     };
   }, [cashBalance, positions]);
 
@@ -140,13 +230,13 @@ export default function PortfolioManager() {
   };
 
   const updateDraft = (key: keyof PositionDraft, value: string) => {
-    const nextValue = key === "ticker" || key === "companyName" || key === "note"
+    const nextValue = key === "ticker" || key === "note"
       ? value
       : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
     setDraft((old) => ({ ...old, [key]: nextValue }));
   };
   const updateEditDraft = (key: keyof PositionDraft, value: string) => {
-    const nextValue = key === "ticker" || key === "companyName" || key === "note"
+    const nextValue = key === "ticker" || key === "note"
       ? value
       : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
     setEditDraft((old) => ({ ...old, [key]: nextValue }));
@@ -155,7 +245,7 @@ export default function PortfolioManager() {
   const addPosition = (event: FormEvent) => {
     event.preventDefault();
     const ticker = draft.ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9.-]{1,12}$/.test(ticker) || draft.shares <= 0 || draft.avgPrice <= 0 || draft.currentPrice < 0) {
+    if (!/^[A-Z0-9.-]{1,12}$/.test(ticker) || draft.shares <= 0 || draft.avgPrice <= 0) {
       setError("티커, 보유 수량, 평균 매수가를 올바르게 입력해 주세요.");
       return;
     }
@@ -170,15 +260,15 @@ export default function PortfolioManager() {
   const startEdit = (position: Position) => {
     setEditingId(position.id);
     setEditDraft({
-      ticker: position.ticker, companyName: position.companyName, shares: position.shares,
-      avgPrice: position.avgPrice, currentPrice: position.currentPrice, note: position.note,
+      ticker: position.ticker, shares: position.shares,
+      avgPrice: position.avgPrice, note: position.note,
       buyStage: position.buyStage, sellStage: position.sellStage,
     });
   };
 
   const commitEdit = (event: FormEvent) => {
     event.preventDefault();
-    if (!editingId || editDraft.shares <= 0 || editDraft.avgPrice <= 0 || editDraft.currentPrice < 0) {
+    if (!editingId || editDraft.shares <= 0 || editDraft.avgPrice <= 0) {
       setError("수량과 평균 매수가는 0보다 커야 합니다.");
       return;
     }
@@ -261,16 +351,14 @@ export default function PortfolioManager() {
 
   return <section className="portfolio-page">
     <div className="portfolio-heading-row">
-      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>보유 수량과 평균 매수가, 현재가를 직접 입력해 손익과 자산 구성을 관리합니다.</p></div>
+      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>보유 수량과 평균 매수가, 분할매수·매도 진행 단계를 관리합니다.</p></div>
       <button className="portfolio-logout" type="button" onClick={logout}>로그아웃</button>
     </div>
 
-    <div className="portfolio-summary">
-      <article><span>총 자산 (평가액 + 예수금)</span><strong>{usd(totals.totalAssets)}</strong><small>현재가 미입력 종목은 평가액에서 제외</small></article>
-      <article><span>보유 주식 평가액</span><strong>{usd(totals.marketValue)}</strong><small>현재가 직접 입력 기준</small></article>
-      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>{positions.length}개 종목</small></article>
-      <article className={totals.profit >= 0 ? "positive" : "negative"}><span>평가 손익</span><strong>{totals.profit >= 0 ? "+" : ""}{usd(totals.profit)}</strong><small>{totals.returnPct >= 0 ? "+" : ""}{totals.returnPct.toFixed(2)}%</small></article>
-      <article><span>예수금 비중</span><strong>{totals.cashPct.toFixed(1)}%</strong><small>{usd(totals.cash)}</small></article>
+    <div className="portfolio-summary portfolio-summary-simple">
+      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>보유 수량 × 평균 매수가 합계</small></article>
+      <article><span>남은 예수금</span><strong>{usd(totals.cash)}</strong><small>직접 입력한 USD 잔액</small></article>
+      <article><span>보유 종목</span><strong>{totals.positionCount}개</strong><small>1차 매수 {totals.firstBuyCount}개 · 2차 매수 {totals.secondBuyCount}개</small></article>
     </div>
 
     <section className="portfolio-panel">
@@ -282,15 +370,13 @@ export default function PortfolioManager() {
     </section>
 
     <section className="portfolio-panel">
-      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>매수·매도 단계를 함께 기록합니다. 기존 종목의 단계는 수정에서 설정해 주세요.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
+      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>티커를 검색해 선택하고 수량·평균 매수가와 거래 진행 단계를 기록합니다.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
       <form className="portfolio-position-form" onSubmit={addPosition}>
         <h3>보유 종목 추가</h3>
         <div className="portfolio-form-grid">
-          {field("티커", "ticker", draft.ticker, updateDraft)}
-          {field("회사명", "companyName", draft.companyName, updateDraft)}
+          <TickerSearchField value={draft.ticker} onChange={(value) => updateDraft("ticker", value)} />
           {field("보유 수량", "shares", draft.shares, updateDraft, "0.0001")}
           {field("평균 매수가 (USD)", "avgPrice", draft.avgPrice, updateDraft)}
-          {field("현재가 (USD)", "currentPrice", draft.currentPrice, updateDraft)}
           {field("메모 (선택)", "note", draft.note, updateDraft)}
           <StageField label="매수 단계" value={draft.buyStage} onChange={(value) => updateDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
           <StageField label="매도 단계" value={draft.sellStage} onChange={(value) => updateDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
@@ -299,21 +385,17 @@ export default function PortfolioManager() {
       </form>
 
       {positions.length ? <div className="portfolio-table-wrap"><table className="portfolio-table">
-        <thead><tr><th>종목</th><th>매수 / 매도 단계</th><th>수량</th><th>평균 매수가</th><th>현재가</th><th>매수 원금</th><th>평가액</th><th>평가 손익</th><th>관리</th></tr></thead>
+        <thead><tr><th>티커</th><th>매수 / 매도 단계</th><th>보유 수량</th><th>평균 매수가</th><th>매수 원금</th><th>관리</th></tr></thead>
         <tbody>{positions.map((item) => {
           const cost = item.shares * item.avgPrice;
-          const value = item.currentPrice > 0 ? item.shares * item.currentPrice : null;
-          const pnl = value === null ? null : value - cost;
-          const pct = pnl === null || cost <= 0 ? null : pnl / cost * 100;
           return <tr key={item.id}>
-            <td><strong>{item.ticker}</strong><small>{item.companyName || "회사명 미입력"}</small>{item.note && <small>{item.note}</small>}</td>
+            <td><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</td>
             <td><div className="portfolio-stage-display">
               <span className="portfolio-stage-badge buy">매수 · {buyStageLabel(item.buyStage)}</span>
               <span className="portfolio-stage-badge sell">매도 · {sellStageLabel(item.sellStage)}</span>
             </div></td>
-            <td>{numberText(item.shares)}</td><td>{usd(item.avgPrice)}</td><td>{item.currentPrice > 0 ? usd(item.currentPrice) : "미입력"}</td>
-            <td>{usd(cost)}</td><td>{value === null ? "—" : usd(value)}</td>
-            <td className={pnl === null ? "" : pnl >= 0 ? "positive" : "negative"}>{pnl === null ? "—" : <>{pnl >= 0 ? "+" : ""}{usd(pnl)}<small>{pct! >= 0 ? "+" : ""}{pct!.toFixed(2)}%</small></>}</td>
+            <td>{numberText(item.shares)}</td><td>{usd(item.avgPrice)}</td>
+            <td>{usd(cost)}</td>
             <td><div className="portfolio-row-actions"><button type="button" onClick={() => startEdit(item)}>수정</button><button type="button" onClick={() => deletePosition(item.id)}>삭제</button></div></td>
           </tr>;
         })}</tbody>
@@ -322,11 +404,9 @@ export default function PortfolioManager() {
       {editingId && <form className="portfolio-edit-form" onSubmit={commitEdit}>
         <h3>{editDraft.ticker || "종목"} 수정</h3>
         <div className="portfolio-form-grid">
-          {field("티커", "ticker", editDraft.ticker, updateEditDraft)}
-          {field("회사명", "companyName", editDraft.companyName, updateEditDraft)}
+          <TickerSearchField value={editDraft.ticker} onChange={(value) => updateEditDraft("ticker", value)} />
           {field("보유 수량", "shares", editDraft.shares, updateEditDraft, "0.0001")}
           {field("평균 매수가 (USD)", "avgPrice", editDraft.avgPrice, updateEditDraft)}
-          {field("현재가 (USD)", "currentPrice", editDraft.currentPrice, updateEditDraft)}
           {field("메모 (선택)", "note", editDraft.note, updateEditDraft)}
           <StageField label="매수 단계" value={editDraft.buyStage} onChange={(value) => updateEditDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
           <StageField label="매도 단계" value={editDraft.sellStage} onChange={(value) => updateEditDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
@@ -337,6 +417,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">매수 단계는 1차 또는 2차 완료, 매도 단계는 매도 전 또는 1~3차 완료로 관리합니다. 기존 종목은 거래 이력을 추정하지 않고 ‘미설정’으로 표시하므로 수정에서 실제 단계로 맞춰 주세요. 단계 변경도 ‘변경사항 저장’을 눌러야 저장됩니다. 종목 정보와 현재가는 직접 입력하며, 증권사 계좌 연동은 하지 않습니다.</div>
+    <div className="portfolio-note">티커 검색은 Yahoo Finance 검색 결과를 이용합니다. 검색 결과에서 종목을 선택하거나 티커를 직접 입력할 수 있습니다. 회사명과 실시간 현재가는 저장하지 않으며, 매수 원금은 보유 수량 × 평균 매수가로 계산합니다. 기존 종목의 단계는 거래 이력을 추정하지 않고 ‘미설정’으로 표시하며, 수정 후 ‘변경사항 저장’을 눌러 주세요.</div>
   </section>;
 }
