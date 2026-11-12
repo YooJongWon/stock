@@ -335,8 +335,8 @@ export default function PortfolioManager() {
         legacyInvestedAmount: Math.max(0, targetTotal - separatedTrancheAmount),
       };
     } else if (current.buyStage >= 2) {
-      if (targetTotal < current.firstBuyAmount) {
-        setError(`1차 매수금액 ${usd(current.firstBuyAmount)}보다 작게 설정할 수 없습니다.`);
+      if (targetTotal <= current.firstBuyAmount) {
+        setError(`2차 매수까지 완료된 종목은 1차 매수금액 ${usd(current.firstBuyAmount)}보다 큰 총액이어야 합니다.`);
         return;
       }
       adjusted = {
