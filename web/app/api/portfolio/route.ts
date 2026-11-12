@@ -7,10 +7,8 @@ export const dynamic = "force-dynamic";
 type Position = {
   id: string;
   ticker: string;
-  companyName: string;
   shares: number;
   avgPrice: number;
-  currentPrice: number;
   note: string;
   buyStage: number | null;
   sellStage: number | null;
@@ -76,25 +74,20 @@ function validPositions(value: unknown): Position[] | null {
     const row = item as Record<string, unknown>;
     const ticker = String(row.ticker || "").trim().toUpperCase();
     const id = String(row.id || "").trim();
-    const companyName = String(row.companyName || "").trim();
     const shares = Number(row.shares);
     const avgPrice = Number(row.avgPrice);
-    const currentPrice = Number(row.currentPrice);
     const buyStage = row.buyStage === undefined || row.buyStage === null ? null : Number(row.buyStage);
     const sellStage = row.sellStage === undefined || row.sellStage === null ? null : Number(row.sellStage);
     if (!id || id.length > 80 || !/^[A-Z0-9.-]{1,12}$/.test(ticker) ||
         !Number.isFinite(shares) || shares <= 0 ||
         !Number.isFinite(avgPrice) || avgPrice <= 0 ||
-        !Number.isFinite(currentPrice) || currentPrice < 0 ||
         (buyStage !== null && (!Number.isInteger(buyStage) || buyStage < 1 || buyStage > 2)) ||
         (sellStage !== null && (!Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3))) return null;
     normalized.push({
       id,
       ticker,
-      companyName: companyName.slice(0, 100),
       shares,
       avgPrice,
-      currentPrice,
       note: String(row.note || "").slice(0, 500),
       buyStage,
       sellStage,
