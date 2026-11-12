@@ -512,12 +512,15 @@ export default function PortfolioManager() {
                 {item.exitStatus !== "active" && <div className={`portfolio-exit-banner ${item.exitStatus}`}>{item.exitStatus === "stopped" ? "손절 처리된 종목" : "3차 분할매도까지 완료"}</div>}
                 {plan.sellTargets.map((target, index) => {
                   const stage = index + 1;
+                  const expectedSaleAmount = invested * (target.sellPct / 100) * (1 + target.returnPct / 100);
+                  const expectedProfit = invested * (target.sellPct / 100) * (target.returnPct / 100);
                   const completed = item.sellStage >= stage;
                   const available = isActive && item.buyStage >= 2 && item.sellStage === stage - 1;
                   const lockedText = item.buyStage < 2 ? "2차 매수 완료 후 활성화" : `${stage - 1}차 매도 완료 후 활성화`;
                   return <div className={`portfolio-sell-target ${completed ? "completed" : available ? "available" : "pending"}`} key={target.label}>
                     <div className="portfolio-sell-target-main">
                       <strong>{target.label}</strong><span>+{target.returnPct}% 수익 · {target.sellPct}% 매도</span>
+                      <small>예상 회수액 {usd(expectedSaleAmount)} · 예상 차익 +{usd(expectedProfit)}</small>
                       <small>매수 원금 대비 +{target.returnPct}% 도달 시 실행</small>
                     </div>
                     <div className="portfolio-sell-target-action">
@@ -583,6 +586,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
+    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 예상 회수액과 차익은 실제 누적 매수금액을 기준으로 각 매도 비중을 배분한 추정치이며 수수료·세금·체결 오차를 제외합니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
   </section>;
 }
