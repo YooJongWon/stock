@@ -211,3 +211,93 @@
 .portfolio-buy-stage-editor .portfolio-error{grid-column:1/-1;margin:0}
 @media(max-width:850px){.portfolio-buy-stage-editor{grid-template-columns:1fr 1fr}.portfolio-buy-stage-editor .portfolio-row-actions{grid-column:1/-1}}
 @media(max-width:650px){.portfolio-workflow-table{min-width:820px}.portfolio-buy-stage-editor{grid-template-columns:1fr}.portfolio-buy-stage-editor .portfolio-row-actions{grid-column:auto}.portfolio-buy-stage-editor .portfolio-row-actions button{flex:1}}
+
+/* Calculator-linked portfolio trading desk */
+.portfolio-plan-banner{margin:-2px 0 18px;padding:16px 18px;border:1px solid #2c4a60;border-radius:11px;background:linear-gradient(130deg,#102131,#0d1722)}
+.portfolio-plan-banner-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.portfolio-plan-banner-heading div{display:grid;gap:5px}
+.portfolio-plan-banner-heading span,.portfolio-position-section-title span,.portfolio-modal-heading span{color:#8ca6bd;font:700 9px "DM Mono",monospace;letter-spacing:.08em}
+.portfolio-plan-banner-heading strong{color:#edf6fc;font-size:16px}
+.portfolio-plan-banner-heading>small{color:#8497a9;font-size:10px}
+.portfolio-plan-amounts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.portfolio-plan-amounts>div{display:grid;gap:5px;padding:10px 11px;border:1px solid #294052;border-radius:8px;background:rgba(5,13,21,.3)}
+.portfolio-plan-amounts small{color:#8ca0b3;font-size:9px}
+.portfolio-plan-amounts strong{color:#c8e5f9;font:700 14px "DM Mono",monospace}
+.portfolio-plan-banner>p{margin:11px 0 0;color:#8294a6;font-size:9px;line-height:1.6}
+.portfolio-position-list{display:grid;gap:13px;margin-top:15px}
+.portfolio-position-card{overflow:hidden;border:1px solid #2a3948;border-radius:12px;background:linear-gradient(145deg,#101923,#0c121a)}
+.portfolio-position-card-header{display:flex;align-items:center;gap:16px;padding:15px 17px;border-bottom:1px solid #263443}
+.portfolio-position-card-header>div:first-child{display:grid;gap:4px;min-width:100px}
+.portfolio-position-card-header>div:first-child strong{color:#9fe0c9;font:700 17px "DM Mono",monospace}
+.portfolio-position-card-header>div:first-child small{color:#7f90a2;font-size:9px}
+.portfolio-position-invested{display:grid;gap:4px;margin-left:auto;text-align:right}
+.portfolio-position-invested span{color:#8b9bae;font-size:9px}
+.portfolio-position-invested strong{color:#f1f5fa;font:700 16px "DM Mono",monospace}
+.portfolio-position-invested small{color:#7f90a2;font-size:9px}
+.portfolio-active-status{padding:5px 8px;border:1px solid #315b4e;border-radius:6px;background:#102820;color:#a9e3c7;font:10px "Noto Sans KR",sans-serif}
+.portfolio-position-columns{display:grid;grid-template-columns:minmax(260px,.8fr) minmax(390px,1.2fr);gap:0}
+.portfolio-position-section{padding:15px 17px}
+.portfolio-position-section+section{border-left:1px solid #263443}
+.portfolio-position-section-title{display:grid;gap:4px;margin-bottom:12px}
+.portfolio-position-section-title strong{color:#e2eaf2;font-size:12px}
+.portfolio-buy-step{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 10px;border:1px solid #263747;border-radius:8px;margin-bottom:8px;background:#0c151e}
+.portfolio-buy-step>div{display:grid;gap:5px}
+.portfolio-buy-step>div strong{color:#dce8f2;font-size:11px}
+.portfolio-buy-step>div small{color:#8294a7;font-size:9px}
+.portfolio-buy-step.done{border-color:#315a4b;background:#10231e}
+.portfolio-buy-step.current{border-color:#315d7b;background:#0f2130}
+.portfolio-buy-step.locked{opacity:.66}
+.portfolio-step-done{color:#9fe1c4;font:700 10px "Noto Sans KR",sans-serif;white-space:nowrap}
+.portfolio-budget-progress{margin-top:12px;padding:10px;border:1px solid #263747;border-radius:8px;background:#0a131b}
+.portfolio-budget-progress>div:first-child{display:flex;justify-content:space-between;gap:8px;color:#8496a9;font-size:9px}
+.portfolio-budget-progress>div:first-child strong{color:#cdddea;font:700 10px "DM Mono",monospace}
+.portfolio-budget-track{height:6px;margin:9px 0 6px;overflow:hidden;border-radius:10px;background:#263443}
+.portfolio-budget-track span{display:block;height:100%;border-radius:10px;background:#63b99a}
+.portfolio-budget-progress>small{color:#8193a5;font-size:9px}
+.portfolio-sell-target{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 11px;border:1px solid #2b3c4c;border-radius:8px;margin-bottom:7px;background:#0c151e}
+.portfolio-sell-target.completed{border-color:#315a4b;background:#10231e}
+.portfolio-sell-target.available{border-color:#70502f;background:#211a12}
+.portfolio-sell-target-main{display:grid;grid-template-columns:auto auto;align-items:baseline;gap:4px 9px}
+.portfolio-sell-target-main strong{color:#e4ebf2;font-size:10px}
+.portfolio-sell-target-main>span{color:#f4c98c;font:700 10px "DM Mono",monospace}
+.portfolio-sell-target-main small{grid-column:1/-1;color:#91a0b1;font-size:9px}
+.portfolio-sell-target-action{display:flex;justify-content:flex-end}
+.portfolio-exit-banner{margin-bottom:8px;padding:8px 10px;border-radius:7px;font-size:10px}
+.portfolio-exit-banner.stopped{border:1px solid #75404a;background:#321c22;color:#ffb6bf}
+.portfolio-exit-banner.completed{border:1px solid #3f6b59;background:#18372d;color:#b8edcf}
+.portfolio-stop-target{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 11px;border:1px solid #75404a;border-radius:8px;background:#211419}
+.portfolio-stop-target>div{display:grid;gap:4px}
+.portfolio-stop-target strong{color:#ffc0c6;font-size:10px}
+.portfolio-stop-target span{color:#ed9fa8;font:700 10px "DM Mono",monospace}
+.portfolio-stop-target small{color:#a98c91;font-size:9px}
+.portfolio-price-hint{margin:9px 0 0;color:#8b9cad;font-size:9px;line-height:1.6}
+.portfolio-position-card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 17px;border-top:1px solid #263443;background:#0a121a}
+.portfolio-position-card-footer>span{color:#8294a6;font-size:9px}
+.portfolio-form-hint{margin-top:11px;color:#91a1b3;font-size:9px;line-height:1.6}
+.portfolio-form-hint strong{color:#cce5f6;font:700 10px "DM Mono",monospace}
+.portfolio-modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:18px;background:rgba(2,7,12,.76);backdrop-filter:blur(5px)}
+.portfolio-buy-stage-editor{display:grid;gap:13px;width:min(520px,100%);padding:21px;border:1px solid #37556d;border-radius:14px;background:#101b27;box-shadow:0 22px 70px rgba(0,0,0,.55)}
+.portfolio-modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.portfolio-modal-heading h3{margin:6px 0;color:#edf4fa;font-size:17px}
+.portfolio-modal-heading p{margin:0;color:#91a3b6;font-size:10px;line-height:1.5}
+.portfolio-modal-close{width:30px;height:30px;border:1px solid #34485b;border-radius:7px;background:#172431;color:#dbe6ef;font-size:20px;cursor:pointer}
+.portfolio-buy-recommendation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.portfolio-buy-recommendation>div{display:grid;gap:5px;padding:10px;border:1px solid #2a4053;border-radius:8px;background:#0b151f}
+.portfolio-buy-recommendation small{color:#8ca0b3;font-size:9px}
+.portfolio-buy-recommendation strong{color:#cce7f9;font:700 14px "DM Mono",monospace}
+.portfolio-modal-hint,.portfolio-modal-warning{margin:0;color:#8da0b3;font-size:9px;line-height:1.6}
+.portfolio-modal-warning{color:#f0c18c}
+.portfolio-buy-stage-editor .portfolio-row-actions{justify-content:flex-end;margin-top:2px}
+@media(max-width:900px){.portfolio-position-columns{grid-template-columns:1fr}.portfolio-position-section+section{border-left:0;border-top:1px solid #263443}}
+@media(max-width:650px){
+  .portfolio-plan-banner{padding:13px}
+  .portfolio-plan-banner-heading{align-items:flex-start;flex-direction:column}
+  .portfolio-plan-amounts{grid-template-columns:1fr 1fr}
+  .portfolio-position-card-header{flex-wrap:wrap;gap:10px}
+  .portfolio-position-invested{margin-left:auto}
+  .portfolio-position-columns{grid-template-columns:1fr}
+  .portfolio-position-card-footer{align-items:flex-start;flex-direction:column}
+  .portfolio-buy-step{align-items:flex-start;flex-direction:column}
+  .portfolio-sell-target{grid-template-columns:1fr}
+  .portfolio-sell-target-action{justify-content:flex-start}
+}
