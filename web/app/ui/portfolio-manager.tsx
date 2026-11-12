@@ -14,7 +14,7 @@ type Position = {
   exitStatus: "active" | "stopped" | "completed";
 };
 type PositionDraft = { ticker: string; note: string; firstBuyAmount: string };
-type PositionEditDraft = Pick<Position, "ticker" | "note">;
+type PositionEditDraft = { ticker: string; note: string; totalInvestedAmount: string };
 type BuyStageEditor = { positionId: string; stage: 1 | 2 };
 type CalculatorInputs = {
   total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
@@ -171,7 +171,7 @@ export default function PortfolioManager() {
   const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [draft, setDraft] = useState<PositionDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<PositionEditDraft>({ ticker: "", note: "" });
+  const [editDraft, setEditDraft] = useState<PositionEditDraft>({ ticker: "", note: "", totalInvestedAmount: "0" });
   const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
   const [buyAmountInput, setBuyAmountInput] = useState("");
   const [buyStageError, setBuyStageError] = useState("");
@@ -291,7 +291,11 @@ export default function PortfolioManager() {
 
   const startEdit = (position: Position) => {
     setEditingId(position.id);
-    setEditDraft({ ticker: position.ticker, note: position.note });
+    setEditDraft({
+      ticker: position.ticker,
+      note: position.note,
+      totalInvestedAmount: totalInvested(position).toFixed(2),
+    });
   };
 
   const commitEdit = (event: FormEvent) => {
@@ -306,11 +310,62 @@ export default function PortfolioManager() {
       setError("이미 보유 목록에 있는 종목입니다.");
       return;
     }
-    setPositions((old) => old.map((item) => item.id === editingId ? { ...item, ticker, note: editDraft.note.trim() } : item));
+    const targetTotal = Number(editDraft.totalInvestedAmount);
+    if (!Number.isFinite(targetTotal) || targetTotal < 0) {
+      setError("총 매수금액은 0 이상의 USD 금액으로 입력해 주세요.");
+      return;
+    }
+    const current = positions.find((item) => item.id === editingId);
+    if (!current) return;
+    if (current.buyStage >= 1 && targetTotal <= 0) {
+      setError("이미 매수한 종목의 총 매수금액은 0보다 커야 합니다.");
+      return;
+    }
+    const separatedTrancheAmount = current.firstBuyAmount + current.secondBuyAmount;
+    if (current.legacyInvestedAmount > 0 && targetTotal < separatedTrancheAmount) {
+      setError(`차수가 구분된 매수금액 ${usd(separatedTrancheAmount)}보다 작게 설정할 수 없습니다.`);
+      return;
+    }
+    let adjusted: Position;
+    if (current.legacyInvestedAmount > 0) {
+      adjusted = {
+        ...current,
+        ticker,
+        note: editDraft.note.trim(),
+        legacyInvestedAmount: Math.max(0, targetTotal - separatedTrancheAmount),
+      };
+    } else if (current.buyStage >= 2) {
+      if (targetTotal < current.firstBuyAmount) {
+        setError(`1차 매수금액 ${usd(current.firstBuyAmount)}보다 작게 설정할 수 없습니다.`);
+        return;
+      }
+      adjusted = {
+        ...current,
+        ticker,
+        note: editDraft.note.trim(),
+        secondBuyAmount: targetTotal - current.firstBuyAmount,
+      };
+    } else if (current.buyStage === 1) {
+      adjusted = {
+        ...current,
+        ticker,
+        note: editDraft.note.trim(),
+        firstBuyAmount: targetTotal,
+      };
+    } else {
+      adjusted = {
+        ...current,
+        ticker,
+        note: editDraft.note.trim(),
+        firstBuyAmount: targetTotal,
+        buyStage: targetTotal > 0 ? 1 : 0,
+      };
+    }
+    setPositions((old) => old.map((item) => item.id === editingId ? adjusted : item));
     setEditingId(null);
     setDirty(true);
     setError("");
-    setMessage("수정 내용이 반영됐습니다. 저장 버튼을 눌러 저장하세요.");
+    setMessage("총 매수금액을 수정했습니다. 차수별 금액에도 반영됐으니 변경사항 저장을 눌러 주세요.");
   };
 
   const openBuyStageEditor = (position: Position, stage: 1 | 2) => {
@@ -580,8 +635,15 @@ export default function PortfolioManager() {
         <h3>{editDraft.ticker || "종목"} 수정</h3>
         <div className="portfolio-form-grid">
           <TickerSearchField value={editDraft.ticker} onChange={(value) => updateEditDraft("ticker", value)} />
+          <NumericField
+            label="총 매수금액 (USD)"
+            value={editDraft.totalInvestedAmount}
+            onChange={(value) => setEditDraft((old) => ({ ...old, totalInvestedAmount: value }))}
+            step="0.01"
+          />
           <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={editDraft.note} onChange={(event) => updateEditDraft("note", event.target.value)} /></label>
         </div>
+        <p className="portfolio-form-hint">총 매수금액을 바꾸면 차수별 매수금액도 자동 조정됩니다. 2차 매수 완료 종목은 1차 금액을 유지하고 2차 금액을 조정합니다.</p>
         <div className="portfolio-row-actions"><button className="portfolio-primary" type="submit">수정 반영</button><button className="portfolio-secondary" type="button" onClick={() => setEditingId(null)}>취소</button></div>
       </form>}
     </section>
