@@ -87,12 +87,12 @@ function normalizeStoredPositions(value: unknown): Position[] {
     const legacyInvestedAmount = hasNewAmounts
       ? Math.max(0, Number(row.legacyInvestedAmount))
       : oldInvested;
-    const hasPreviousBuyStage = Number.isInteger(row.buyStage) && Number(row.buyStage) >= 0 && Number(row.buyStage) <= 2;
-    const hasPreviousSellStage = Number.isInteger(row.sellStage) && Number(row.sellStage) >= 0 && Number(row.sellStage) <= 3;
+    const hasPreviousBuyStage = typeof row.buyStage === "number" && Number.isInteger(row.buyStage) && row.buyStage >= 0 && row.buyStage <= 2;
+    const hasPreviousSellStage = typeof row.sellStage === "number" && Number.isInteger(row.sellStage) && row.sellStage >= 0 && row.sellStage <= 3;
     // Old portfolio records had actual shares and average price but no stages.
     // Treat an existing holding as at least a completed first buy; do not guess whether a second buy happened.
-    const buyStage = hasPreviousBuyStage ? Number(row.buyStage) : oldInvested > 0 ? 1 : 0;
-    const sellStage = hasPreviousSellStage ? Number(row.sellStage) : 0;
+    const buyStage = hasPreviousBuyStage ? row.buyStage as number : oldInvested > 0 ? 1 : 0;
+    const sellStage = hasPreviousSellStage ? row.sellStage as number : 0;
     const exitStatus = row.exitStatus === "stopped" || row.exitStatus === "completed"
       ? row.exitStatus
       : sellStage === 3 ? "completed" : "active";
