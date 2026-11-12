@@ -310,3 +310,16 @@
 .portfolio-buy-trigger-modal span{color:#f0c58b;font:700 11px "DM Mono",monospace}
 .portfolio-buy-trigger-modal small{color:#91a5b8;font-size:9px;line-height:1.55}
 @media(max-width:850px){.portfolio-plan-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Prominent per-position progress shown before the ticker */
+.portfolio-position-card-header{justify-content:space-between}
+.portfolio-position-identity{display:flex!important;align-items:center;flex-wrap:wrap;gap:8px 10px;min-width:0}
+.portfolio-position-identity>strong{color:#f0f5fa;font:700 17px "DM Mono",monospace}
+.portfolio-position-identity>small{flex-basis:100%;margin-left:2px}
+.portfolio-progress-badge{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;padding:5px 8px;border:1px solid;border-radius:6px;font:700 9px "Noto Sans KR",sans-serif;letter-spacing:-.01em}
+.portfolio-progress-badge.buy{border-color:#315d7b;background:#102b40;color:#b6ddff}
+.portfolio-progress-badge.sell{border-color:#765332;background:#332313;color:#ffdda9}
+.portfolio-progress-badge.stopped{border-color:#75404a;background:#321c22;color:#ffb6bf}
+.portfolio-progress-badge.completed{border-color:#3f6b59;background:#18372d;color:#b8edcf}
+.portfolio-progress-badge.pending{border-color:#495665;background:#1b2530;color:#b4c0ce}
+@media(max-width:650px){.portfolio-position-card-header{align-items:flex-start}.portfolio-position-identity{flex:1 1 100%}.portfolio-position-invested{margin-left:0;text-align:left}}
