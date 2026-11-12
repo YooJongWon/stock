@@ -9,23 +9,73 @@ type Position = {
   firstBuyAmount: number;
   secondBuyAmount: number;
   legacyInvestedAmount: number;
+  firstBuyPrice: number | null;
+  secondBuyPrice: number | null;
   buyStage: number;
   sellStage: number;
   exitStatus: "active" | "stopped" | "completed";
 };
-type PositionDraft = Pick<Position, "ticker" | "note">;
+type PositionDraft = { ticker: string; note: string; firstBuyAmount: string; firstBuyPrice: string };
+type PositionEditDraft = Pick<Position, "ticker" | "note">;
 type BuyStageEditor = { positionId: string; stage: 1 | 2 };
-
+type CalculatorInputs = {
+  total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
+  stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
+};
+type CalculatorPlan = {
+  total: number; stockCount: number; perStockAmount: number; firstBuyAmount: number;
+  secondBuyAmount: number; stopLossRatio: number;
+  sellTargets: { label: string; returnPct: number; sellPct: number }[];
+};
 type TickerSearchResult = { symbol: string; name: string; exchange: string };
-type PortfolioData = { cashBalance: number; positions: Position[] };
+type PortfolioData = { cashBalance: number; positions: Position[]; calculatorInputs?: Partial<CalculatorInputs> | null };
 
-const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "" };
+const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
+  total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
+  stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
+};
+const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "", firstBuyPrice: "" };
 const totalInvested = (position: Position) =>
   position.firstBuyAmount + position.secondBuyAmount + position.legacyInvestedAmount;
+
+function buildCalculatorPlan(input: Partial<CalculatorInputs> | null | undefined): CalculatorPlan {
+  const read = (key: keyof CalculatorInputs, fallback: string) => {
+    const raw = input?.[key];
+    const value = typeof raw === "string" ? Number(raw) : Number.NaN;
+    return Number.isFinite(value) ? value : Number(fallback);
+  };
+  const total = Math.max(0, read("total", DEFAULT_CALCULATOR_INPUTS.total));
+  const stockCount = Math.max(1, Math.min(100, Math.floor(read("stockCount", DEFAULT_CALCULATOR_INPUTS.stockCount))));
+  const cashRatio = Math.max(0, Math.min(100, read("cashRatio", DEFAULT_CALCULATOR_INPUTS.cashRatio))) / 100;
+  const firstRatio = Math.max(0, Math.min(100, read("firstBuyRatio", DEFAULT_CALCULATOR_INPUTS.firstBuyRatio))) / 100;
+  const perStockAmount = total * (1 - cashRatio) / stockCount;
+  return {
+    total, stockCount, perStockAmount,
+    firstBuyAmount: perStockAmount * firstRatio,
+    secondBuyAmount: perStockAmount * (1 - firstRatio),
+    stopLossRatio: Math.min(0, Math.max(-100, read("stopLossRatio", DEFAULT_CALCULATOR_INPUTS.stopLossRatio))),
+    sellTargets: [
+      { label: "1차 매도", returnPct: Math.max(0, read("firstTargetRatio", DEFAULT_CALCULATOR_INPUTS.firstTargetRatio)), sellPct: 40 },
+      { label: "2차 매도", returnPct: 9, sellPct: 30 },
+      { label: "3차 매도", returnPct: Math.max(0, read("finalTargetRatio", DEFAULT_CALCULATOR_INPUTS.finalTargetRatio)), sellPct: 30 },
+    ],
+  };
+}
+
+function getAverageEntryPrice(position: Position): number | null {
+  if (position.legacyInvestedAmount > 0 || position.firstBuyAmount <= 0 || !position.firstBuyPrice) return null;
+  if (position.buyStage >= 2) {
+    if (position.secondBuyAmount <= 0 || !position.secondBuyPrice) return null;
+    const shares = position.firstBuyAmount / position.firstBuyPrice + position.secondBuyAmount / position.secondBuyPrice;
+    return shares > 0 ? (position.firstBuyAmount + position.secondBuyAmount) / shares : null;
+  }
+  return position.firstBuyPrice;
+}
+
 const usd = (value: number) => new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
-const numberText = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
+const inputMoney = (value: number) => value > 0 ? value.toFixed(2) : "";
 
 function NumericField({ label, value, onChange, step = "0.01", min = "0" }: {
   label: string; value: string | number; onChange: (value: string) => void; step?: string; min?: string;
@@ -131,11 +181,13 @@ export default function PortfolioManager() {
   const [password, setPassword] = useState("");
   const [cashBalance, setCashBalance] = useState("0");
   const [positions, setPositions] = useState<Position[]>([]);
+  const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [draft, setDraft] = useState<PositionDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<PositionDraft>(EMPTY_DRAFT);
+  const [editDraft, setEditDraft] = useState<PositionEditDraft>({ ticker: "", note: "" });
   const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
   const [buyAmountInput, setBuyAmountInput] = useState("");
+  const [buyPriceInput, setBuyPriceInput] = useState("");
   const [buyStageError, setBuyStageError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -155,6 +207,7 @@ export default function PortfolioManager() {
       if (!response.ok) throw new Error(payload.error || "포트폴리오를 불러오지 못했습니다.");
       const data = payload as PortfolioData;
       setCashBalance(String(data.cashBalance ?? 0));
+      setCalculatorInputs({ ...DEFAULT_CALCULATOR_INPUTS, ...(data.calculatorInputs || {}) });
       setPositions(Array.isArray(data.positions) ? data.positions.map((item) => ({
         id: item.id,
         ticker: item.ticker,
@@ -162,6 +215,8 @@ export default function PortfolioManager() {
         firstBuyAmount: Number(item.firstBuyAmount) || 0,
         secondBuyAmount: Number(item.secondBuyAmount) || 0,
         legacyInvestedAmount: Number(item.legacyInvestedAmount) || 0,
+        firstBuyPrice: Number(item.firstBuyPrice) > 0 ? Number(item.firstBuyPrice) : null,
+        secondBuyPrice: Number(item.secondBuyPrice) > 0 ? Number(item.secondBuyPrice) : null,
         buyStage: Number.isInteger(item.buyStage) && item.buyStage >= 0 && item.buyStage <= 2 ? item.buyStage : 0,
         sellStage: Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : 0,
         exitStatus: item.exitStatus === "stopped" || item.exitStatus === "completed" ? item.exitStatus : "active",
@@ -176,6 +231,11 @@ export default function PortfolioManager() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
+  useEffect(() => {
+    setDraft((old) => old.firstBuyAmount ? old : { ...old, firstBuyAmount: inputMoney(plan.firstBuyAmount) });
+  }, [plan.firstBuyAmount]);
 
   const totals = useMemo(() => {
     const cost = positions.reduce((sum, item) => sum + totalInvested(item), 0);
@@ -210,15 +270,25 @@ export default function PortfolioManager() {
   const updateDraft = (key: keyof PositionDraft, value: string) => {
     setDraft((old) => ({ ...old, [key]: value }));
   };
-  const updateEditDraft = (key: keyof PositionDraft, value: string) => {
+  const updateEditDraft = (key: keyof PositionEditDraft, value: string) => {
     setEditDraft((old) => ({ ...old, [key]: value }));
   };
 
   const addPosition = (event: FormEvent) => {
     event.preventDefault();
     const ticker = draft.ticker.trim().toUpperCase();
+    const firstBuyAmount = Number(draft.firstBuyAmount);
+    const firstBuyPrice = Number(draft.firstBuyPrice);
     if (!/^[A-Z0-9.-]{1,12}$/.test(ticker)) {
       setError("티커를 검색 결과에서 선택하거나 올바른 티커를 입력해 주세요.");
+      return;
+    }
+    if (!Number.isFinite(firstBuyAmount) || firstBuyAmount <= 0) {
+      setError("실제 1차 매수 금액을 입력해 주세요.");
+      return;
+    }
+    if (draft.firstBuyPrice.trim() && (!Number.isFinite(firstBuyPrice) || firstBuyPrice <= 0)) {
+      setError("1주당 체결가는 비워두거나 0보다 큰 값을 입력해 주세요.");
       return;
     }
     if (positions.some((item) => item.ticker === ticker && item.exitStatus === "active")) {
@@ -229,18 +299,20 @@ export default function PortfolioManager() {
       id: crypto.randomUUID(),
       ticker,
       note: draft.note.trim(),
-      firstBuyAmount: 0,
+      firstBuyAmount,
       secondBuyAmount: 0,
       legacyInvestedAmount: 0,
-      buyStage: 0,
+      firstBuyPrice: firstBuyPrice > 0 ? firstBuyPrice : null,
+      secondBuyPrice: null,
+      buyStage: 1,
       sellStage: 0,
       exitStatus: "active",
     };
     setPositions((old) => [...old, next]);
-    setDraft(EMPTY_DRAFT);
+    setDraft({ ...EMPTY_DRAFT, firstBuyAmount: inputMoney(plan.firstBuyAmount) });
     setDirty(true);
     setError("");
-    setMessage("새 종목이 추가됐습니다. 1차 매수 버튼에서 실제 매수 금액을 입력하세요.");
+    setMessage("종목과 1차 매수금액을 등록했습니다. 계산기 기준 2차 매수금액이 자동으로 계산됩니다.");
   };
 
   const startEdit = (position: Position) => {
@@ -268,8 +340,10 @@ export default function PortfolioManager() {
   };
 
   const openBuyStageEditor = (position: Position, stage: 1 | 2) => {
+    const recommended = stage === 1 ? plan.firstBuyAmount : Math.max(0, plan.perStockAmount - totalInvested(position));
     setBuyStageEditor({ positionId: position.id, stage });
-    setBuyAmountInput("");
+    setBuyAmountInput(inputMoney(recommended));
+    setBuyPriceInput("");
     setBuyStageError("");
   };
 
@@ -277,20 +351,33 @@ export default function PortfolioManager() {
     event.preventDefault();
     if (!buyStageEditor) return;
     const amount = Number(buyAmountInput);
+    const price = Number(buyPriceInput);
     if (!Number.isFinite(amount) || amount <= 0) {
       setBuyStageError("실제 매수 금액을 USD로 입력해 주세요.");
       return;
     }
+    if (buyPriceInput.trim() && (!Number.isFinite(price) || price <= 0)) {
+      setBuyStageError("1주당 체결가는 비워두거나 0보다 큰 값을 입력해 주세요.");
+      return;
+    }
     const { positionId, stage } = buyStageEditor;
+    const current = positions.find((item) => item.id === positionId);
+    if (!current || current.exitStatus !== "active" ||
+        (stage === 1 && current.buyStage !== 0) ||
+        (stage === 2 && current.buyStage !== 1)) {
+      setBuyStageError("현재 단계에서는 이 매수를 진행할 수 없습니다.");
+      return;
+    }
     setPositions((old) => old.map((item) => {
       if (item.id !== positionId) return item;
       return stage === 1
-        ? { ...item, firstBuyAmount: amount, buyStage: 1 }
-        : { ...item, secondBuyAmount: amount, buyStage: 2 };
+        ? { ...item, firstBuyAmount: amount, firstBuyPrice: price > 0 ? price : null, buyStage: 1 }
+        : { ...item, secondBuyAmount: amount, secondBuyPrice: price > 0 ? price : null, buyStage: 2 };
     }));
     setDirty(true);
     setBuyStageEditor(null);
     setBuyAmountInput("");
+    setBuyPriceInput("");
     setBuyStageError("");
     setMessage(`${stage}차 매수 금액이 반영됐습니다. 변경사항 저장을 눌러 저장하세요.`);
   };
@@ -298,7 +385,8 @@ export default function PortfolioManager() {
   const completeSellStage = (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 2 || position.sellStage >= 3) return;
     const nextStage = position.sellStage + 1;
-    if (!window.confirm(`${position.ticker} ${nextStage}차 매도 체결을 기록할까요?`)) return;
+    const target = plan.sellTargets[nextStage - 1];
+    if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?`)) return;
     setPositions((old) => old.map((item) => item.id === position.id ? {
       ...item,
       sellStage: nextStage,
@@ -312,7 +400,7 @@ export default function PortfolioManager() {
 
   const stopLossPosition = (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 1) return;
-    if (!window.confirm(`${position.ticker} 손절 완료로 처리할까요? 실제 매도 체결 후 진행해 주세요.`)) return;
+    if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요?`)) return;
     setPositions((old) => old.map((item) => item.id === position.id ? { ...item, exitStatus: "stopped" } : item));
     setDirty(true);
     setMessage(`${position.ticker} 손절 종료로 표시했습니다. 저장 버튼을 눌러 주세요.`);
@@ -375,15 +463,27 @@ export default function PortfolioManager() {
 
   return <section className="portfolio-page">
     <div className="portfolio-heading-row">
-      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>실제 투입한 매수 금액과 분할매수·매도 진행 단계를 기록합니다.</p></div>
+      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>스윙 투자 계산기의 종목당 배정금액을 기준으로 분할매수·매도 진행 상황을 관리합니다.</p></div>
       <button className="portfolio-logout" type="button" onClick={logout}>로그아웃</button>
     </div>
 
     <div className="portfolio-summary portfolio-summary-simple">
-      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>1차·2차 매수 금액 및 기존 원금 포함</small></article>
+      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>실제 1·2차 매수금액 합계</small></article>
       <article><span>남은 예수금</span><strong>{usd(totals.cash)}</strong><small>직접 입력한 USD 잔액</small></article>
-      <article><span>보유 종목</span><strong>{totals.positionCount}개</strong><small>1차 매수 {totals.firstBuyCount}개 · 2차 매수 {totals.secondBuyCount}개 진행</small></article>
+      <article><span>현재 운용 종목</span><strong>{totals.positionCount}개</strong><small>1차 {totals.firstBuyCount}개 · 2차 {totals.secondBuyCount}개 완료</small></article>
     </div>
+    <section className="portfolio-plan-banner">
+      <div className="portfolio-plan-banner-heading">
+        <div><span>SWING CALCULATOR 연동</span><strong>종목당 목표 투자금 {usd(plan.perStockAmount)}</strong></div>
+        <small>총 투자금 {usd(plan.total)} ÷ {plan.stockCount}종목 · 현금 비중 반영</small>
+      </div>
+      <div className="portfolio-plan-amounts">
+        <div><small>1차 매수 권장</small><strong>{usd(plan.firstBuyAmount)}</strong></div>
+        <div><small>2차 매수 권장</small><strong>{usd(plan.secondBuyAmount)}</strong></div>
+        <div><small>손절 / 익절 목표</small><strong>{plan.stopLossRatio}% · +{plan.sellTargets.map((item) => item.returnPct).join("% / +")}%</strong></div>
+      </div>
+      <p>권장 금액은 계산기 설정에서 자동으로 가져옵니다. 실제 체결 금액이 다르면 매수 입력창에서 수정할 수 있습니다.</p>
+    </section>
 
     <section className="portfolio-panel">
       <div className="portfolio-panel-heading"><div><div className="eyebrow">CASH BALANCE</div><h2>남은 예수금</h2><p>계좌의 남은 현금을 USD 기준으로 입력합니다.</p></div></div>
@@ -394,91 +494,122 @@ export default function PortfolioManager() {
     </section>
 
     <section className="portfolio-panel">
-      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>종목을 등록한 뒤 1차 매수 금액을 입력하고 단계별 거래를 진행하세요.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
+      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>등록 시 실제 1차 매수금액을 입력하면 1차 매수 완료 상태로 시작합니다.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
       <form className="portfolio-position-form" onSubmit={addPosition}>
         <h3>보유 종목 추가</h3>
         <div className="portfolio-form-grid">
           <TickerSearchField value={draft.ticker} onChange={(value) => updateDraft("ticker", value)} />
+          <NumericField label="실제 1차 매수 금액 (USD)" value={draft.firstBuyAmount} onChange={(value) => updateDraft("firstBuyAmount", value)} step="0.01" />
+          <NumericField label="1주당 체결가 (USD · 선택)" value={draft.firstBuyPrice} onChange={(value) => updateDraft("firstBuyPrice", value)} step="0.01" />
           <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={draft.note} onChange={(event) => updateDraft("note", event.target.value)} /></label>
         </div>
-        <button className="portfolio-secondary" type="submit">+ 종목 등록 (1차 매수 전)</button>
+        <div className="portfolio-form-hint">계산기 기준 1차 권장금액 <strong>{usd(plan.firstBuyAmount)}</strong> · 종목당 총 배정금액 <strong>{usd(plan.perStockAmount)}</strong>. 실제 체결 금액으로 수정해서 등록하세요.</div>
+        <button className="portfolio-primary" type="submit">1차 매수 완료로 등록</button>
       </form>
 
-      {positions.length ? <div className="portfolio-table-wrap"><table className="portfolio-table portfolio-workflow-table">
-        <thead><tr><th>종목</th><th>누적 매수금액</th><th>매수 진행</th><th>매도 진행</th><th>관리</th></tr></thead>
-        <tbody>{positions.map((item) => {
+      {positions.length ? <div className="portfolio-position-list">
+        {positions.map((item) => {
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
-          return <tr key={item.id}>
-            <td><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</td>
-            <td className="portfolio-invested-cell">
-              <strong>{usd(invested)}</strong>
-              <small>1차 {usd(item.firstBuyAmount)} · 2차 {usd(item.secondBuyAmount)}</small>
-              {item.legacyInvestedAmount > 0 && <small>기존 기록 {usd(item.legacyInvestedAmount)} (차수 미분류)</small>}
-            </td>
-            <td><div className="portfolio-stage-actions">
-              <div className="portfolio-stage-line">
-                {item.buyStage >= 1
-                  ? <span className="portfolio-stage-done">✓ 1차 매수 완료</span>
-                  : isActive
-                    ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 1)}>1차 매수 금액 입력</button>
-                    : <span className="portfolio-stage-locked">1차 매수 전</span>}
+          const entryPrice = getAverageEntryPrice(item);
+          const remainingBudget = Math.max(0, plan.perStockAmount - invested);
+          return <article className="portfolio-position-card" key={item.id}>
+            <header className="portfolio-position-card-header">
+              <div><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</div>
+              <div className="portfolio-position-invested"><span>누적 매수금액</span><strong>{usd(invested)}</strong><small>1차 {usd(item.firstBuyAmount)} · 2차 {usd(item.secondBuyAmount)}{item.legacyInvestedAmount > 0 ? ` · 기존 ${usd(item.legacyInvestedAmount)}` : ""}</small></div>
+              {item.exitStatus === "stopped" ? <span className="portfolio-exit-status stopped">손절 종료</span>
+                : item.exitStatus === "completed" ? <span className="portfolio-exit-status completed">분할매도 완료</span>
+                : <span className="portfolio-active-status">운용 중</span>}
+            </header>
+            <div className="portfolio-position-columns">
+              <section className="portfolio-position-section buy-section">
+                <div className="portfolio-position-section-title"><span>BUY PLAN</span><strong>분할매수 진행</strong></div>
+                <div className={`portfolio-buy-step ${item.buyStage >= 1 ? "done" : "current"}`}>
+                  <div><strong>1차 매수</strong><small>권장 {usd(plan.firstBuyAmount)}</small></div>
+                  {item.buyStage >= 1 ? <span className="portfolio-step-done">완료 · {usd(item.firstBuyAmount || item.legacyInvestedAmount)}</span>
+                    : isActive ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 1)}>1차 매수 금액 입력</button>
+                    : <span className="portfolio-stage-locked">진행 불가</span>}
+                </div>
+                <div className={`portfolio-buy-step ${item.buyStage >= 2 ? "done" : item.buyStage === 1 ? "current" : "locked"}`}>
+                  <div><strong>2차 매수</strong><small>추가 권장 {usd(item.buyStage >= 1 ? remainingBudget : plan.secondBuyAmount)}</small></div>
+                  {item.buyStage >= 2 ? <span className="portfolio-step-done">완료 · {usd(item.secondBuyAmount)}</span>
+                    : item.buyStage === 1 && isActive ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 2)}>2차 매수 · 추가 {usd(remainingBudget)}</button>
+                    : <span className="portfolio-stage-locked">1차 매수 완료 후 활성화</span>}
+                </div>
+                <div className="portfolio-budget-progress">
+                  <div><span>종목당 목표금액</span><strong>{usd(plan.perStockAmount)}</strong></div>
+                  <div className="portfolio-budget-track"><span style={{ width: `${plan.perStockAmount > 0 ? Math.min(100, invested / plan.perStockAmount * 100) : 0}%` }} /></div>
+                  <small>{plan.perStockAmount > 0 ? Math.min(100, invested / plan.perStockAmount * 100).toFixed(0) : "0"}% 집행 · 남은 배정금 {usd(remainingBudget)}</small>
+                </div>
+              </section>
+              <section className="portfolio-position-section sell-section">
+                <div className="portfolio-position-section-title"><span>SELL PLAN</span><strong>분할매도 목표</strong></div>
+                {item.exitStatus !== "active" && <div className={`portfolio-exit-banner ${item.exitStatus}`}>{item.exitStatus === "stopped" ? "손절 처리된 종목" : "3차 분할매도까지 완료"}</div>}
+                {plan.sellTargets.map((target, index) => {
+                  const stage = index + 1;
+                  const targetPrice = entryPrice !== null ? entryPrice * (1 + target.returnPct / 100) : null;
+                  const completed = item.sellStage >= stage;
+                  const available = isActive && item.buyStage >= 2 && item.sellStage === stage - 1;
+                  const lockedText = item.buyStage < 2 ? "2차 매수 완료 후 활성화" : `${stage - 1}차 매도 완료 후 활성화`;
+                  return <div className={`portfolio-sell-target ${completed ? "completed" : available ? "available" : "pending"}`} key={target.label}>
+                    <div className="portfolio-sell-target-main">
+                      <strong>{target.label}</strong><span>+{target.returnPct}% 수익 · {target.sellPct}% 매도</span>
+                      <small>{targetPrice !== null ? `목표가 약 ${usd(targetPrice)}` : "목표 수익률 기준 · 체결가 입력 시 목표가격 표시"}</small>
+                    </div>
+                    <div className="portfolio-sell-target-action">
+                      {completed ? <span className="portfolio-step-done">완료</span>
+                        : available ? <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>매도 완료 기록</button>
+                        : <span className="portfolio-stage-locked">{lockedText}</span>}
+                    </div>
+                  </div>;
+                })}
+                <div className="portfolio-stop-target">
+                  <div><strong>전량 손절</strong><span>{plan.stopLossRatio}% 기준</span><small>{entryPrice !== null ? `손절 기준가 약 ${usd(entryPrice * (1 + plan.stopLossRatio / 100))}` : "체결가 입력 시 기준가격 표시"}</small></div>
+                  {isActive && item.buyStage >= 1 ? <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 완료 기록</button>
+                    : <span className="portfolio-stage-locked">1차 매수 후 활성화</span>}
+                </div>
+                {item.buyStage >= 2 && entryPrice === null && item.legacyInvestedAmount === 0 &&
+                  <p className="portfolio-price-hint">목표가격까지 보려면 1·2차 매수 입력창에서 1주당 체결가를 선택 입력해 주세요. 수익률 목표는 계산기 설정으로 표시됩니다.</p>}
+              </section>
+            </div>
+            <footer className="portfolio-position-card-footer">
+              <span>{item.buyStage >= 2 ? "2차 매수 완료 · 익절 단계 진행 가능" : item.buyStage === 1 ? "2차 매수 대기 · 계산기 배정액 확인" : "1차 매수 전"}</span>
+              <div className="portfolio-row-actions">
+                <button type="button" onClick={() => startEdit(item)}>종목 수정</button>
+                <button type="button" onClick={() => deletePosition(item.id)}>삭제</button>
               </div>
-              <div className="portfolio-stage-line">
-                {item.buyStage >= 2
-                  ? <span className="portfolio-stage-done">✓ 2차 매수 완료</span>
-                  : item.buyStage === 1 && isActive
-                    ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 2)}>2차 매수 준비 · 금액 입력</button>
-                    : <span className="portfolio-stage-locked">1차 매수 후 2차 매수 준비</span>}
-              </div>
-            </div></td>
-            <td><div className="portfolio-stage-actions">
-              {item.exitStatus === "stopped"
-                ? <span className="portfolio-exit-status stopped">손절 종료</span>
-                : item.exitStatus === "completed"
-                  ? <span className="portfolio-exit-status completed">분할매도 완료</span>
-                  : item.buyStage < 2
-                    ? <span className="portfolio-stage-locked">2차 매수 완료 후 익절 가능</span>
-                    : <>
-                      <div className="portfolio-stage-line">
-                        {item.sellStage >= 1
-                          ? <span className="portfolio-stage-done">✓ 1차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>1차 매도 +8% · 40% 완료</button>}
-                      </div>
-                      {item.sellStage >= 1 && <div className="portfolio-stage-line">
-                        {item.sellStage >= 2
-                          ? <span className="portfolio-stage-done">✓ 2차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>2차 매도 +9% · 30% 완료</button>}
-                      </div>}
-                      {item.sellStage >= 2 && <div className="portfolio-stage-line">
-                        {item.sellStage >= 3
-                          ? <span className="portfolio-stage-done">✓ 3차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>3차 매도 +10% · 30% 완료</button>}
-                      </div>}
-                    </>}
-              {isActive && item.buyStage >= 1 && <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 -5% 완료 처리</button>}
-            </div></td>
-            <td><div className="portfolio-row-actions"><button type="button" onClick={() => startEdit(item)}>수정</button><button type="button" onClick={() => deletePosition(item.id)}>삭제</button></div></td>
-          </tr>;
-        })}</tbody>
-      </table></div> : <div className="portfolio-empty">아직 등록한 보유 종목이 없습니다. 위 입력란에서 첫 종목을 추가하세요.</div>}
+            </footer>
+          </article>;
+        })}
+      </div> : <div className="portfolio-empty">아직 등록한 종목이 없습니다. 종목을 검색하고 실제 1차 매수 금액을 입력해 등록하세요.</div>}
       {buyStageEditor && (() => {
         const item = positions.find((position) => position.id === buyStageEditor.positionId);
         if (!item) return null;
-        return <form className="portfolio-buy-stage-editor" onSubmit={completeBuyStage}>
-          <div>
-            <strong>{item.ticker} · {buyStageEditor.stage}차 매수 금액</strong>
-            <p>{buyStageEditor.stage === 1 ? "실제로 1차 매수한 금액을 입력해 주세요." : "실제로 추가 매수한 금액만 입력해 주세요. 기존 1차 금액과 합산됩니다."}</p>
-          </div>
-          <NumericField label="매수 금액 (USD)" value={buyAmountInput} onChange={setBuyAmountInput} step="0.01" />
-          {buyStageError && <p className="portfolio-error">{buyStageError}</p>}
-          <div className="portfolio-row-actions">
-            <button className="portfolio-primary" type="submit">{buyStageEditor.stage}차 매수 완료</button>
-            <button className="portfolio-secondary" type="button" onClick={() => { setBuyStageEditor(null); setBuyStageError(""); }}>취소</button>
-          </div>
-        </form>;
+        const recommended = buyStageEditor.stage === 1 ? plan.firstBuyAmount : Math.max(0, plan.perStockAmount - totalInvested(item));
+        return <div className="portfolio-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setBuyStageEditor(null); }}>
+          <form className="portfolio-buy-stage-editor" role="dialog" aria-modal="true" aria-labelledby="buy-stage-title" onSubmit={completeBuyStage}>
+            <div className="portfolio-modal-heading">
+              <div><span>BUY EXECUTION</span><h3 id="buy-stage-title">{item.ticker} · {buyStageEditor.stage}차 매수</h3><p>계산기 권장 금액과 실제 체결 금액을 비교한 뒤 기록하세요.</p></div>
+              <button type="button" className="portfolio-modal-close" onClick={() => setBuyStageEditor(null)} aria-label="닫기">×</button>
+            </div>
+            <div className="portfolio-buy-recommendation">
+              <div><small>종목당 목표 투자금</small><strong>{usd(plan.perStockAmount)}</strong></div>
+              <div><small>{buyStageEditor.stage}차 권장 매수금</small><strong>{usd(recommended)}</strong></div>
+              {buyStageEditor.stage === 2 && <div><small>현재까지 매수한 금액</small><strong>{usd(totalInvested(item))}</strong></div>}
+            </div>
+            <NumericField label="실제 매수 금액 (USD)" value={buyAmountInput} onChange={setBuyAmountInput} step="0.01" />
+            <NumericField label="1주당 체결가 (USD · 선택)" value={buyPriceInput} onChange={setBuyPriceInput} step="0.01" />
+            <p className="portfolio-modal-hint">실제 매수한 금액을 입력하세요. 권장금액과 다르면 수정할 수 있습니다. 체결가를 입력하면 목표 매도가도 계산합니다.</p>
+            {Number(buyAmountInput) > recommended && recommended > 0 && <p className="portfolio-modal-warning">계산기 기준 권장 추가금액보다 큽니다. 종목당 배정금액을 초과하는지 확인하세요.</p>}
+            {buyStageError && <p className="portfolio-error">{buyStageError}</p>}
+            <div className="portfolio-row-actions">
+              <button className="portfolio-primary" type="submit">{buyStageEditor.stage}차 매수 완료</button>
+              <button className="portfolio-secondary" type="button" onClick={() => setBuyStageEditor(null)}>취소</button>
+            </div>
+          </form>
+        </div>;
       })()}
-
+      
       {editingId && <form className="portfolio-edit-form" onSubmit={commitEdit}>
         <h3>{editDraft.ticker || "종목"} 수정</h3>
         <div className="portfolio-form-grid">
@@ -491,6 +622,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">매수 금액은 실제 체결된 금액을 1차·2차로 나누어 기록합니다. 기존 종목은 과거 수량 × 평균 매수가로 계산한 금액을 ‘기존 기록(차수 미분류)’로 보존합니다. 일반 분할매도는 2차 매수 완료 후 순서대로 열리며, 손절은 1차 매수 이후 언제든 별도로 처리할 수 있습니다. 단계 변경과 금액 입력은 화면에서 반영한 뒤 ‘변경사항 저장’을 눌러 Supabase에 저장하세요.</div>
+    <div className="portfolio-note">매수금과 매도 수익률은 스윙 투자 계산기의 저장된 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 목표 절대가격은 종목별 1주당 체결가를 입력한 경우에만 표시하며, 체결가는 선택 입력입니다. 기존 데이터는 원금을 보존하되 과거 매수 차수·체결가를 추정하지 않습니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
   </section>;
 }
