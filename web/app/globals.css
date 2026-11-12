@@ -129,7 +129,7 @@
 .portfolio-primary{border:1px solid #397a6b;border-radius:7px;background:#173c35;color:#b9f0d7;padding:10px 15px;font:700 11px "Noto Sans KR",sans-serif;cursor:pointer}
 .portfolio-primary:disabled{opacity:.45;cursor:not-allowed}
 .portfolio-login .portfolio-primary{width:100%;margin-top:14px}
-.portfolio-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:0 0 18px}
+.portfolio-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:0 0 18px}
 .portfolio-summary article{display:grid;gap:8px;min-width:0;padding:15px;border:1px solid var(--line);border-radius:10px;background:#0d141d}
 .portfolio-summary article>span{color:var(--muted);font-size:10px}
 .portfolio-summary article strong{color:#edf4fa;font:700 19px "DM Mono",monospace;overflow-wrap:anywhere}
@@ -145,6 +145,15 @@
 .portfolio-field{display:grid;gap:7px;min-width:0;color:var(--muted);font-size:10px}
 .portfolio-field input{width:100%;min-width:0;border:1px solid #2c3948;border-radius:7px;background:#0a1018;color:var(--text);padding:10px 11px;font:12px "DM Mono",monospace;outline:none}
 .portfolio-field input:focus,.portfolio-field select:focus{border-color:var(--mint)}
+.ticker-search-field{position:relative}
+.ticker-search-results{position:absolute;z-index:30;top:100%;left:0;right:0;max-height:260px;overflow:auto;margin-top:4px;border:1px solid #34485b;border-radius:8px;background:#101a25;box-shadow:0 12px 30px rgba(0,0,0,.42)}
+.ticker-search-results button{display:grid;grid-template-columns:72px minmax(0,1fr);gap:3px 9px;width:100%;padding:10px 11px;border:0;border-bottom:1px solid #223141;background:transparent;color:#e6edf4;text-align:left;cursor:pointer}
+.ticker-search-results button:hover{background:#1a2938}
+.ticker-search-results button strong{grid-row:span 2;color:var(--mint);font:700 12px "DM Mono",monospace}
+.ticker-search-results button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px "Noto Sans KR",sans-serif}
+.ticker-search-results button small,.ticker-search-message,.ticker-search-hint{color:#8292a5;font:10px "Noto Sans KR",sans-serif}
+.ticker-search-message{padding:12px}
+.ticker-search-hint{display:block;font-size:9px}
 .portfolio-field select{width:100%;min-width:0;border:1px solid #2c3948;border-radius:7px;background:#0a1018;color:var(--text);padding:10px 11px;font:11px "Noto Sans KR",sans-serif;outline:none}
 .portfolio-stage-display{display:grid;gap:6px;min-width:150px}
 .portfolio-stage-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:5px 8px;border:1px solid;border-radius:6px;font:10px "Noto Sans KR",sans-serif;white-space:nowrap}
@@ -157,7 +166,7 @@
 .portfolio-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
 .portfolio-position-form>.portfolio-secondary{margin-top:13px}
 .portfolio-table-wrap{width:100%;margin-top:15px;overflow:auto;border:1px solid #243141;border-radius:9px}
-.portfolio-table{width:100%;min-width:850px;border-collapse:collapse;text-align:left}
+.portfolio-table{width:100%;min-width:690px;border-collapse:collapse;text-align:left}
 .portfolio-table th{padding:11px;background:#151f2b;color:#92a3b5;font-size:9px;white-space:nowrap}
 .portfolio-table td{padding:12px;border-top:1px solid #202d3a;color:#c7d0dc;font:10px "DM Mono",monospace;white-space:nowrap}
 .portfolio-table td:first-child strong{display:block;color:var(--mint);font-size:12px}
