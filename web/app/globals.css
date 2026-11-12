@@ -219,7 +219,7 @@
 .portfolio-plan-banner-heading span,.portfolio-position-section-title span,.portfolio-modal-heading span{color:#8ca6bd;font:700 9px "DM Mono",monospace;letter-spacing:.08em}
 .portfolio-plan-banner-heading strong{color:#edf6fc;font-size:16px}
 .portfolio-plan-banner-heading>small{color:#8497a9;font-size:10px}
-.portfolio-plan-amounts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.portfolio-plan-amounts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
 .portfolio-plan-amounts>div{display:grid;gap:5px;padding:10px 11px;border:1px solid #294052;border-radius:8px;background:rgba(5,13,21,.3)}
 .portfolio-plan-amounts small{color:#8ca0b3;font-size:9px}
 .portfolio-plan-amounts strong{color:#c8e5f9;font:700 14px "DM Mono",monospace}
@@ -301,3 +301,12 @@
   .portfolio-sell-target{grid-template-columns:1fr}
   .portfolio-sell-target-action{justify-content:flex-start}
 }
+
+.portfolio-buy-trigger-note{display:grid;gap:5px;margin-top:9px;padding:9px 10px;border:1px solid #37516a;border-radius:7px;background:#0d1b28;color:#c0d9ec;font-size:9px;line-height:1.55}
+.portfolio-buy-trigger-note small{color:#91a5b8;font-size:9px}
+.portfolio-over-budget-note{padding:8px 9px;border:1px solid #765332;border-radius:7px;background:#2c2115;color:#f0c58b;font-size:9px;line-height:1.5}
+.portfolio-buy-trigger-modal{display:grid;gap:5px;padding:11px 12px;border:1px solid #37516a;border-radius:8px;background:#0d1b28}
+.portfolio-buy-trigger-modal strong{color:#c7e4f8;font-size:10px}
+.portfolio-buy-trigger-modal span{color:#f0c58b;font:700 11px "DM Mono",monospace}
+.portfolio-buy-trigger-modal small{color:#91a5b8;font-size:9px;line-height:1.55}
+@media(max-width:850px){.portfolio-plan-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}}
