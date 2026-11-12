@@ -9,11 +9,12 @@ Supabase Dashboard의 SQL Editor에서 `supabase/portfolio.sql` 내용을 한 �
 Vercel 프로젝트의 Settings → Environment Variables에 아래 값을 등록하고 Production 배포를 다시 진행합니다.
 
 - `SUPABASE_URL`: Supabase Project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: Supabase의 서버 전용 service_role 키
+- `SUPABASE_SECRET_KEY`: Supabase Settings → API Keys → Secret keys의 `sb_secret_...` 키 (권장)
+- 또는 구형 키를 사용하는 경우 `SUPABASE_SERVICE_ROLE_KEY`: Legacy API Keys의 `service_role` 키
 - `PORTFOLIO_ACCESS_PASSWORD`: 포트폴리오 탭을 열 때 사용할 본인만 아는 비밀번호
 - `PORTFOLIO_SESSION_SECRET`: 32자 이상의 임의 비밀 문자열
 
-service_role 키는 절대 `NEXT_PUBLIC_` 접두사를 붙이지 말고 브라우저 코드나 Git 저장소에 기록하지 마세요. 이 앱은 모든 DB 요청을 Next.js 서버에서 처리합니다.
+Secret key (`sb_secret_...`) 또는 구형 `service_role` 키는 절대 `NEXT_PUBLIC_` 접두사를 붙이지 말고 브라우저 코드나 Git 저장소에 기록하지 마세요. 새 Secret key는 `apikey` 헤더로만 전송하고, 구형 service_role JWT는 `Authorization: Bearer` 헤더도 함께 사용하도록 서버 코드가 구분합니다. 이 앱은 모든 DB 요청을 Next.js 서버에서 처리합니다.
 
 ## 3. 사용 방법
 
