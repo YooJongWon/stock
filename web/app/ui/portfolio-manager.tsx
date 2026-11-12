@@ -38,6 +38,16 @@ const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "" };
 const totalInvested = (position: Position) =>
   position.firstBuyAmount + position.secondBuyAmount + position.legacyInvestedAmount;
 
+function getPositionProgress(position: Position): { label: string; tone: "buy" | "sell" | "stopped" | "completed" | "pending" } {
+  if (position.exitStatus === "stopped") return { label: "손절 종료", tone: "stopped" };
+  if (position.exitStatus === "completed" || position.sellStage >= 3) return { label: "3차 매도 완료", tone: "completed" };
+  if (position.sellStage === 2) return { label: "2차 매도 완료", tone: "sell" };
+  if (position.sellStage === 1) return { label: "1차 매도 완료", tone: "sell" };
+  if (position.buyStage >= 2) return { label: "2차 매수 완료", tone: "buy" };
+  if (position.buyStage === 1) return { label: "1차 매수 완료", tone: "buy" };
+  return { label: "1차 매수 대기", tone: "pending" };
+}
+
 function buildCalculatorPlan(input: Partial<CalculatorInputs> | null | undefined): CalculatorPlan {
   const read = (key: keyof CalculatorInputs, fallback: string) => {
     const raw = input?.[key];
@@ -540,13 +550,15 @@ export default function PortfolioManager() {
           const overBudget = Math.max(0, invested - plan.perStockAmount);
           const exitBasisAmount = item.buyStage >= 2 ? invested : plan.perStockAmount;
           const exitBasisLabel = item.buyStage >= 2 ? "실제 누적 매수금 기준" : "종목당 목표금액 기준";
+          const progress = getPositionProgress(item);
           return <article className="portfolio-position-card" key={item.id}>
             <header className="portfolio-position-card-header">
-              <div><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</div>
+              <div className="portfolio-position-identity">
+                <span className={`portfolio-progress-badge ${progress.tone}`}>{progress.label}</span>
+                <strong>{item.ticker}</strong>
+                {item.note && <small>{item.note}</small>}
+              </div>
               <div className="portfolio-position-invested"><span>누적 매수금액</span><strong>{usd(invested)}</strong><small>1차 {usd(item.firstBuyAmount)} · 2차 {usd(item.secondBuyAmount)}{item.legacyInvestedAmount > 0 ? ` · 기존 ${usd(item.legacyInvestedAmount)}` : ""}</small></div>
-              {item.exitStatus === "stopped" ? <span className="portfolio-exit-status stopped">손절 종료</span>
-                : item.exitStatus === "completed" ? <span className="portfolio-exit-status completed">분할매도 완료</span>
-                : <span className="portfolio-active-status">운용 중</span>}
             </header>
             <div className="portfolio-position-columns">
               <section className="portfolio-position-section buy-section">
