@@ -5,36 +5,26 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 type Position = {
   id: string;
   ticker: string;
-  shares: number;
-  avgPrice: number;
   note: string;
-  buyStage: number | null;
-  sellStage: number | null;
+  firstBuyAmount: number;
+  secondBuyAmount: number;
+  legacyInvestedAmount: number;
+  buyStage: number;
+  sellStage: number;
+  exitStatus: "active" | "stopped" | "completed";
 };
-type PositionDraft = Omit<Position, "id">;
+type PositionDraft = Pick<Position, "ticker" | "note">;
+type BuyStageEditor = { positionId: string; stage: 1 | 2 };
+
 type TickerSearchResult = { symbol: string; name: string; exchange: string };
 type PortfolioData = { cashBalance: number; positions: Position[] };
 
-const EMPTY_DRAFT: PositionDraft = {
-  ticker: "", shares: 0, avgPrice: 0, note: "",
-  buyStage: 1, sellStage: 0,
-};
-const BUY_STAGE_OPTIONS = [
-  { value: "", label: "미설정" },
-  { value: "1", label: "1차 매수 완료" },
-  { value: "2", label: "2차 매수 완료" },
-];
-const SELL_STAGE_OPTIONS = [
-  { value: "", label: "미설정" },
-  { value: "0", label: "매도 전" },
-  { value: "1", label: "1차 매도 완료" },
-  { value: "2", label: "2차 매도 완료" },
-  { value: "3", label: "3차 매도 완료" },
-];
-const buyStageLabel = (stage: number | null) =>
-  stage === null ? "미설정" : stage === 1 ? "1차 매수 완료" : "2차 매수 완료";
-const sellStageLabel = (stage: number | null) =>
-  stage === null ? "미설정" : stage === 0 ? "매도 전" : `${stage}차 매도 완료`;
+const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "" };
+const totalInvested = (position: Position) =>
+  position.firstBuyAmount + position.secondBuyAmount + position.legacyInvestedAmount;
+const usd = (value: number) => new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD", maximumFractionDigits: 2,
+}).format(Number.isFinite(value) ? value : 0);
 const usd = (value: number) => new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
@@ -46,20 +36,6 @@ function NumericField({ label, value, onChange, step = "0.01", min = "0" }: {
   return <label className="portfolio-field">
     <span>{label}</span>
     <input type="number" min={min} step={step} value={value} onChange={(event) => onChange(event.target.value)} />
-  </label>;
-}
-
-function StageField({ label, value, onChange, options }: {
-  label: string;
-  value: number | null;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return <label className="portfolio-field">
-    <span>{label}</span>
-    <select value={value === null ? "" : String(value)} onChange={(event) => onChange(event.target.value)}>
-      {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select>
   </label>;
 }
 
@@ -161,6 +137,9 @@ export default function PortfolioManager() {
   const [draft, setDraft] = useState<PositionDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<PositionDraft>(EMPTY_DRAFT);
+  const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
+  const [buyAmountInput, setBuyAmountInput] = useState("");
+  const [buyStageError, setBuyStageError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -182,11 +161,13 @@ export default function PortfolioManager() {
       setPositions(Array.isArray(data.positions) ? data.positions.map((item) => ({
         id: item.id,
         ticker: item.ticker,
-        shares: item.shares,
-        avgPrice: item.avgPrice,
         note: item.note || "",
-        buyStage: typeof item.buyStage === "number" && Number.isInteger(item.buyStage) && item.buyStage >= 1 && item.buyStage <= 2 ? item.buyStage : null,
-        sellStage: typeof item.sellStage === "number" && Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : null,
+        firstBuyAmount: Number(item.firstBuyAmount) || 0,
+        secondBuyAmount: Number(item.secondBuyAmount) || 0,
+        legacyInvestedAmount: Number(item.legacyInvestedAmount) || 0,
+        buyStage: Number.isInteger(item.buyStage) && item.buyStage >= 0 && item.buyStage <= 2 ? item.buyStage : 0,
+        sellStage: Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : 0,
+        exitStatus: item.exitStatus === "stopped" || item.exitStatus === "completed" ? item.exitStatus : "active",
       })) : []);
       setAuthenticated(true);
       setDirty(false);
@@ -200,14 +181,14 @@ export default function PortfolioManager() {
   useEffect(() => { void load(); }, [load]);
 
   const totals = useMemo(() => {
-    const cost = positions.reduce((sum, item) => sum + item.shares * item.avgPrice, 0);
+    const cost = positions.reduce((sum, item) => sum + totalInvested(item), 0);
     const cash = Math.max(0, Number(cashBalance) || 0);
     return {
       cost,
       cash,
-      positionCount: positions.length,
-      firstBuyCount: positions.filter((item) => item.buyStage === 1).length,
-      secondBuyCount: positions.filter((item) => item.buyStage === 2).length,
+      positionCount: positions.filter((item) => item.exitStatus === "active").length,
+      firstBuyCount: positions.filter((item) => item.buyStage >= 1 && item.exitStatus === "active").length,
+      secondBuyCount: positions.filter((item) => item.buyStage >= 2 && item.exitStatus === "active").length,
     };
   }, [cashBalance, positions]);
 
@@ -230,58 +211,114 @@ export default function PortfolioManager() {
   };
 
   const updateDraft = (key: keyof PositionDraft, value: string) => {
-    const nextValue = key === "ticker" || key === "note"
-      ? value
-      : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
-    setDraft((old) => ({ ...old, [key]: nextValue }));
+    setDraft((old) => ({ ...old, [key]: value }));
   };
   const updateEditDraft = (key: keyof PositionDraft, value: string) => {
-    const nextValue = key === "ticker" || key === "note"
-      ? value
-      : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
-    setEditDraft((old) => ({ ...old, [key]: nextValue }));
+    setEditDraft((old) => ({ ...old, [key]: value }));
   };
 
   const addPosition = (event: FormEvent) => {
     event.preventDefault();
     const ticker = draft.ticker.trim().toUpperCase();
-    if (!/^[A-Z0-9.-]{1,12}$/.test(ticker) || draft.shares <= 0 || draft.avgPrice <= 0) {
-      setError("티커, 보유 수량, 평균 매수가를 올바르게 입력해 주세요.");
+    if (!/^[A-Z0-9.-]{1,12}$/.test(ticker)) {
+      setError("티커를 검색 결과에서 선택하거나 올바른 티커를 입력해 주세요.");
       return;
     }
-    const next: Position = { ...draft, id: crypto.randomUUID(), ticker };
+    if (positions.some((item) => item.ticker === ticker && item.exitStatus === "active")) {
+      setError("이미 보유 목록에 있는 종목입니다.");
+      return;
+    }
+    const next: Position = {
+      id: crypto.randomUUID(),
+      ticker,
+      note: draft.note.trim(),
+      firstBuyAmount: 0,
+      secondBuyAmount: 0,
+      legacyInvestedAmount: 0,
+      buyStage: 0,
+      sellStage: 0,
+      exitStatus: "active",
+    };
     setPositions((old) => [...old, next]);
     setDraft(EMPTY_DRAFT);
     setDirty(true);
     setError("");
-    setMessage("새 종목이 목록에 추가됐습니다. 저장 버튼을 눌러 반영하세요.");
+    setMessage("새 종목이 추가됐습니다. 1차 매수 버튼에서 실제 매수 금액을 입력하세요.");
   };
 
   const startEdit = (position: Position) => {
     setEditingId(position.id);
-    setEditDraft({
-      ticker: position.ticker, shares: position.shares,
-      avgPrice: position.avgPrice, note: position.note,
-      buyStage: position.buyStage, sellStage: position.sellStage,
-    });
+    setEditDraft({ ticker: position.ticker, note: position.note });
   };
 
   const commitEdit = (event: FormEvent) => {
     event.preventDefault();
-    if (!editingId || editDraft.shares <= 0 || editDraft.avgPrice <= 0) {
-      setError("수량과 평균 매수가는 0보다 커야 합니다.");
-      return;
-    }
+    if (!editingId) return;
     const ticker = editDraft.ticker.trim().toUpperCase();
     if (!/^[A-Z0-9.-]{1,12}$/.test(ticker)) {
       setError("티커 형식이 올바르지 않습니다.");
       return;
     }
-    setPositions((old) => old.map((item) => item.id === editingId ? { ...editDraft, id: editingId, ticker } : item));
+    if (positions.some((item) => item.id !== editingId && item.ticker === ticker && item.exitStatus === "active")) {
+      setError("이미 보유 목록에 있는 종목입니다.");
+      return;
+    }
+    setPositions((old) => old.map((item) => item.id === editingId ? { ...item, ticker, note: editDraft.note.trim() } : item));
     setEditingId(null);
     setDirty(true);
     setError("");
     setMessage("수정 내용이 반영됐습니다. 저장 버튼을 눌러 저장하세요.");
+  };
+
+  const openBuyStageEditor = (position: Position, stage: 1 | 2) => {
+    setBuyStageEditor({ positionId: position.id, stage });
+    setBuyAmountInput("");
+    setBuyStageError("");
+  };
+
+  const completeBuyStage = (event: FormEvent) => {
+    event.preventDefault();
+    if (!buyStageEditor) return;
+    const amount = Number(buyAmountInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setBuyStageError("실제 매수 금액을 USD로 입력해 주세요.");
+      return;
+    }
+    const { positionId, stage } = buyStageEditor;
+    setPositions((old) => old.map((item) => {
+      if (item.id !== positionId) return item;
+      return stage === 1
+        ? { ...item, firstBuyAmount: amount, buyStage: 1 }
+        : { ...item, secondBuyAmount: amount, buyStage: 2 };
+    }));
+    setDirty(true);
+    setBuyStageEditor(null);
+    setBuyAmountInput("");
+    setBuyStageError("");
+    setMessage(`${stage}차 매수 금액이 반영됐습니다. 변경사항 저장을 눌러 저장하세요.`);
+  };
+
+  const completeSellStage = (position: Position) => {
+    if (position.exitStatus !== "active" || position.buyStage < 2 || position.sellStage >= 3) return;
+    const nextStage = position.sellStage + 1;
+    if (!window.confirm(`${position.ticker} ${nextStage}차 매도 체결을 기록할까요?`)) return;
+    setPositions((old) => old.map((item) => item.id === position.id ? {
+      ...item,
+      sellStage: nextStage,
+      exitStatus: nextStage === 3 ? "completed" : "active",
+    } : item));
+    setDirty(true);
+    setMessage(nextStage === 3
+      ? `${position.ticker} 분할매도 완료로 표시했습니다. 저장 버튼을 눌러 주세요.`
+      : `${position.ticker} ${nextStage}차 매도를 기록했습니다. 저장 버튼을 눌러 주세요.`);
+  };
+
+  const stopLossPosition = (position: Position) => {
+    if (position.exitStatus !== "active" || position.buyStage < 1) return;
+    if (!window.confirm(`${position.ticker} 손절 완료로 처리할까요? 실제 매도 체결 후 진행해 주세요.`)) return;
+    setPositions((old) => old.map((item) => item.id === position.id ? { ...item, exitStatus: "stopped" } : item));
+    setDirty(true);
+    setMessage(`${position.ticker} 손절 종료로 표시했습니다. 저장 버튼을 눌러 주세요.`);
   };
 
   const deletePosition = (id: string) => {
@@ -289,6 +326,7 @@ export default function PortfolioManager() {
     setPositions((old) => old.filter((item) => item.id !== id));
     setDirty(true);
     if (editingId === id) setEditingId(null);
+    if (buyStageEditor?.positionId === id) setBuyStageEditor(null);
     setMessage("삭제 내용이 반영됐습니다. 저장 버튼을 눌러 저장하세요.");
   };
 
@@ -325,17 +363,6 @@ export default function PortfolioManager() {
     setMessage("");
   };
 
-  const field = (label: string, key: keyof PositionDraft, value: PositionDraft[keyof PositionDraft], onChange: (key: keyof PositionDraft, value: string) => void, step?: string) =>
-    <label className="portfolio-field" key={key}><span>{label}</span>
-      <input
-        type={typeof value === "number" ? "number" : "text"}
-        min={typeof value === "number" ? "0" : undefined}
-        step={typeof value === "number" ? step || "0.01" : undefined}
-        value={String(value)}
-        onChange={(event) => onChange(key, event.target.value)}
-      />
-    </label>;
-
   if (loading) return <section className="portfolio-page"><p className="portfolio-feedback">포트폴리오 정보를 확인하고 있습니다…</p></section>;
 
   if (!authenticated) return <section className="portfolio-page">
@@ -351,14 +378,14 @@ export default function PortfolioManager() {
 
   return <section className="portfolio-page">
     <div className="portfolio-heading-row">
-      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>보유 수량과 평균 매수가, 분할매수·매도 진행 단계를 관리합니다.</p></div>
+      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>실제 투입한 매수 금액과 분할매수·매도 진행 단계를 기록합니다.</p></div>
       <button className="portfolio-logout" type="button" onClick={logout}>로그아웃</button>
     </div>
 
     <div className="portfolio-summary portfolio-summary-simple">
-      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>보유 수량 × 평균 매수가 합계</small></article>
+      <article><span>총 매수 원금</span><strong>{usd(totals.cost)}</strong><small>1차·2차 매수 금액 및 기존 원금 포함</small></article>
       <article><span>남은 예수금</span><strong>{usd(totals.cash)}</strong><small>직접 입력한 USD 잔액</small></article>
-      <article><span>보유 종목</span><strong>{totals.positionCount}개</strong><small>1차 매수 {totals.firstBuyCount}개 · 2차 매수 {totals.secondBuyCount}개</small></article>
+      <article><span>보유 종목</span><strong>{totals.positionCount}개</strong><small>1차 매수 {totals.firstBuyCount}개 · 2차 매수 {totals.secondBuyCount}개 진행</small></article>
     </div>
 
     <section className="portfolio-panel">
@@ -370,46 +397,96 @@ export default function PortfolioManager() {
     </section>
 
     <section className="portfolio-panel">
-      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>티커를 검색해 선택하고 수량·평균 매수가와 거래 진행 단계를 기록합니다.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
+      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>종목을 등록한 뒤 1차 매수 금액을 입력하고 단계별 거래를 진행하세요.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
       <form className="portfolio-position-form" onSubmit={addPosition}>
         <h3>보유 종목 추가</h3>
         <div className="portfolio-form-grid">
           <TickerSearchField value={draft.ticker} onChange={(value) => updateDraft("ticker", value)} />
-          {field("보유 수량", "shares", draft.shares, updateDraft, "0.0001")}
-          {field("평균 매수가 (USD)", "avgPrice", draft.avgPrice, updateDraft)}
-          {field("메모 (선택)", "note", draft.note, updateDraft)}
-          <StageField label="매수 단계" value={draft.buyStage} onChange={(value) => updateDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
-          <StageField label="매도 단계" value={draft.sellStage} onChange={(value) => updateDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
+          <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={draft.note} onChange={(event) => updateDraft("note", event.target.value)} /></label>
         </div>
-        <button className="portfolio-secondary" type="submit">+ 보유 종목 추가</button>
+        <button className="portfolio-secondary" type="submit">+ 종목 등록 (1차 매수 전)</button>
       </form>
 
-      {positions.length ? <div className="portfolio-table-wrap"><table className="portfolio-table">
-        <thead><tr><th>티커</th><th>매수 / 매도 단계</th><th>보유 수량</th><th>평균 매수가</th><th>매수 원금</th><th>관리</th></tr></thead>
+      {positions.length ? <div className="portfolio-table-wrap"><table className="portfolio-table portfolio-workflow-table">
+        <thead><tr><th>종목</th><th>누적 매수금액</th><th>매수 진행</th><th>매도 진행</th><th>관리</th></tr></thead>
         <tbody>{positions.map((item) => {
-          const cost = item.shares * item.avgPrice;
+          const invested = totalInvested(item);
+          const isActive = item.exitStatus === "active";
           return <tr key={item.id}>
             <td><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</td>
-            <td><div className="portfolio-stage-display">
-              <span className="portfolio-stage-badge buy">매수 · {buyStageLabel(item.buyStage)}</span>
-              <span className="portfolio-stage-badge sell">매도 · {sellStageLabel(item.sellStage)}</span>
+            <td className="portfolio-invested-cell">
+              <strong>{usd(invested)}</strong>
+              <small>1차 {usd(item.firstBuyAmount)} · 2차 {usd(item.secondBuyAmount)}</small>
+              {item.legacyInvestedAmount > 0 && <small>기존 기록 {usd(item.legacyInvestedAmount)} (차수 미분류)</small>}
+            </td>
+            <td><div className="portfolio-stage-actions">
+              <div className="portfolio-stage-line">
+                {item.buyStage >= 1
+                  ? <span className="portfolio-stage-done">✓ 1차 매수 완료</span>
+                  : isActive
+                    ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 1)}>1차 매수 금액 입력</button>
+                    : <span className="portfolio-stage-locked">1차 매수 전</span>}
+              </div>
+              <div className="portfolio-stage-line">
+                {item.buyStage >= 2
+                  ? <span className="portfolio-stage-done">✓ 2차 매수 완료</span>
+                  : item.buyStage === 1 && isActive
+                    ? <button type="button" className="portfolio-stage-next buy" onClick={() => openBuyStageEditor(item, 2)}>2차 매수 준비 · 금액 입력</button>
+                    : <span className="portfolio-stage-locked">1차 매수 후 2차 매수 준비</span>}
+              </div>
             </div></td>
-            <td>{numberText(item.shares)}</td><td>{usd(item.avgPrice)}</td>
-            <td>{usd(cost)}</td>
+            <td><div className="portfolio-stage-actions">
+              {item.exitStatus === "stopped"
+                ? <span className="portfolio-exit-status stopped">손절 종료</span>
+                : item.exitStatus === "completed"
+                  ? <span className="portfolio-exit-status completed">분할매도 완료</span>
+                  : item.buyStage < 2
+                    ? <span className="portfolio-stage-locked">2차 매수 완료 후 익절 가능</span>
+                    : <>
+                      <div className="portfolio-stage-line">
+                        {item.sellStage >= 1
+                          ? <span className="portfolio-stage-done">✓ 1차 매도 완료</span>
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>1차 매도 완료 처리</button>}
+                      </div>
+                      {item.sellStage >= 1 && <div className="portfolio-stage-line">
+                        {item.sellStage >= 2
+                          ? <span className="portfolio-stage-done">✓ 2차 매도 완료</span>
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>2차 매도 완료 처리</button>}
+                      </div>}
+                      {item.sellStage >= 2 && <div className="portfolio-stage-line">
+                        {item.sellStage >= 3
+                          ? <span className="portfolio-stage-done">✓ 3차 매도 완료</span>
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>3차 매도 완료 처리</button>}
+                      </div>}
+                    </>}
+              {isActive && item.buyStage >= 1 && <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 완료 처리</button>}
+            </div></td>
             <td><div className="portfolio-row-actions"><button type="button" onClick={() => startEdit(item)}>수정</button><button type="button" onClick={() => deletePosition(item.id)}>삭제</button></div></td>
           </tr>;
         })}</tbody>
       </table></div> : <div className="portfolio-empty">아직 등록한 보유 종목이 없습니다. 위 입력란에서 첫 종목을 추가하세요.</div>}
+      {buyStageEditor && (() => {
+        const item = positions.find((position) => position.id === buyStageEditor.positionId);
+        if (!item) return null;
+        return <form className="portfolio-buy-stage-editor" onSubmit={completeBuyStage}>
+          <div>
+            <strong>{item.ticker} · {buyStageEditor.stage}차 매수 금액</strong>
+            <p>{buyStageEditor.stage === 1 ? "실제로 1차 매수한 금액을 입력해 주세요." : "실제로 추가 매수한 금액만 입력해 주세요. 기존 1차 금액과 합산됩니다."}</p>
+          </div>
+          <NumericField label="매수 금액 (USD)" value={buyAmountInput} onChange={setBuyAmountInput} step="0.01" />
+          {buyStageError && <p className="portfolio-error">{buyStageError}</p>}
+          <div className="portfolio-row-actions">
+            <button className="portfolio-primary" type="submit">{buyStageEditor.stage}차 매수 완료</button>
+            <button className="portfolio-secondary" type="button" onClick={() => { setBuyStageEditor(null); setBuyStageError(""); }}>취소</button>
+          </div>
+        </form>;
+      })()}
 
       {editingId && <form className="portfolio-edit-form" onSubmit={commitEdit}>
         <h3>{editDraft.ticker || "종목"} 수정</h3>
         <div className="portfolio-form-grid">
           <TickerSearchField value={editDraft.ticker} onChange={(value) => updateEditDraft("ticker", value)} />
-          {field("보유 수량", "shares", editDraft.shares, updateEditDraft, "0.0001")}
-          {field("평균 매수가 (USD)", "avgPrice", editDraft.avgPrice, updateEditDraft)}
-          {field("메모 (선택)", "note", editDraft.note, updateEditDraft)}
-          <StageField label="매수 단계" value={editDraft.buyStage} onChange={(value) => updateEditDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
-          <StageField label="매도 단계" value={editDraft.sellStage} onChange={(value) => updateEditDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
+          <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={editDraft.note} onChange={(event) => updateEditDraft("note", event.target.value)} /></label>
         </div>
         <div className="portfolio-row-actions"><button className="portfolio-primary" type="submit">수정 반영</button><button className="portfolio-secondary" type="button" onClick={() => setEditingId(null)}>취소</button></div>
       </form>}
@@ -417,6 +494,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">티커 검색은 Yahoo Finance 검색 결과를 이용합니다. 검색 결과에서 종목을 선택하거나 티커를 직접 입력할 수 있습니다. 회사명과 실시간 현재가는 저장하지 않으며, 매수 원금은 보유 수량 × 평균 매수가로 계산합니다. 기존 종목의 단계는 거래 이력을 추정하지 않고 ‘미설정’으로 표시하며, 수정 후 ‘변경사항 저장’을 눌러 주세요.</div>
+    <div className="portfolio-note">매수 금액은 실제 체결된 금액을 1차·2차로 나누어 기록합니다. 기존 종목은 과거 수량 × 평균 매수가로 계산한 금액을 ‘기존 기록(차수 미분류)’로 보존합니다. 일반 분할매도는 2차 매수 완료 후 순서대로 열리며, 손절은 1차 매수 이후 언제든 별도로 처리할 수 있습니다. 단계 변경과 금액 입력은 화면에서 반영한 뒤 ‘변경사항 저장’을 눌러 Supabase에 저장하세요.</div>
   </section>;
 }
