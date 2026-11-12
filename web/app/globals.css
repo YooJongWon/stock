@@ -187,3 +187,27 @@
 @media(max-width:1000px){.portfolio-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.portfolio-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.portfolio-page{padding-top:18px}.portfolio-hero h1{font-size:24px}.portfolio-heading-row{align-items:center}.portfolio-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.portfolio-summary article{padding:12px}.portfolio-summary article strong{font-size:16px}.portfolio-panel{padding:14px}.portfolio-panel-heading{align-items:flex-start}.portfolio-cash-row{grid-template-columns:1fr}.portfolio-save-area{justify-content:space-between}.portfolio-form-grid{grid-template-columns:1fr 1fr;gap:9px}.portfolio-bottom-actions{align-items:stretch;flex-direction:column}.portfolio-bottom-actions .portfolio-primary{width:100%}}
 @media(max-width:380px){.portfolio-form-grid{grid-template-columns:1fr}}
+
+/* Portfolio buy/sell workflow */
+.portfolio-workflow-table{min-width:900px}
+.portfolio-invested-cell>strong{display:block;color:#e9f1f8;font:700 13px "DM Mono",monospace}
+.portfolio-invested-cell>small{display:block;margin-top:5px;color:#8494a6;font:9px "Noto Sans KR",sans-serif;white-space:normal}
+.portfolio-stage-actions{display:grid;gap:8px;min-width:205px}
+.portfolio-stage-line{display:flex;align-items:center;min-height:30px}
+.portfolio-stage-next{border:1px solid;border-radius:7px;padding:7px 9px;font:700 10px "Noto Sans KR",sans-serif;cursor:pointer;transition:filter .15s ease}
+.portfolio-stage-next:hover{filter:brightness(1.16)}
+.portfolio-stage-next.buy{border-color:#315d7b;background:#102b40;color:#b6ddff}
+.portfolio-stage-next.sell{border-color:#765332;background:#332313;color:#ffdda9}
+.portfolio-stage-done{display:inline-flex;align-items:center;border-radius:6px;padding:6px 8px;background:#132d29;color:#a9e6ce;font:10px "Noto Sans KR",sans-serif}
+.portfolio-stage-locked{color:#7f8b9b;font:9px "Noto Sans KR",sans-serif}
+.portfolio-stop-button{justify-self:start;border:1px solid #75404a;border-radius:6px;background:#321c22;color:#ffb6bf;padding:6px 8px;font:10px "Noto Sans KR",sans-serif;cursor:pointer}
+.portfolio-exit-status{display:inline-flex;width:max-content;border-radius:6px;padding:7px 9px;font:700 10px "Noto Sans KR",sans-serif}
+.portfolio-exit-status.stopped{border:1px solid #75404a;background:#321c22;color:#ffb6bf}
+.portfolio-exit-status.completed{border:1px solid #3f6b59;background:#18372d;color:#b8edcf}
+.portfolio-buy-stage-editor{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,260px) auto;align-items:end;gap:12px;margin-top:14px;padding:14px;border:1px solid #315d7b;border-radius:9px;background:#0d1b28}
+.portfolio-buy-stage-editor>div:first-child strong{display:block;color:#d9ebfa;font-size:12px}
+.portfolio-buy-stage-editor>div:first-child p{margin:6px 0 0;color:#91a4b8;font-size:10px;line-height:1.5}
+.portfolio-buy-stage-editor .portfolio-row-actions{margin:0}
+.portfolio-buy-stage-editor .portfolio-error{grid-column:1/-1;margin:0}
+@media(max-width:850px){.portfolio-buy-stage-editor{grid-template-columns:1fr 1fr}.portfolio-buy-stage-editor .portfolio-row-actions{grid-column:1/-1}}
+@media(max-width:650px){.portfolio-workflow-table{min-width:820px}.portfolio-buy-stage-editor{grid-template-columns:1fr}.portfolio-buy-stage-editor .portfolio-row-actions{grid-column:auto}.portfolio-buy-stage-editor .portfolio-row-actions button{flex:1}}
