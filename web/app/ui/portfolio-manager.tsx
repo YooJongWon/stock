@@ -477,7 +477,6 @@ export default function PortfolioManager() {
         {positions.map((item) => {
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
-          const entryPrice = getAverageEntryPrice(item);
           const remainingBudget = Math.max(0, plan.perStockAmount - invested);
           return <article className="portfolio-position-card" key={item.id}>
             <header className="portfolio-position-card-header">
