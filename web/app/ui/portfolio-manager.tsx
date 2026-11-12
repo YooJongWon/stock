@@ -478,6 +478,8 @@ export default function PortfolioManager() {
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
           const remainingBudget = Math.max(0, plan.perStockAmount - invested);
+          const exitBasisAmount = item.buyStage >= 2 ? invested : plan.perStockAmount;
+          const exitBasisLabel = item.buyStage >= 2 ? "실제 누적 매수금 기준" : "종목당 목표금액 기준";
           return <article className="portfolio-position-card" key={item.id}>
             <header className="portfolio-position-card-header">
               <div><strong>{item.ticker}</strong>{item.note && <small>{item.note}</small>}</div>
@@ -512,8 +514,8 @@ export default function PortfolioManager() {
                 {item.exitStatus !== "active" && <div className={`portfolio-exit-banner ${item.exitStatus}`}>{item.exitStatus === "stopped" ? "손절 처리된 종목" : "3차 분할매도까지 완료"}</div>}
                 {plan.sellTargets.map((target, index) => {
                   const stage = index + 1;
-                  const expectedSaleAmount = invested * (target.sellPct / 100) * (1 + target.returnPct / 100);
-                  const expectedProfit = invested * (target.sellPct / 100) * (target.returnPct / 100);
+                  const expectedSaleAmount = exitBasisAmount * (target.sellPct / 100) * (1 + target.returnPct / 100);
+                  const expectedProfit = exitBasisAmount * (target.sellPct / 100) * (target.returnPct / 100);
                   const completed = item.sellStage >= stage;
                   const available = isActive && item.buyStage >= 2 && item.sellStage === stage - 1;
                   const lockedText = item.buyStage < 2 ? "2차 매수 완료 후 활성화" : `${stage - 1}차 매도 완료 후 활성화`;
@@ -521,7 +523,7 @@ export default function PortfolioManager() {
                     <div className="portfolio-sell-target-main">
                       <strong>{target.label}</strong><span>+{target.returnPct}% 수익 · {target.sellPct}% 매도</span>
                       <small>예상 회수액 {usd(expectedSaleAmount)} · 예상 차익 +{usd(expectedProfit)}</small>
-                      <small>매수 원금 대비 +{target.returnPct}% 도달 시 실행</small>
+                      <small>{exitBasisLabel} · +{target.returnPct}% 도달 시 실행</small>
                     </div>
                     <div className="portfolio-sell-target-action">
                       {completed ? <span className="portfolio-step-done">완료</span>
