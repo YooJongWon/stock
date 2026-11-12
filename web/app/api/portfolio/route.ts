@@ -7,11 +7,13 @@ export const dynamic = "force-dynamic";
 type Position = {
   id: string;
   ticker: string;
-  shares: number;
-  avgPrice: number;
   note: string;
-  buyStage: number | null;
-  sellStage: number | null;
+  firstBuyAmount: number;
+  secondBuyAmount: number;
+  legacyInvestedAmount: number;
+  buyStage: number;
+  sellStage: number;
+  exitStatus: "active" | "stopped" | "completed";
 };
 
 const CALCULATOR_KEYS = [
@@ -62,8 +64,49 @@ async function readPortfolio() {
   return {
     cashBalance: row ? Number(row.cash_balance) || 0 : 0,
     calculatorInputs: row?.calculator_settings || null,
-    positions: Array.isArray(row?.positions) ? row.positions : [],
+    positions: normalizeStoredPositions(row?.positions),
   };
+}
+
+function normalizeStoredPositions(value: unknown): Position[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const ticker = String(row.ticker || "").trim().toUpperCase();
+    const id = String(row.id || "").trim();
+    if (!id || !/^[A-Z0-9.-]{1,12}$/.test(ticker)) return [];
+
+    const hasNewAmounts =
+      typeof row.firstBuyAmount === "number" &&
+      typeof row.secondBuyAmount === "number" &&
+      typeof row.legacyInvestedAmount === "number";
+    const oldInvested = Math.max(0, Number(row.shares) * Number(row.avgPrice) || 0);
+    const firstBuyAmount = hasNewAmounts ? Math.max(0, Number(row.firstBuyAmount)) : 0;
+    const secondBuyAmount = hasNewAmounts ? Math.max(0, Number(row.secondBuyAmount)) : 0;
+    const legacyInvestedAmount = hasNewAmounts
+      ? Math.max(0, Number(row.legacyInvestedAmount))
+      : oldInvested;
+    const buyStageRaw = Number(row.buyStage);
+    const sellStageRaw = Number(row.sellStage);
+    const buyStage = Number.isInteger(buyStageRaw) && buyStageRaw >= 0 && buyStageRaw <= 2 ? buyStageRaw : 0;
+    const sellStage = Number.isInteger(sellStageRaw) && sellStageRaw >= 0 && sellStageRaw <= 3 ? sellStageRaw : 0;
+    const exitStatus = row.exitStatus === "stopped" || row.exitStatus === "completed"
+      ? row.exitStatus
+      : sellStage === 3 ? "completed" : "active";
+
+    return [{
+      id,
+      ticker,
+      note: String(row.note || "").slice(0, 500),
+      firstBuyAmount,
+      secondBuyAmount,
+      legacyInvestedAmount,
+      buyStage,
+      sellStage,
+      exitStatus,
+    }];
+  });
 }
 
 function validPositions(value: unknown): Position[] | null {
@@ -74,23 +117,33 @@ function validPositions(value: unknown): Position[] | null {
     const row = item as Record<string, unknown>;
     const ticker = String(row.ticker || "").trim().toUpperCase();
     const id = String(row.id || "").trim();
-    const shares = Number(row.shares);
-    const avgPrice = Number(row.avgPrice);
-    const buyStage = row.buyStage === undefined || row.buyStage === null ? null : Number(row.buyStage);
-    const sellStage = row.sellStage === undefined || row.sellStage === null ? null : Number(row.sellStage);
+    const firstBuyAmount = Number(row.firstBuyAmount);
+    const secondBuyAmount = Number(row.secondBuyAmount);
+    const legacyInvestedAmount = Number(row.legacyInvestedAmount ?? 0);
+    const buyStage = Number(row.buyStage);
+    const sellStage = Number(row.sellStage);
+    const exitStatus = row.exitStatus;
     if (!id || id.length > 80 || !/^[A-Z0-9.-]{1,12}$/.test(ticker) ||
-        !Number.isFinite(shares) || shares <= 0 ||
-        !Number.isFinite(avgPrice) || avgPrice <= 0 ||
-        (buyStage !== null && (!Number.isInteger(buyStage) || buyStage < 1 || buyStage > 2)) ||
-        (sellStage !== null && (!Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3))) return null;
+        !Number.isFinite(firstBuyAmount) || firstBuyAmount < 0 ||
+        !Number.isFinite(secondBuyAmount) || secondBuyAmount < 0 ||
+        !Number.isFinite(legacyInvestedAmount) || legacyInvestedAmount < 0 ||
+        !Number.isInteger(buyStage) || buyStage < 0 || buyStage > 2 ||
+        !Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3 ||
+        !["active", "stopped", "completed"].includes(String(exitStatus)) ||
+        (buyStage < 1 && (firstBuyAmount > 0 || secondBuyAmount > 0)) ||
+        (buyStage < 2 && (secondBuyAmount > 0 || sellStage > 0)) ||
+        (exitStatus !== "active" && exitStatus !== "stopped" && exitStatus !== "completed")) return null;
+
     normalized.push({
       id,
       ticker,
-      shares,
-      avgPrice,
       note: String(row.note || "").slice(0, 500),
+      firstBuyAmount,
+      secondBuyAmount,
+      legacyInvestedAmount,
       buyStage,
       sellStage,
+      exitStatus,
     });
   }
   return normalized;
