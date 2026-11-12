@@ -89,10 +89,10 @@ function normalizeStoredPositions(value: unknown): Position[] {
       : oldInvested;
     const hasPreviousBuyStage = typeof row.buyStage === "number" && Number.isInteger(row.buyStage) && row.buyStage >= 0 && row.buyStage <= 2;
     const hasPreviousSellStage = typeof row.sellStage === "number" && Number.isInteger(row.sellStage) && row.sellStage >= 0 && row.sellStage <= 3;
-    // Old portfolio records had actual shares and average price but no stages.
-    // Treat an existing holding as at least a completed first buy; do not guess whether a second buy happened.
-    const buyStage = hasPreviousBuyStage ? row.buyStage as number : oldInvested > 0 ? 1 : 0;
     const sellStage = hasPreviousSellStage ? row.sellStage as number : 0;
+    // Old holdings imply at least a first buy. A previously recorded sell stage also implies the old
+    // manual workflow had progressed to the exit sequence, so preserve access to later sell steps.
+    const buyStage = hasPreviousBuyStage ? row.buyStage as number : oldInvested > 0 ? (sellStage > 0 ? 2 : 1) : 0;
     const exitStatus = row.exitStatus === "stopped" || row.exitStatus === "completed"
       ? row.exitStatus
       : sellStage === 3 ? "completed" : "active";
