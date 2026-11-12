@@ -9,13 +9,11 @@ type Position = {
   firstBuyAmount: number;
   secondBuyAmount: number;
   legacyInvestedAmount: number;
-  firstBuyPrice: number | null;
-  secondBuyPrice: number | null;
   buyStage: number;
   sellStage: number;
   exitStatus: "active" | "stopped" | "completed";
 };
-type PositionDraft = { ticker: string; note: string; firstBuyAmount: string; firstBuyPrice: string };
+type PositionDraft = { ticker: string; note: string; firstBuyAmount: string };
 type PositionEditDraft = Pick<Position, "ticker" | "note">;
 type BuyStageEditor = { positionId: string; stage: 1 | 2 };
 type CalculatorInputs = {
@@ -34,7 +32,7 @@ const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
 };
-const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "", firstBuyPrice: "" };
+const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "" };
 const totalInvested = (position: Position) =>
   position.firstBuyAmount + position.secondBuyAmount + position.legacyInvestedAmount;
 
@@ -62,20 +60,9 @@ function buildCalculatorPlan(input: Partial<CalculatorInputs> | null | undefined
   };
 }
 
-function getAverageEntryPrice(position: Position): number | null {
-  if (position.legacyInvestedAmount > 0 || position.firstBuyAmount <= 0 || !position.firstBuyPrice) return null;
-  if (position.buyStage >= 2) {
-    if (position.secondBuyAmount <= 0 || !position.secondBuyPrice) return null;
-    const shares = position.firstBuyAmount / position.firstBuyPrice + position.secondBuyAmount / position.secondBuyPrice;
-    return shares > 0 ? (position.firstBuyAmount + position.secondBuyAmount) / shares : null;
-  }
-  return position.firstBuyPrice;
-}
-
 const usd = (value: number) => new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
-const inputMoney = (value: number) => value > 0 ? value.toFixed(2) : "";
 
 function NumericField({ label, value, onChange, step = "0.01", min = "0" }: {
   label: string; value: string | number; onChange: (value: string) => void; step?: string; min?: string;
@@ -187,7 +174,6 @@ export default function PortfolioManager() {
   const [editDraft, setEditDraft] = useState<PositionEditDraft>({ ticker: "", note: "" });
   const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
   const [buyAmountInput, setBuyAmountInput] = useState("");
-  const [buyPriceInput, setBuyPriceInput] = useState("");
   const [buyStageError, setBuyStageError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -215,8 +201,6 @@ export default function PortfolioManager() {
         firstBuyAmount: Number(item.firstBuyAmount) || 0,
         secondBuyAmount: Number(item.secondBuyAmount) || 0,
         legacyInvestedAmount: Number(item.legacyInvestedAmount) || 0,
-        firstBuyPrice: Number(item.firstBuyPrice) > 0 ? Number(item.firstBuyPrice) : null,
-        secondBuyPrice: Number(item.secondBuyPrice) > 0 ? Number(item.secondBuyPrice) : null,
         buyStage: Number.isInteger(item.buyStage) && item.buyStage >= 0 && item.buyStage <= 2 ? item.buyStage : 0,
         sellStage: Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : 0,
         exitStatus: item.exitStatus === "stopped" || item.exitStatus === "completed" ? item.exitStatus : "active",
@@ -233,9 +217,6 @@ export default function PortfolioManager() {
   useEffect(() => { void load(); }, [load]);
 
   const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
-  useEffect(() => {
-    setDraft((old) => old.firstBuyAmount ? old : { ...old, firstBuyAmount: inputMoney(plan.firstBuyAmount) });
-  }, [plan.firstBuyAmount]);
 
   const totals = useMemo(() => {
     const cost = positions.reduce((sum, item) => sum + totalInvested(item), 0);
@@ -278,17 +259,12 @@ export default function PortfolioManager() {
     event.preventDefault();
     const ticker = draft.ticker.trim().toUpperCase();
     const firstBuyAmount = Number(draft.firstBuyAmount);
-    const firstBuyPrice = Number(draft.firstBuyPrice);
     if (!/^[A-Z0-9.-]{1,12}$/.test(ticker)) {
       setError("티커를 검색 결과에서 선택하거나 올바른 티커를 입력해 주세요.");
       return;
     }
     if (!Number.isFinite(firstBuyAmount) || firstBuyAmount <= 0) {
       setError("실제 1차 매수 금액을 입력해 주세요.");
-      return;
-    }
-    if (draft.firstBuyPrice.trim() && (!Number.isFinite(firstBuyPrice) || firstBuyPrice <= 0)) {
-      setError("1주당 체결가는 비워두거나 0보다 큰 값을 입력해 주세요.");
       return;
     }
     if (positions.some((item) => item.ticker === ticker && item.exitStatus === "active")) {
@@ -302,14 +278,12 @@ export default function PortfolioManager() {
       firstBuyAmount,
       secondBuyAmount: 0,
       legacyInvestedAmount: 0,
-      firstBuyPrice: firstBuyPrice > 0 ? firstBuyPrice : null,
-      secondBuyPrice: null,
       buyStage: 1,
       sellStage: 0,
       exitStatus: "active",
     };
     setPositions((old) => [...old, next]);
-    setDraft({ ...EMPTY_DRAFT, firstBuyAmount: inputMoney(plan.firstBuyAmount) });
+    setDraft(EMPTY_DRAFT);
     setDirty(true);
     setError("");
     setMessage("종목과 1차 매수금액을 등록했습니다. 계산기 기준 2차 매수금액이 자동으로 계산됩니다.");
@@ -342,8 +316,7 @@ export default function PortfolioManager() {
   const openBuyStageEditor = (position: Position, stage: 1 | 2) => {
     const recommended = stage === 1 ? plan.firstBuyAmount : Math.max(0, plan.perStockAmount - totalInvested(position));
     setBuyStageEditor({ positionId: position.id, stage });
-    setBuyAmountInput(inputMoney(recommended));
-    setBuyPriceInput("");
+    setBuyAmountInput(recommended > 0 ? recommended.toFixed(2) : "");
     setBuyStageError("");
   };
 
@@ -351,13 +324,8 @@ export default function PortfolioManager() {
     event.preventDefault();
     if (!buyStageEditor) return;
     const amount = Number(buyAmountInput);
-    const price = Number(buyPriceInput);
     if (!Number.isFinite(amount) || amount <= 0) {
       setBuyStageError("실제 매수 금액을 USD로 입력해 주세요.");
-      return;
-    }
-    if (buyPriceInput.trim() && (!Number.isFinite(price) || price <= 0)) {
-      setBuyStageError("1주당 체결가는 비워두거나 0보다 큰 값을 입력해 주세요.");
       return;
     }
     const { positionId, stage } = buyStageEditor;
@@ -371,13 +339,12 @@ export default function PortfolioManager() {
     setPositions((old) => old.map((item) => {
       if (item.id !== positionId) return item;
       return stage === 1
-        ? { ...item, firstBuyAmount: amount, firstBuyPrice: price > 0 ? price : null, buyStage: 1 }
-        : { ...item, secondBuyAmount: amount, secondBuyPrice: price > 0 ? price : null, buyStage: 2 };
+        ? { ...item, firstBuyAmount: amount, buyStage: 1 }
+        : { ...item, secondBuyAmount: amount, buyStage: 2 };
     }));
     setDirty(true);
     setBuyStageEditor(null);
     setBuyAmountInput("");
-    setBuyPriceInput("");
     setBuyStageError("");
     setMessage(`${stage}차 매수 금액이 반영됐습니다. 변경사항 저장을 눌러 저장하세요.`);
   };
@@ -500,7 +467,6 @@ export default function PortfolioManager() {
         <div className="portfolio-form-grid">
           <TickerSearchField value={draft.ticker} onChange={(value) => updateDraft("ticker", value)} />
           <NumericField label="실제 1차 매수 금액 (USD)" value={draft.firstBuyAmount} onChange={(value) => updateDraft("firstBuyAmount", value)} step="0.01" />
-          <NumericField label="1주당 체결가 (USD · 선택)" value={draft.firstBuyPrice} onChange={(value) => updateDraft("firstBuyPrice", value)} step="0.01" />
           <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={draft.note} onChange={(event) => updateDraft("note", event.target.value)} /></label>
         </div>
         <div className="portfolio-form-hint">계산기 기준 1차 권장금액 <strong>{usd(plan.firstBuyAmount)}</strong> · 종목당 총 배정금액 <strong>{usd(plan.perStockAmount)}</strong>. 실제 체결 금액으로 수정해서 등록하세요.</div>
@@ -547,14 +513,13 @@ export default function PortfolioManager() {
                 {item.exitStatus !== "active" && <div className={`portfolio-exit-banner ${item.exitStatus}`}>{item.exitStatus === "stopped" ? "손절 처리된 종목" : "3차 분할매도까지 완료"}</div>}
                 {plan.sellTargets.map((target, index) => {
                   const stage = index + 1;
-                  const targetPrice = entryPrice !== null ? entryPrice * (1 + target.returnPct / 100) : null;
                   const completed = item.sellStage >= stage;
                   const available = isActive && item.buyStage >= 2 && item.sellStage === stage - 1;
                   const lockedText = item.buyStage < 2 ? "2차 매수 완료 후 활성화" : `${stage - 1}차 매도 완료 후 활성화`;
                   return <div className={`portfolio-sell-target ${completed ? "completed" : available ? "available" : "pending"}`} key={target.label}>
                     <div className="portfolio-sell-target-main">
                       <strong>{target.label}</strong><span>+{target.returnPct}% 수익 · {target.sellPct}% 매도</span>
-                      <small>{targetPrice !== null ? `목표가 약 ${usd(targetPrice)}` : "목표 수익률 기준 · 체결가 입력 시 목표가격 표시"}</small>
+                      <small>매수 원금 대비 +{target.returnPct}% 도달 시 실행</small>
                     </div>
                     <div className="portfolio-sell-target-action">
                       {completed ? <span className="portfolio-step-done">완료</span>
@@ -564,12 +529,10 @@ export default function PortfolioManager() {
                   </div>;
                 })}
                 <div className="portfolio-stop-target">
-                  <div><strong>전량 손절</strong><span>{plan.stopLossRatio}% 기준</span><small>{entryPrice !== null ? `손절 기준가 약 ${usd(entryPrice * (1 + plan.stopLossRatio / 100))}` : "체결가 입력 시 기준가격 표시"}</small></div>
+                  <div><strong>전량 손절</strong><span>{plan.stopLossRatio}% 기준</span><small>누적 매수 원금 대비 손실 기준</small></div>
                   {isActive && item.buyStage >= 1 ? <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 완료 기록</button>
                     : <span className="portfolio-stage-locked">1차 매수 후 활성화</span>}
                 </div>
-                {item.buyStage >= 2 && entryPrice === null && item.legacyInvestedAmount === 0 &&
-                  <p className="portfolio-price-hint">목표가격까지 보려면 1·2차 매수 입력창에서 1주당 체결가를 선택 입력해 주세요. 수익률 목표는 계산기 설정으로 표시됩니다.</p>}
               </section>
             </div>
             <footer className="portfolio-position-card-footer">
@@ -598,8 +561,7 @@ export default function PortfolioManager() {
               {buyStageEditor.stage === 2 && <div><small>현재까지 매수한 금액</small><strong>{usd(totalInvested(item))}</strong></div>}
             </div>
             <NumericField label="실제 매수 금액 (USD)" value={buyAmountInput} onChange={setBuyAmountInput} step="0.01" />
-            <NumericField label="1주당 체결가 (USD · 선택)" value={buyPriceInput} onChange={setBuyPriceInput} step="0.01" />
-            <p className="portfolio-modal-hint">실제 매수한 금액을 입력하세요. 권장금액과 다르면 수정할 수 있습니다. 체결가를 입력하면 목표 매도가도 계산합니다.</p>
+            <p className="portfolio-modal-hint">계산기 권장 추가금액을 기본값으로 채웠습니다. 실제 매수할 금액에 맞게 수정한 뒤 완료 처리하세요.</p>
             {Number(buyAmountInput) > recommended && recommended > 0 && <p className="portfolio-modal-warning">계산기 기준 권장 추가금액보다 큽니다. 종목당 배정금액을 초과하는지 확인하세요.</p>}
             {buyStageError && <p className="portfolio-error">{buyStageError}</p>}
             <div className="portfolio-row-actions">
@@ -622,6 +584,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">매수금과 매도 수익률은 스윙 투자 계산기의 저장된 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 목표 절대가격은 종목별 1주당 체결가를 입력한 경우에만 표시하며, 체결가는 선택 입력입니다. 기존 데이터는 원금을 보존하되 과거 매수 차수·체결가를 추정하지 않습니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
+    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
   </section>;
 }
