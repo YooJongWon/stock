@@ -25,9 +25,6 @@ const totalInvested = (position: Position) =>
 const usd = (value: number) => new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
-const usd = (value: number) => new Intl.NumberFormat("en-US", {
-  style: "currency", currency: "USD", maximumFractionDigits: 2,
-}).format(Number.isFinite(value) ? value : 0);
 const numberText = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value);
 
 function NumericField({ label, value, onChange, step = "0.01", min = "0" }: {
