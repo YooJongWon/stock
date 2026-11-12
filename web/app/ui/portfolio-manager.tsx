@@ -10,13 +10,32 @@ type Position = {
   avgPrice: number;
   currentPrice: number;
   note: string;
+  buyStage: number | null;
+  sellStage: number | null;
 };
 type PositionDraft = Omit<Position, "id">;
 type PortfolioData = { cashBalance: number; positions: Position[] };
 
 const EMPTY_DRAFT: PositionDraft = {
   ticker: "", companyName: "", shares: 0, avgPrice: 0, currentPrice: 0, note: "",
+  buyStage: 1, sellStage: 0,
 };
+const BUY_STAGE_OPTIONS = [
+  { value: "", label: "미설정" },
+  { value: "1", label: "1차 매수 완료" },
+  { value: "2", label: "2차 매수 완료" },
+];
+const SELL_STAGE_OPTIONS = [
+  { value: "", label: "미설정" },
+  { value: "0", label: "매도 전" },
+  { value: "1", label: "1차 매도 완료" },
+  { value: "2", label: "2차 매도 완료" },
+  { value: "3", label: "3차 매도 완료" },
+];
+const buyStageLabel = (stage: number | null) =>
+  stage === null ? "미설정" : stage === 1 ? "1차 매수 완료" : "2차 매수 완료";
+const sellStageLabel = (stage: number | null) =>
+  stage === null ? "미설정" : stage === 0 ? "매도 전" : `${stage}차 매도 완료`;
 const usd = (value: number) => new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
@@ -28,6 +47,20 @@ function NumericField({ label, value, onChange, step = "0.01", min = "0" }: {
   return <label className="portfolio-field">
     <span>{label}</span>
     <input type="number" min={min} step={step} value={value} onChange={(event) => onChange(event.target.value)} />
+  </label>;
+}
+
+function StageField({ label, value, onChange, options }: {
+  label: string;
+  value: number | null;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return <label className="portfolio-field">
+    <span>{label}</span>
+    <select value={value === null ? "" : String(value)} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
   </label>;
 }
 
@@ -58,7 +91,11 @@ export default function PortfolioManager() {
       if (!response.ok) throw new Error(payload.error || "포트폴리오를 불러오지 못했습니다.");
       const data = payload as PortfolioData;
       setCashBalance(String(data.cashBalance ?? 0));
-      setPositions(Array.isArray(data.positions) ? data.positions : []);
+      setPositions(Array.isArray(data.positions) ? data.positions.map((item) => ({
+        ...item,
+        buyStage: typeof item.buyStage === "number" && Number.isInteger(item.buyStage) && item.buyStage >= 1 && item.buyStage <= 2 ? item.buyStage : null,
+        sellStage: typeof item.sellStage === "number" && Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : null,
+      })) : []);
       setAuthenticated(true);
       setDirty(false);
     } catch (caught) {
@@ -103,10 +140,16 @@ export default function PortfolioManager() {
   };
 
   const updateDraft = (key: keyof PositionDraft, value: string) => {
-    setDraft((old) => ({ ...old, [key]: key === "ticker" || key === "companyName" || key === "note" ? value : Number(value) }));
+    const nextValue = key === "ticker" || key === "companyName" || key === "note"
+      ? value
+      : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
+    setDraft((old) => ({ ...old, [key]: nextValue }));
   };
   const updateEditDraft = (key: keyof PositionDraft, value: string) => {
-    setEditDraft((old) => ({ ...old, [key]: key === "ticker" || key === "companyName" || key === "note" ? value : Number(value) }));
+    const nextValue = key === "ticker" || key === "companyName" || key === "note"
+      ? value
+      : key === "buyStage" || key === "sellStage" ? (value === "" ? null : Number(value)) : Number(value);
+    setEditDraft((old) => ({ ...old, [key]: nextValue }));
   };
 
   const addPosition = (event: FormEvent) => {
@@ -129,6 +172,7 @@ export default function PortfolioManager() {
     setEditDraft({
       ticker: position.ticker, companyName: position.companyName, shares: position.shares,
       avgPrice: position.avgPrice, currentPrice: position.currentPrice, note: position.note,
+      buyStage: position.buyStage, sellStage: position.sellStage,
     });
   };
 
@@ -238,7 +282,7 @@ export default function PortfolioManager() {
     </section>
 
     <section className="portfolio-panel">
-      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>주식 수량, 평균 매수가, 현재가를 직접 입력합니다. 시세 자동 연동은 아직 사용하지 않습니다.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
+      <div className="portfolio-panel-heading"><div><div className="eyebrow">HOLDINGS</div><h2>보유 종목</h2><p>매수·매도 단계를 함께 기록합니다. 기존 종목의 단계는 수정에서 설정해 주세요.</p></div><span className="portfolio-count">{positions.length} / 100</span></div>
       <form className="portfolio-position-form" onSubmit={addPosition}>
         <h3>보유 종목 추가</h3>
         <div className="portfolio-form-grid">
@@ -248,12 +292,14 @@ export default function PortfolioManager() {
           {field("평균 매수가 (USD)", "avgPrice", draft.avgPrice, updateDraft)}
           {field("현재가 (USD)", "currentPrice", draft.currentPrice, updateDraft)}
           {field("메모 (선택)", "note", draft.note, updateDraft)}
+          <StageField label="매수 단계" value={draft.buyStage} onChange={(value) => updateDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
+          <StageField label="매도 단계" value={draft.sellStage} onChange={(value) => updateDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
         </div>
         <button className="portfolio-secondary" type="submit">+ 보유 종목 추가</button>
       </form>
 
       {positions.length ? <div className="portfolio-table-wrap"><table className="portfolio-table">
-        <thead><tr><th>종목</th><th>수량</th><th>평균 매수가</th><th>현재가</th><th>매수 원금</th><th>평가액</th><th>평가 손익</th><th>관리</th></tr></thead>
+        <thead><tr><th>종목</th><th>매수 / 매도 단계</th><th>수량</th><th>평균 매수가</th><th>현재가</th><th>매수 원금</th><th>평가액</th><th>평가 손익</th><th>관리</th></tr></thead>
         <tbody>{positions.map((item) => {
           const cost = item.shares * item.avgPrice;
           const value = item.currentPrice > 0 ? item.shares * item.currentPrice : null;
@@ -261,6 +307,10 @@ export default function PortfolioManager() {
           const pct = pnl === null || cost <= 0 ? null : pnl / cost * 100;
           return <tr key={item.id}>
             <td><strong>{item.ticker}</strong><small>{item.companyName || "회사명 미입력"}</small>{item.note && <small>{item.note}</small>}</td>
+            <td><div className="portfolio-stage-display">
+              <span className="portfolio-stage-badge buy">매수 · {buyStageLabel(item.buyStage)}</span>
+              <span className="portfolio-stage-badge sell">매도 · {sellStageLabel(item.sellStage)}</span>
+            </div></td>
             <td>{numberText(item.shares)}</td><td>{usd(item.avgPrice)}</td><td>{item.currentPrice > 0 ? usd(item.currentPrice) : "미입력"}</td>
             <td>{usd(cost)}</td><td>{value === null ? "—" : usd(value)}</td>
             <td className={pnl === null ? "" : pnl >= 0 ? "positive" : "negative"}>{pnl === null ? "—" : <>{pnl >= 0 ? "+" : ""}{usd(pnl)}<small>{pct! >= 0 ? "+" : ""}{pct!.toFixed(2)}%</small></>}</td>
@@ -278,6 +328,8 @@ export default function PortfolioManager() {
           {field("평균 매수가 (USD)", "avgPrice", editDraft.avgPrice, updateEditDraft)}
           {field("현재가 (USD)", "currentPrice", editDraft.currentPrice, updateEditDraft)}
           {field("메모 (선택)", "note", editDraft.note, updateEditDraft)}
+          <StageField label="매수 단계" value={editDraft.buyStage} onChange={(value) => updateEditDraft("buyStage", value)} options={BUY_STAGE_OPTIONS} />
+          <StageField label="매도 단계" value={editDraft.sellStage} onChange={(value) => updateEditDraft("sellStage", value)} options={SELL_STAGE_OPTIONS} />
         </div>
         <div className="portfolio-row-actions"><button className="portfolio-primary" type="submit">수정 반영</button><button className="portfolio-secondary" type="button" onClick={() => setEditingId(null)}>취소</button></div>
       </form>}
@@ -285,6 +337,6 @@ export default function PortfolioManager() {
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
     <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">이 화면의 종목 정보와 현재가는 직접 입력한 값입니다. 자동 시세·증권사 계좌 연동은 하지 않습니다. 저장된 정보는 인증된 사용자만 조회할 수 있습니다.</div>
+    <div className="portfolio-note">매수 단계는 1차 또는 2차 완료, 매도 단계는 매도 전 또는 1~3차 완료로 관리합니다. 기존 종목은 거래 이력을 추정하지 않고 ‘미설정’으로 표시하므로 수정에서 실제 단계로 맞춰 주세요. 단계 변경도 ‘변경사항 저장’을 눌러야 저장됩니다. 종목 정보와 현재가는 직접 입력하며, 증권사 계좌 연동은 하지 않습니다.</div>
   </section>;
 }
