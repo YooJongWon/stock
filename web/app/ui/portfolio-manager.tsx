@@ -446,20 +446,20 @@ export default function PortfolioManager() {
                       <div className="portfolio-stage-line">
                         {item.sellStage >= 1
                           ? <span className="portfolio-stage-done">✓ 1차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>1차 매도 완료 처리</button>}
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>1차 매도 +8% · 40% 완료</button>}
                       </div>
                       {item.sellStage >= 1 && <div className="portfolio-stage-line">
                         {item.sellStage >= 2
                           ? <span className="portfolio-stage-done">✓ 2차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>2차 매도 완료 처리</button>}
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>2차 매도 +9% · 30% 완료</button>}
                       </div>}
                       {item.sellStage >= 2 && <div className="portfolio-stage-line">
                         {item.sellStage >= 3
                           ? <span className="portfolio-stage-done">✓ 3차 매도 완료</span>
-                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>3차 매도 완료 처리</button>}
+                          : <button type="button" className="portfolio-stage-next sell" onClick={() => completeSellStage(item)}>3차 매도 +10% · 30% 완료</button>}
                       </div>}
                     </>}
-              {isActive && item.buyStage >= 1 && <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 완료 처리</button>}
+              {isActive && item.buyStage >= 1 && <button type="button" className="portfolio-stop-button" onClick={() => stopLossPosition(item)}>손절 -5% 완료 처리</button>}
             </div></td>
             <td><div className="portfolio-row-actions"><button type="button" onClick={() => startEdit(item)}>수정</button><button type="button" onClick={() => deletePosition(item.id)}>삭제</button></div></td>
           </tr>;
