@@ -28,15 +28,19 @@ function supabaseConfig() {
 
 async function supabaseRequest(path: string, init: RequestInit = {}) {
   const { url, key } = supabaseConfig();
+  const headers: Record<string, string> = {
+    apikey: key,
+    "Content-Type": "application/json",
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  // Current sb_secret_ keys are API keys, not JWTs: send them via apikey only.
+  // Legacy service_role keys are JWTs and can also be sent as Authorization Bearer.
+  if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
+
   const response = await fetch(`${url}/rest/v1/${path}`, {
     ...init,
     cache: "no-store",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
+    headers,
   });
   if (!response.ok) {
     const message = await response.text();
