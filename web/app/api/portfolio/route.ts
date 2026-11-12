@@ -12,6 +12,8 @@ type Position = {
   avgPrice: number;
   currentPrice: number;
   note: string;
+  buyStage: number | null;
+  sellStage: number | null;
 };
 
 const CALCULATOR_KEYS = [
@@ -78,10 +80,14 @@ function validPositions(value: unknown): Position[] | null {
     const shares = Number(row.shares);
     const avgPrice = Number(row.avgPrice);
     const currentPrice = Number(row.currentPrice);
+    const buyStage = row.buyStage === undefined || row.buyStage === null ? null : Number(row.buyStage);
+    const sellStage = row.sellStage === undefined || row.sellStage === null ? null : Number(row.sellStage);
     if (!id || id.length > 80 || !/^[A-Z0-9.-]{1,12}$/.test(ticker) ||
         !Number.isFinite(shares) || shares <= 0 ||
         !Number.isFinite(avgPrice) || avgPrice <= 0 ||
-        !Number.isFinite(currentPrice) || currentPrice < 0) return null;
+        !Number.isFinite(currentPrice) || currentPrice < 0 ||
+        (buyStage !== null && (!Number.isInteger(buyStage) || buyStage < 1 || buyStage > 2)) ||
+        (sellStage !== null && (!Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3))) return null;
     normalized.push({
       id,
       ticker,
@@ -90,6 +96,8 @@ function validPositions(value: unknown): Position[] | null {
       avgPrice,
       currentPrice,
       note: String(row.note || "").slice(0, 500),
+      buyStage,
+      sellStage,
     });
   }
   return normalized;
