@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import PortfolioManager from "./portfolio-manager";
 
 type Result = {
   status: string;
@@ -308,7 +309,7 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
 }
 
 export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
-  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals">("screener");
+  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals" | "portfolio">("screener");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
@@ -340,11 +341,12 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스크리너</button>
           <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => setActiveMenu("calculator")}>스윙 투자 계산기</button>
           <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
+          <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => setActiveMenu("portfolio")}>내 포트폴리오</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
-      {activeMenu === "calculator" ? <InvestmentCalculator /> : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      {activeMenu === "portfolio" ? <PortfolioManager /> : activeMenu === "calculator" ? <InvestmentCalculator /> : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
@@ -548,7 +550,6 @@ type CalculatorInputs = {
   firstEntryPrice: string; secondEntryRisePct: string;
 };
 
-const CALCULATOR_STORAGE_KEY = "jong9-stock-swing-calculator-v1";
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
   stopLossRatio: "-5", firstTargetRatio: "8", finalTargetRatio: "10",
@@ -558,51 +559,77 @@ const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
 function InvestmentCalculator() {
   const [input, setInput] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [storageReady, setStorageReady] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(CALCULATOR_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<CalculatorInputs>;
+    let cancelled = false;
+    const restore = async () => {
+      try {
+        const response = await fetch("/api/portfolio", { cache: "no-store" });
+        if (!response.ok) {
+          if (!cancelled && response.status === 401) setAuthenticated(false);
+          return;
+        }
+        const data = await response.json() as { calculatorInputs?: Partial<CalculatorInputs> | null };
+        if (cancelled) return;
+        setAuthenticated(true);
         const restored = { ...DEFAULT_CALCULATOR_INPUTS };
-        (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
-          const value = parsed[key];
-          if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
-            restored[key] = value;
+        const savedSettings = data.calculatorInputs;
+        if (savedSettings && Object.keys(savedSettings).length > 0) {
+          (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
+            const value = savedSettings[key];
+            if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) restored[key] = value;
+          });
+          if (savedSettings.cashRatio === "17") restored.cashRatio = "5";
+          setInput(restored);
+          setSaved(true);
+        } else {
+          const raw = window.localStorage.getItem("jong9-stock-swing-calculator-v1");
+          if (raw) {
+            const legacy = JSON.parse(raw) as Partial<CalculatorInputs>;
+            (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
+              const value = legacy[key];
+              if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) restored[key] = value;
+            });
+            if (legacy.cashRatio === "17") restored.cashRatio = "5";
+            setInput(restored);
+            const migration = await fetch("/api/portfolio", {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ calculatorInputs: restored }),
+            });
+            if (migration.ok) { window.localStorage.removeItem("jong9-stock-swing-calculator-v1"); setSaved(true); }
           }
-        });
-        // Migrate the previous default reserve from 17% to the updated 5% policy.
-        if (parsed.cashRatio === "17") restored.cashRatio = "5";
-        setInput(restored);
-        setSaved(true);
+        }
+      } catch {
+        if (!cancelled) setSaved(false);
+      } finally {
+        if (!cancelled) setStorageReady(true);
       }
-    } catch {
-      // Storage may be unavailable; the calculator remains usable.
-    } finally {
-      setStorageReady(true);
-    }
+    };
+    void restore();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!storageReady) return;
-    try {
-      window.localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(input));
-      setSaved(true);
-    } catch {
-      setSaved(false);
-    }
-  }, [input, storageReady]);
+    if (!storageReady || !authenticated) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/portfolio", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ calculatorInputs: input }),
+        });
+        if (!response.ok) throw new Error("저장 실패");
+        setSaved(true);
+      } catch {
+        setSaved(false);
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [input, storageReady, authenticated]);
 
-  const resetInputs = () => {
-    setInput(DEFAULT_CALCULATOR_INPUTS);
-    try {
-      window.localStorage.removeItem(CALCULATOR_STORAGE_KEY);
-      setSaved(false);
-    } catch {
-      setSaved(false);
-    }
-  };
+  const resetInputs = () => setInput(DEFAULT_CALCULATOR_INPUTS);
   const get = (key: keyof CalculatorInputs) => Number.parseFloat(input[key]) || 0;
   const total = Math.max(0, get("total"));
   const count = Math.max(1, Math.min(100, Math.floor(get("stockCount"))));
@@ -659,7 +686,7 @@ function InvestmentCalculator() {
     <div className="hero calculator-hero"><div className="eyebrow">POSITION SIZING</div><h1>미국주식 스윙 투자 계산기</h1><p>2회 분할매수와 3회 분할매도, 평균 매수가 기준 손절·목표가를 계산합니다.</p></div>
     <div className="calculator-layout">
       <section className="calculator-card input-card">
-        <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>운용 기준</h2></div><div className="calculator-storage-actions"><span className="calculator-save-status" role="status">{!storageReady ? "저장값 확인 중…" : saved ? "✓ 자동 저장됨" : "기본값 사용 중"}</span><button type="button" className="calculator-reset-button" onClick={resetInputs}>기본값 초기화</button></div></div>
+        <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>운용 기준</h2></div><div className="calculator-storage-actions"><span className="calculator-save-status" role="status">{!storageReady ? "저장값 확인 중…" : !authenticated ? "포트폴리오 탭에서 인증 후 저장" : saved ? "✓ Supabase 자동 저장됨" : "저장 대기 중"}</span><button type="button" className="calculator-reset-button" onClick={resetInputs}>기본값 초기화</button></div></div>
         <div className="calculator-inputs">{fields.map(({ key, label, suffix, ...limits }) => <label className="calculator-field" key={key}><span>{label}</span><div className="calculator-input-wrap"><input type="number" inputMode="decimal" value={input[key]} onChange={(event) => set(key, event.target.value)} {...limits} aria-label={label} /><em>{suffix}</em></div></label>)}</div>
         <div className="calculator-note">
           <strong>고정 매매 원칙</strong><br />
@@ -705,7 +732,7 @@ function InvestmentCalculator() {
       </table></div>
       <p className="calculator-note">예상 손익은 수수료·환전 비용·세금 및 가격 갭을 제외한 단순 계산입니다. 2차 매수는 +3~5% 도달만으로 실행하지 말고, 20일선 또는 돌파 저항선 지지와 저점 상승을 확인하세요. 거래량 과열·이격 과다·지지 실패 시에는 40%를 현금으로 남겨둡니다.</p>
     </section>
-    <footer><span>설정값은 이 브라우저에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
+    <footer><span>인증된 계정의 계산기 설정은 Supabase에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
 }
 
