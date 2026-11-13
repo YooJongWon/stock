@@ -15,6 +15,18 @@ type Position = {
 };
 type PositionDraft = { ticker: string; note: string; firstBuyAmount: string };
 type PositionEditDraft = { ticker: string; note: string; totalInvestedAmount: string };
+type PortfolioGroup = "all" | "waiting" | "buy1" | "buy2" | "sell1" | "sell2" | "sell3" | "stopped";
+
+const PORTFOLIO_GROUPS: { id: PortfolioGroup; label: string }[] = [
+  { id: "all", label: "전체" },
+  { id: "waiting", label: "매수 대기" },
+  { id: "buy1", label: "1차 매수" },
+  { id: "buy2", label: "2차 매수" },
+  { id: "sell1", label: "1차 매도" },
+  { id: "sell2", label: "2차 매도" },
+  { id: "sell3", label: "3차 매도 완료" },
+  { id: "stopped", label: "손절 종료" },
+];
 type BuyStageEditor = { positionId: string; stage: 1 | 2 };
 type CalculatorInputs = {
   total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
@@ -181,6 +193,7 @@ export default function PortfolioManager() {
   const [password, setPassword] = useState("");
   const [cashBalance, setCashBalance] = useState("0");
   const [positions, setPositions] = useState<Position[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<PortfolioGroup>("all");
   const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [draft, setDraft] = useState<PositionDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -231,6 +244,38 @@ export default function PortfolioManager() {
   useEffect(() => { void load(); }, [load]);
 
   const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
+
+  const groupCounts = useMemo(() => {
+    const counts: Record<PortfolioGroup, number> = {
+      all: positions.length, waiting: 0, buy1: 0, buy2: 0,
+      sell1: 0, sell2: 0, sell3: 0, stopped: 0,
+    };
+    positions.forEach((item) => {
+      if (item.exitStatus === "stopped") { counts.stopped += 1; return; }
+      if (item.exitStatus === "completed" || item.sellStage >= 3) { counts.sell3 += 1; return; }
+      if (item.sellStage === 2) { counts.sell2 += 1; return; }
+      if (item.sellStage === 1) { counts.sell1 += 1; return; }
+      if (item.buyStage >= 2) { counts.buy2 += 1; return; }
+      if (item.buyStage === 1) { counts.buy1 += 1; return; }
+      counts.waiting += 1;
+    });
+    return counts;
+  }, [positions]);
+
+  const filteredPositions = useMemo(() => {
+    if (selectedGroup === "all") return positions;
+    return positions.filter((item) => {
+      if (selectedGroup === "stopped") return item.exitStatus === "stopped";
+      if (selectedGroup === "sell3") return item.exitStatus === "completed" || item.sellStage >= 3;
+      if (item.exitStatus !== "active") return false;
+      if (selectedGroup === "sell2") return item.sellStage === 2;
+      if (selectedGroup === "sell1") return item.sellStage === 1;
+      if (selectedGroup === "buy2") return item.buyStage >= 2 && item.sellStage === 0;
+      if (selectedGroup === "buy1") return item.buyStage === 1 && item.sellStage === 0;
+      if (selectedGroup === "waiting") return item.buyStage === 0;
+      return false;
+    });
+  }, [positions, selectedGroup]);
 
   const totals = useMemo(() => {
     const cost = positions.reduce((sum, item) => sum + totalInvested(item), 0);
@@ -549,8 +594,28 @@ export default function PortfolioManager() {
         <button className="portfolio-primary" type="submit">1차 매수 완료로 등록</button>
       </form>
 
-      {positions.length ? <div className="portfolio-position-list">
-        {positions.map((item) => {
+      <div className="portfolio-group-filter" aria-label="매매 진행 단계별 종목 필터">
+        <div className="portfolio-group-filter-heading">
+          <div><strong>진행 단계별 보기</strong><small>단계를 선택하면 해당 종목만 모아볼 수 있습니다.</small></div>
+          <span>{filteredPositions.length} / {positions.length}개 표시</span>
+        </div>
+        <div className="portfolio-group-filter-tabs" role="group" aria-label="보유 종목 진행 단계">
+          {PORTFOLIO_GROUPS.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className={selectedGroup === group.id ? "active" : ""}
+              aria-pressed={selectedGroup === group.id}
+              onClick={() => setSelectedGroup(group.id)}
+            >
+              <span>{group.label}</span><b>{groupCounts[group.id]}</b>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {filteredPositions.length ? <div className="portfolio-position-list">
+        {filteredPositions.map((item) => {}
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
           const remainingBudget = Math.max(0, plan.perStockAmount - invested);
@@ -635,7 +700,12 @@ export default function PortfolioManager() {
             </footer>
           </article>;
         })}
-      </div> : <div className="portfolio-empty">아직 등록한 종목이 없습니다. 종목을 검색하고 실제 1차 매수 금액을 입력해 등록하세요.</div>}
+      </div> : <div className="portfolio-empty">
+        {positions.length === 0
+          ? "아직 등록한 종목이 없습니다. 종목을 검색하고 실제 1차 매수 금액을 입력해 등록하세요."
+          : `‘${PORTFOLIO_GROUPS.find((group) => group.id === selectedGroup)?.label}’ 단계에 해당하는 종목이 없습니다.`}
+        {positions.length > 0 && selectedGroup !== "all" && <button type="button" className="portfolio-empty-reset" onClick={() => setSelectedGroup("all")}>전체 종목 보기</button>}
+      </div>}
       {buyStageEditor && (() => {
         const item = positions.find((position) => position.id === buyStageEditor.positionId);
         if (!item) return null;
