@@ -185,6 +185,7 @@ export default function PortfolioManager() {
   const [draft, setDraft] = useState<PositionDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<PositionEditDraft>({ ticker: "", note: "", totalInvestedAmount: "0" });
+  const [editError, setEditError] = useState("");
   const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
   const [buyAmountInput, setBuyAmountInput] = useState("");
   const [buyStageError, setBuyStageError] = useState("");
@@ -304,6 +305,7 @@ export default function PortfolioManager() {
 
   const startEdit = (position: Position) => {
     setEditingId(position.id);
+    setEditError("");
     setEditDraft({
       ticker: position.ticker,
       note: position.note,
@@ -311,32 +313,37 @@ export default function PortfolioManager() {
     });
   };
 
+  const closeEdit = () => {
+    setEditingId(null);
+    setEditError("");
+  };
+
   const commitEdit = (event: FormEvent) => {
     event.preventDefault();
     if (!editingId) return;
     const ticker = editDraft.ticker.trim().toUpperCase();
     if (!/^[A-Z0-9.-]{1,12}$/.test(ticker)) {
-      setError("티커 형식이 올바르지 않습니다.");
+      setEditError("티커 형식이 올바르지 않습니다.");
       return;
     }
     if (positions.some((item) => item.id !== editingId && item.ticker === ticker && item.exitStatus === "active")) {
-      setError("이미 보유 목록에 있는 종목입니다.");
+      setEditError("이미 보유 목록에 있는 종목입니다.");
       return;
     }
     const targetTotal = Number(editDraft.totalInvestedAmount);
     if (!Number.isFinite(targetTotal) || targetTotal < 0) {
-      setError("총 매수금액은 0 이상의 USD 금액으로 입력해 주세요.");
+      setEditError("총 매수금액은 0 이상의 USD 금액으로 입력해 주세요.");
       return;
     }
     const current = positions.find((item) => item.id === editingId);
     if (!current) return;
     if (current.buyStage >= 1 && targetTotal <= 0) {
-      setError("이미 매수한 종목의 총 매수금액은 0보다 커야 합니다.");
+      setEditError("이미 매수한 종목의 총 매수금액은 0보다 커야 합니다.");
       return;
     }
     const separatedTrancheAmount = current.firstBuyAmount + current.secondBuyAmount;
     if (current.legacyInvestedAmount > 0 && targetTotal < separatedTrancheAmount) {
-      setError(`차수가 구분된 매수금액 ${usd(separatedTrancheAmount)}보다 작게 설정할 수 없습니다.`);
+      setEditError(`차수가 구분된 매수금액 ${usd(separatedTrancheAmount)}보다 작게 설정할 수 없습니다.`);
       return;
     }
     let adjusted: Position;
@@ -349,7 +356,7 @@ export default function PortfolioManager() {
       };
     } else if (current.buyStage >= 2) {
       if (targetTotal <= current.firstBuyAmount) {
-        setError(`2차 매수까지 완료된 종목은 1차 매수금액 ${usd(current.firstBuyAmount)}보다 큰 총액이어야 합니다.`);
+        setEditError(`2차 매수까지 완료된 종목은 1차 매수금액 ${usd(current.firstBuyAmount)}보다 큰 총액이어야 합니다.`);
         return;
       }
       adjusted = {
@@ -377,7 +384,7 @@ export default function PortfolioManager() {
     setPositions((old) => old.map((item) => item.id === editingId ? adjusted : item));
     setEditingId(null);
     setDirty(true);
-    setError("");
+    setEditError("");
     setMessage("총 매수금액을 수정했습니다. 차수별 금액에도 반영됐으니 변경사항 저장을 눌러 주세요.");
   };
 
@@ -445,7 +452,7 @@ export default function PortfolioManager() {
     if (!window.confirm("이 보유 종목을 삭제할까요?")) return;
     setPositions((old) => old.filter((item) => item.id !== id));
     setDirty(true);
-    if (editingId === id) setEditingId(null);
+    if (editingId === id) closeEdit();
     if (buyStageEditor?.positionId === id) setBuyStageEditor(null);
     setMessage("삭제 내용이 반영됐습니다. 저장 버튼을 눌러 저장하세요.");
   };
@@ -536,7 +543,7 @@ export default function PortfolioManager() {
         <div className="portfolio-form-grid">
           <TickerSearchField value={draft.ticker} onChange={(value) => updateDraft("ticker", value)} />
           <NumericField label="실제 1차 매수 금액 (USD)" value={draft.firstBuyAmount} onChange={(value) => updateDraft("firstBuyAmount", value)} step="0.01" />
-          <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={draft.note} onChange={(event) => updateDraft("note", event.target.value)} /></label>
+          <label className="portfolio-field portfolio-span-all"><span>메모 (선택)</span><input type="text" value={draft.note} onChange={(event) => updateDraft("note", event.target.value)} /></label>
         </div>
         <div className="portfolio-form-hint">계산기 기준 1차 권장금액 <strong>{usd(plan.firstBuyAmount)}</strong> · 종목당 총 배정금액 <strong>{usd(plan.perStockAmount)}</strong>. 실제 체결 금액으로 수정해서 등록하세요.</div>
         <button className="portfolio-primary" type="submit">1차 매수 완료로 등록</button>
@@ -662,21 +669,51 @@ export default function PortfolioManager() {
         </div>;
       })()}
       
-      {editingId && <form className="portfolio-edit-form" onSubmit={commitEdit}>
-        <h3>{editDraft.ticker || "종목"} 수정</h3>
-        <div className="portfolio-form-grid">
-          <TickerSearchField value={editDraft.ticker} onChange={(value) => updateEditDraft("ticker", value)} />
-          <NumericField
-            label="총 매수금액 (USD)"
-            value={editDraft.totalInvestedAmount}
-            onChange={(value) => setEditDraft((old) => ({ ...old, totalInvestedAmount: value }))}
-            step="0.01"
-          />
-          <label className="portfolio-field"><span>메모 (선택)</span><input type="text" value={editDraft.note} onChange={(event) => updateEditDraft("note", event.target.value)} /></label>
-        </div>
-        <p className="portfolio-form-hint">총 매수금액을 바꾸면 차수별 매수금액도 자동 조정됩니다. 2차 매수 완료 종목은 1차 금액을 유지하고 2차 금액을 조정합니다.</p>
-        <div className="portfolio-row-actions"><button className="portfolio-primary" type="submit">수정 반영</button><button className="portfolio-secondary" type="button" onClick={() => setEditingId(null)}>취소</button></div>
-      </form>}
+      {editingId && (() => {
+        const item = positions.find((position) => position.id === editingId);
+        if (!item) return null;
+        return <div
+          className="portfolio-modal-backdrop portfolio-edit-backdrop"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeEdit(); }}
+        >
+          <form
+            className="portfolio-edit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="portfolio-edit-title"
+            onSubmit={commitEdit}
+          >
+            <div className="portfolio-modal-heading">
+              <div>
+                <span>EDIT HOLDING</span>
+                <h3 id="portfolio-edit-title">{item.ticker} 종목 수정</h3>
+                <p>티커, 누적 매수금액, 메모를 수정할 수 있습니다.</p>
+              </div>
+              <button type="button" className="portfolio-modal-close" onClick={closeEdit} aria-label="수정 창 닫기">×</button>
+            </div>
+            <div className="portfolio-edit-modal-fields">
+              <TickerSearchField value={editDraft.ticker} onChange={(value) => updateEditDraft("ticker", value)} />
+              <NumericField
+                label="총 매수금액 (USD)"
+                value={editDraft.totalInvestedAmount}
+                onChange={(value) => setEditDraft((old) => ({ ...old, totalInvestedAmount: value }))}
+                step="0.01"
+              />
+              <label className="portfolio-field portfolio-span-all">
+                <span>메모 (선택)</span>
+                <input type="text" value={editDraft.note} onChange={(event) => updateEditDraft("note", event.target.value)} />
+              </label>
+            </div>
+            <p className="portfolio-form-hint">총 매수금액을 바꾸면 차수별 매수금액도 자동 조정됩니다. 2차 매수 완료 종목은 1차 금액을 유지하고 2차 금액을 조정합니다.</p>
+            {editError && <p className="portfolio-error portfolio-edit-error">{editError}</p>}
+            <div className="portfolio-row-actions portfolio-edit-modal-actions">
+              <button className="portfolio-primary" type="submit">수정 반영</button>
+              <button className="portfolio-secondary" type="button" onClick={closeEdit}>취소</button>
+            </div>
+          </form>
+        </div>;
+      })()}
     </section>
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
