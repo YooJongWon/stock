@@ -323,3 +323,34 @@
 .portfolio-progress-badge.completed{border-color:#3f6b59;background:#18372d;color:#b8edcf}
 .portfolio-progress-badge.pending{border-color:#495665;background:#1b2530;color:#b4c0ce}
 @media(max-width:650px){.portfolio-position-card-header{align-items:flex-start}.portfolio-position-identity{flex:1 1 100%}.portfolio-position-invested{margin-left:0;text-align:left}}
+
+/* Portfolio add form: prevent grid children from expanding beyond the panel */
+.portfolio-position-form{width:100%;max-width:100%;min-width:0;overflow:visible}
+.portfolio-position-form .portfolio-form-grid{display:grid;width:100%;max-width:100%;min-width:0;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px}
+.portfolio-position-form .portfolio-form-grid>*{min-width:0;max-width:100%}
+.portfolio-position-form .portfolio-field,.portfolio-position-form .ticker-search-field{width:100%;max-width:100%;min-width:0}
+.portfolio-position-form .portfolio-field input{display:block;width:100%;max-width:100%;min-width:0}
+.portfolio-position-form .portfolio-span-all{grid-column:1/-1}
+.portfolio-position-form>.portfolio-primary{margin-top:13px}
+.portfolio-edit-backdrop{z-index:1100}
+.portfolio-edit-modal{display:grid;gap:15px;width:min(560px,calc(100vw - 32px));max-height:min(88vh,820px);max-height:min(88dvh,820px);overflow-y:auto;overscroll-behavior:contain;padding:21px;border:1px solid #37556d;border-radius:14px;background:#101b27;box-shadow:0 22px 70px rgba(0,0,0,.55)}
+.portfolio-edit-modal .portfolio-modal-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.portfolio-edit-modal .portfolio-modal-heading h3{margin:6px 0;color:#edf4fa;font-size:17px}
+.portfolio-edit-modal .portfolio-modal-heading p{margin:0;color:#91a3b6;font-size:10px;line-height:1.5}
+.portfolio-edit-modal-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.portfolio-edit-modal-fields>*{min-width:0;max-width:100%}
+.portfolio-edit-modal-fields .portfolio-field{width:100%;min-width:0}
+.portfolio-edit-modal-fields .portfolio-span-all{grid-column:1/-1}
+.portfolio-edit-modal .portfolio-form-hint{margin:0;padding:10px 11px;border:1px solid #293c4f;border-radius:8px;background:#0c1722}
+.portfolio-edit-error{margin:0;padding:9px 10px;border:1px solid #75404a;border-radius:7px;background:#321c22}
+.portfolio-edit-modal-actions{justify-content:flex-end;flex-wrap:wrap;margin-top:0}
+@media(max-width:650px){
+  .portfolio-position-form .portfolio-form-grid{grid-template-columns:minmax(0,1fr)}
+  .portfolio-position-form .portfolio-span-all{grid-column:auto}
+  .portfolio-edit-backdrop{align-items:center;padding:12px}
+  .portfolio-edit-modal{width:100%;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);padding:16px;gap:12px}
+  .portfolio-edit-modal-fields{grid-template-columns:minmax(0,1fr);gap:10px}
+  .portfolio-edit-modal-fields .portfolio-span-all{grid-column:auto}
+  .portfolio-edit-modal-actions{display:grid;grid-template-columns:1fr 1fr}
+  .portfolio-edit-modal-actions button{width:100%}
+}
