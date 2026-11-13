@@ -615,7 +615,7 @@ export default function PortfolioManager() {
       </div>
 
       {filteredPositions.length ? <div className="portfolio-position-list">
-        {filteredPositions.map((item) => {}
+        {filteredPositions.map((item) => {
           const invested = totalInvested(item);
           const isActive = item.exitStatus === "active";
           const remainingBudget = Math.max(0, plan.perStockAmount - invested);
