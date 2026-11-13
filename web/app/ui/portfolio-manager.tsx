@@ -15,17 +15,15 @@ type Position = {
 };
 type PositionDraft = { ticker: string; note: string; firstBuyAmount: string };
 type PositionEditDraft = { ticker: string; note: string; totalInvestedAmount: string };
-type PortfolioGroup = "all" | "waiting" | "buy1" | "buy2" | "sell1" | "sell2" | "sell3" | "stopped";
+type PortfolioGroup = "all" | "buy1" | "buy2" | "sell1" | "sell2" | "sell3";
 
 const PORTFOLIO_GROUPS: { id: PortfolioGroup; label: string }[] = [
   { id: "all", label: "전체" },
-  { id: "waiting", label: "매수 대기" },
   { id: "buy1", label: "1차 매수" },
   { id: "buy2", label: "2차 매수" },
   { id: "sell1", label: "1차 매도" },
   { id: "sell2", label: "2차 매도" },
-  { id: "sell3", label: "3차 매도 완료" },
-  { id: "stopped", label: "손절 종료" },
+  { id: "sell3", label: "3차 매도" },
 ];
 type BuyStageEditor = { positionId: string; stage: 1 | 2 };
 type CalculatorInputs = {
@@ -247,17 +245,15 @@ export default function PortfolioManager() {
 
   const groupCounts = useMemo(() => {
     const counts: Record<PortfolioGroup, number> = {
-      all: positions.length, waiting: 0, buy1: 0, buy2: 0,
-      sell1: 0, sell2: 0, sell3: 0, stopped: 0,
+      all: positions.length, buy1: 0, buy2: 0, sell1: 0, sell2: 0, sell3: 0,
     };
     positions.forEach((item) => {
-      if (item.exitStatus === "stopped") { counts.stopped += 1; return; }
+      if (item.exitStatus === "stopped") return;
       if (item.exitStatus === "completed" || item.sellStage >= 3) { counts.sell3 += 1; return; }
       if (item.sellStage === 2) { counts.sell2 += 1; return; }
       if (item.sellStage === 1) { counts.sell1 += 1; return; }
       if (item.buyStage >= 2) { counts.buy2 += 1; return; }
       if (item.buyStage === 1) { counts.buy1 += 1; return; }
-      counts.waiting += 1;
     });
     return counts;
   }, [positions]);
@@ -265,14 +261,12 @@ export default function PortfolioManager() {
   const filteredPositions = useMemo(() => {
     if (selectedGroup === "all") return positions;
     return positions.filter((item) => {
-      if (selectedGroup === "stopped") return item.exitStatus === "stopped";
       if (selectedGroup === "sell3") return item.exitStatus === "completed" || item.sellStage >= 3;
       if (item.exitStatus !== "active") return false;
       if (selectedGroup === "sell2") return item.sellStage === 2;
       if (selectedGroup === "sell1") return item.sellStage === 1;
       if (selectedGroup === "buy2") return item.buyStage >= 2 && item.sellStage === 0;
       if (selectedGroup === "buy1") return item.buyStage === 1 && item.sellStage === 0;
-      if (selectedGroup === "waiting") return item.buyStage === 0;
       return false;
     });
   }, [positions, selectedGroup]);
