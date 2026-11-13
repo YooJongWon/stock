@@ -354,3 +354,24 @@
   .portfolio-edit-modal-actions{display:grid;grid-template-columns:1fr 1fr}
   .portfolio-edit-modal-actions button{width:100%}
 }
+
+/* Portfolio stage grouping and quick filters */
+.portfolio-group-filter{display:grid;gap:11px;margin:17px 0 14px;padding:13px 14px;border:1px solid #263747;border-radius:10px;background:#0a131c;min-width:0}
+.portfolio-group-filter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.portfolio-group-filter-heading>div{display:grid;gap:4px;min-width:0}
+.portfolio-group-filter-heading strong{color:#e4edf5;font-size:11px}
+.portfolio-group-filter-heading small,.portfolio-group-filter-heading>span{color:#8394a7;font-size:9px}
+.portfolio-group-filter-heading>span{white-space:nowrap}
+.portfolio-group-filter-tabs{display:flex;flex-wrap:wrap;gap:7px;min-width:0}
+.portfolio-group-filter-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:7px 10px;border:1px solid #304152;border-radius:7px;background:#111c28;color:#aab8c7;font:600 10px "Noto Sans KR",sans-serif;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.portfolio-group-filter-tabs button:hover{border-color:#50728a;color:#e1edf7}
+.portfolio-group-filter-tabs button.active{border-color:#397a6b;background:#173c35;color:#c4f2dc;box-shadow:inset 0 0 0 1px rgba(96,224,179,.08)}
+.portfolio-group-filter-tabs button b{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:5px;background:#223244;color:#c2d0de;font:700 9px "DM Mono",monospace}
+.portfolio-group-filter-tabs button.active b{background:#28584c;color:#d4ffeb}
+.portfolio-empty-reset{display:block;width:max-content;margin:12px auto 0;padding:7px 10px;border:1px solid #34495b;border-radius:7px;background:#132231;color:#bcd3e5;font:10px "Noto Sans KR",sans-serif;cursor:pointer}
+@media(max-width:650px){
+  .portfolio-group-filter{padding:11px;margin:13px 0}
+  .portfolio-group-filter-heading{align-items:flex-start;flex-direction:column;gap:5px}
+  .portfolio-group-filter-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;padding:1px 1px 6px;scrollbar-width:thin}
+  .portfolio-group-filter-tabs button{flex:0 0 auto;min-height:36px}
+}
