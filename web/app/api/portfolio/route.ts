@@ -4,6 +4,19 @@ import { isValidPortfolioSession, PORTFOLIO_COOKIE_NAME } from "@/lib/portfolio-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type PositionSnapshot = {
+  firstBuyAmount: number;
+  secondBuyAmount: number;
+  legacyInvestedAmount: number;
+  buyStage: number;
+  sellStage: number;
+  exitStatus: "active" | "stopped" | "completed";
+};
+type PositionUndoEntry = {
+  action: string;
+  before: PositionSnapshot;
+  createdAt: string;
+};
 type Position = {
   id: string;
   ticker: string;
@@ -14,6 +27,7 @@ type Position = {
   buyStage: number;
   sellStage: number;
   exitStatus: "active" | "stopped" | "completed";
+  undoHistory: PositionUndoEntry[];
 };
 
 const CALCULATOR_KEYS = [
@@ -68,6 +82,37 @@ async function readPortfolio() {
   };
 }
 
+function validUndoHistory(value: unknown): PositionUndoEntry[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 10) return null;
+  const history: PositionUndoEntry[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") return null;
+    const row = entry as Record<string, unknown>;
+    const before = row.before as Record<string, unknown> | null;
+    if (!before || typeof before !== "object") return null;
+    const firstBuyAmount = Number(before.firstBuyAmount);
+    const secondBuyAmount = Number(before.secondBuyAmount);
+    const legacyInvestedAmount = Number(before.legacyInvestedAmount);
+    const buyStage = Number(before.buyStage);
+    const sellStage = Number(before.sellStage);
+    const exitStatus = before.exitStatus;
+    if (typeof row.action !== "string" || row.action.length < 1 || row.action.length > 40 ||
+        !Number.isFinite(firstBuyAmount) || firstBuyAmount < 0 ||
+        !Number.isFinite(secondBuyAmount) || secondBuyAmount < 0 ||
+        !Number.isFinite(legacyInvestedAmount) || legacyInvestedAmount < 0 ||
+        !Number.isInteger(buyStage) || buyStage < 0 || buyStage > 2 ||
+        !Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3 ||
+        !["active", "stopped", "completed"].includes(String(exitStatus))) return null;
+    history.push({
+      action: row.action,
+      before: { firstBuyAmount, secondBuyAmount, legacyInvestedAmount, buyStage, sellStage, exitStatus: exitStatus as PositionSnapshot["exitStatus"] },
+      createdAt: typeof row.createdAt === "string" ? row.createdAt.slice(0, 40) : "",
+    });
+  }
+  return history;
+}
+
 function normalizeStoredPositions(value: unknown): Position[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
@@ -96,6 +141,7 @@ function normalizeStoredPositions(value: unknown): Position[] {
     const exitStatus = row.exitStatus === "stopped" || row.exitStatus === "completed"
       ? row.exitStatus
       : sellStage === 3 ? "completed" : "active";
+    const undoHistory = validUndoHistory(row.undoHistory) || [];
 
     return [{
       id,
@@ -107,6 +153,7 @@ function normalizeStoredPositions(value: unknown): Position[] {
       buyStage,
       sellStage,
       exitStatus,
+      undoHistory,
     }];
   });
 }
@@ -125,7 +172,9 @@ function validPositions(value: unknown): Position[] | null {
     const buyStage = Number(row.buyStage);
     const sellStage = Number(row.sellStage);
     const exitStatus = row.exitStatus;
+    const undoHistory = validUndoHistory(row.undoHistory);
     if (!id || id.length > 80 || !/^[A-Z0-9.-]{1,12}$/.test(ticker) ||
+        !undoHistory ||
         !Number.isFinite(firstBuyAmount) || firstBuyAmount < 0 ||
         !Number.isFinite(secondBuyAmount) || secondBuyAmount < 0 ||
         !Number.isFinite(legacyInvestedAmount) || legacyInvestedAmount < 0 ||
@@ -146,6 +195,7 @@ function validPositions(value: unknown): Position[] | null {
       buyStage,
       sellStage,
       exitStatus,
+      undoHistory,
     });
   }
   return normalized;
