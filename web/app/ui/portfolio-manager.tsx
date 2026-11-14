@@ -2,6 +2,19 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+type PositionSnapshot = {
+  firstBuyAmount: number;
+  secondBuyAmount: number;
+  legacyInvestedAmount: number;
+  buyStage: number;
+  sellStage: number;
+  exitStatus: "active" | "stopped" | "completed";
+};
+type PositionUndoEntry = {
+  action: string;
+  before: PositionSnapshot;
+  createdAt: string;
+};
 type Position = {
   id: string;
   ticker: string;
@@ -12,6 +25,7 @@ type Position = {
   buyStage: number;
   sellStage: number;
   exitStatus: "active" | "stopped" | "completed";
+  undoHistory: PositionUndoEntry[];
 };
 type PositionDraft = { ticker: string; note: string; firstBuyAmount: string };
 type PositionEditDraft = { ticker: string; note: string; totalInvestedAmount: string };
@@ -47,6 +61,24 @@ const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
 const EMPTY_DRAFT: PositionDraft = { ticker: "", note: "", firstBuyAmount: "" };
 const totalInvested = (position: Position) =>
   position.firstBuyAmount + position.secondBuyAmount + position.legacyInvestedAmount;
+
+function snapshotPosition(position: Position): PositionSnapshot {
+  return {
+    firstBuyAmount: position.firstBuyAmount,
+    secondBuyAmount: position.secondBuyAmount,
+    legacyInvestedAmount: position.legacyInvestedAmount,
+    buyStage: position.buyStage,
+    sellStage: position.sellStage,
+    exitStatus: position.exitStatus,
+  };
+}
+
+function addUndoEntry(position: Position, action: string): PositionUndoEntry[] {
+  return [
+    ...(Array.isArray(position.undoHistory) ? position.undoHistory : []),
+    { action, before: snapshotPosition(position), createdAt: new Date().toISOString() },
+  ].slice(-10);
+}
 
 function getPositionProgress(position: Position): { label: string; tone: "buy" | "sell" | "stopped" | "completed" | "pending" } {
   if (position.exitStatus === "stopped") return { label: "손절 종료", tone: "stopped" };
@@ -229,6 +261,7 @@ export default function PortfolioManager() {
         buyStage: Number.isInteger(item.buyStage) && item.buyStage >= 0 && item.buyStage <= 2 ? item.buyStage : 0,
         sellStage: Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : 0,
         exitStatus: item.exitStatus === "stopped" || item.exitStatus === "completed" ? item.exitStatus : "active",
+        undoHistory: Array.isArray(item.undoHistory) ? item.undoHistory.slice(-10) : [],
       })) : []);
       setAuthenticated(true);
       setDirty(false);
@@ -334,6 +367,7 @@ export default function PortfolioManager() {
       buyStage: 1,
       sellStage: 0,
       exitStatus: "active",
+      undoHistory: [],
     };
     setPositions((old) => [...old, next]);
     setDraft(EMPTY_DRAFT);
@@ -452,9 +486,10 @@ export default function PortfolioManager() {
     }
     setPositions((old) => old.map((item) => {
       if (item.id !== positionId) return item;
+      const undoHistory = addUndoEntry(item, `${stage}차 매수`);
       return stage === 1
-        ? { ...item, firstBuyAmount: amount, buyStage: 1 }
-        : { ...item, secondBuyAmount: amount, buyStage: 2 };
+        ? { ...item, undoHistory, firstBuyAmount: amount, buyStage: 1 }
+        : { ...item, undoHistory, secondBuyAmount: amount, buyStage: 2 };
     }));
     setDirty(true);
     setBuyStageEditor(null);
@@ -470,6 +505,7 @@ export default function PortfolioManager() {
     if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?`)) return;
     setPositions((old) => old.map((item) => item.id === position.id ? {
       ...item,
+      undoHistory: addUndoEntry(item, `${nextStage}차 매도`),
       sellStage: nextStage,
       exitStatus: nextStage === 3 ? "completed" : "active",
     } : item));
@@ -482,9 +518,31 @@ export default function PortfolioManager() {
   const stopLossPosition = (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 1) return;
     if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요?`)) return;
-    setPositions((old) => old.map((item) => item.id === position.id ? { ...item, exitStatus: "stopped" } : item));
+    setPositions((old) => old.map((item) => item.id === position.id ? {
+      ...item,
+      undoHistory: addUndoEntry(item, "손절 종료"),
+      exitStatus: "stopped",
+    } : item));
     setDirty(true);
     setMessage(`${position.ticker} 손절 종료로 표시했습니다. 저장 버튼을 눌러 주세요.`);
+  };
+
+  const undoLastProgress = (position: Position) => {
+    const last = position.undoHistory[position.undoHistory.length - 1];
+    if (!last) return;
+    if (!window.confirm(`${position.ticker}의 ‘${last.action}’ 기록을 되돌릴까요? 매수금액과 진행 상태가 직전 값으로 복구됩니다.`)) return;
+    setPositions((old) => old.map((item) => {
+      if (item.id !== position.id) return item;
+      const latest = item.undoHistory[item.undoHistory.length - 1];
+      if (!latest) return item;
+      return {
+        ...item,
+        ...latest.before,
+        undoHistory: item.undoHistory.slice(0, -1),
+      };
+    }));
+    setDirty(true);
+    setMessage(`${position.ticker}의 ${last.action} 기록을 되돌렸습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
   };
 
   const deletePosition = (id: string) => {
@@ -687,7 +745,13 @@ export default function PortfolioManager() {
             </div>
             <footer className="portfolio-position-card-footer">
               <span>{item.buyStage >= 2 ? "2차 매수 완료 · 익절 단계 진행 가능" : item.buyStage === 1 ? "2차 매수 대기 · 계산기 배정액 확인" : "1차 매수 전"}</span>
-              <div className="portfolio-row-actions">
+              <div className="portfolio-row-actions portfolio-card-actions">
+                {item.undoHistory.length > 0 && <button
+                  type="button"
+                  className="portfolio-undo-button"
+                  onClick={() => undoLastProgress(item)}
+                  title={`직전 변경: ${item.undoHistory[item.undoHistory.length - 1].action}`}
+                >↶ {item.undoHistory[item.undoHistory.length - 1].action} 되돌리기</button>}
                 <button type="button" onClick={() => startEdit(item)}>종목 수정</button>
                 <button type="button" onClick={() => deletePosition(item.id)}>삭제</button>
               </div>
