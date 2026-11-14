@@ -419,3 +419,9 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
   .portfolio-page .portfolio-position-invested strong{font-size:18px}
   .portfolio-page .portfolio-group-filter-tabs button{font-size:12px}
 }
+
+/* Per-position undo action */
+.portfolio-card-actions{align-items:center;flex-wrap:wrap}
+.portfolio-undo-button{border:1px solid #765332!important;border-radius:7px!important;background:#2b2116!important;color:#f2c78e!important;padding:7px 10px!important;font:600 10px system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif!important;cursor:pointer}
+.portfolio-undo-button:hover{border-color:#d29a55!important;background:#3a2a18!important;color:#ffe1b5!important}
+@media(max-width:650px){.portfolio-card-actions{width:100%}.portfolio-undo-button{width:100%;min-height:36px}}
