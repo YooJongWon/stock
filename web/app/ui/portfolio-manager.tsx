@@ -529,21 +529,41 @@ export default function PortfolioManager() {
 
   const undoLastProgress = (position: Position) => {
     const last = position.undoHistory[position.undoHistory.length - 1];
-    if (!last) return;
-    if (!window.confirm(`${position.ticker}의 ‘${last.action}’ 기록을 되돌릴까요? 매수금액과 진행 상태가 직전 값으로 복구됩니다.`)) return;
+    const canFallbackUndo = position.sellStage > 0 || position.exitStatus === "stopped";
+    if (!last && !canFallbackUndo) return;
+
+    const actionLabel = last?.action ?? (position.sellStage > 0
+      ? `${position.sellStage}차 매도 완료`
+      : "손절 종료");
+    const fallbackDescription = last
+      ? "직전 상태와 매수금액까지 복원됩니다."
+      : position.sellStage > 0
+        ? "이전 저장 이력이 없어 매도 단계를 한 단계 낮추고 매도 전 상태로 돌립니다."
+        : "이전 저장 이력이 없어 손절 종료 표시만 해제합니다.";
+
+    if (!window.confirm(`${position.ticker}의 ‘${actionLabel}’ 기록을 되돌릴까요? ${fallbackDescription}`)) return;
+
     setPositions((old) => old.map((item) => {
       if (item.id !== position.id) return item;
       const latest = item.undoHistory[item.undoHistory.length - 1];
-      if (!latest) return item;
-      return {
-        ...item,
-        ...latest.before,
-        undoHistory: item.undoHistory.slice(0, -1),
-      };
+      if (latest) {
+        return {
+          ...item,
+          ...latest.before,
+          undoHistory: item.undoHistory.slice(0, -1),
+        };
+      }
+      if (item.sellStage > 0) {
+        return { ...item, sellStage: item.sellStage - 1, exitStatus: "active" };
+      }
+      if (item.exitStatus === "stopped") {
+        return { ...item, exitStatus: "active" };
+      }
+      return item;
     }));
     setDirty(true);
     setSelectedGroup("all");
-    setMessage(`${position.ticker}의 ${last.action} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
+    setMessage(`${position.ticker}의 ${actionLabel} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
   };
 
   const deletePosition = (id: string) => {
@@ -747,12 +767,16 @@ export default function PortfolioManager() {
             <footer className="portfolio-position-card-footer">
               <span>{item.buyStage >= 2 ? "2차 매수 완료 · 익절 단계 진행 가능" : item.buyStage === 1 ? "2차 매수 대기 · 계산기 배정액 확인" : "1차 매수 전"}</span>
               <div className="portfolio-row-actions portfolio-card-actions">
-                {item.undoHistory.length > 0 && <button
+                {(item.undoHistory.length > 0 || item.sellStage > 0 || item.exitStatus === "stopped") && <button
                   type="button"
                   className="portfolio-undo-button"
                   onClick={() => undoLastProgress(item)}
-                  title={`직전 변경: ${item.undoHistory[item.undoHistory.length - 1].action}`}
-                >↶ {item.undoHistory[item.undoHistory.length - 1].action} 되돌리기</button>}
+                  title={item.undoHistory.length > 0
+                    ? `직전 변경: ${item.undoHistory[item.undoHistory.length - 1].action}`
+                    : "이전 이력은 없지만 현재 매도 단계를 한 단계 되돌립니다."}
+                >↶ {item.undoHistory.length > 0
+                  ? `${item.undoHistory[item.undoHistory.length - 1].action} 되돌리기`
+                  : item.sellStage > 0 ? `${item.sellStage}차 매도 되돌리기` : "손절 종료 되돌리기"}</button>}
                 <button type="button" onClick={() => startEdit(item)}>종목 수정</button>
                 <button type="button" onClick={() => deletePosition(item.id)}>삭제</button>
               </div>
