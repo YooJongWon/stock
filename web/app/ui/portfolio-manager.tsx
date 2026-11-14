@@ -542,7 +542,8 @@ export default function PortfolioManager() {
       };
     }));
     setDirty(true);
-    setMessage(`${position.ticker}의 ${last.action} 기록을 되돌렸습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
+    setSelectedGroup("all");
+    setMessage(`${position.ticker}의 ${last.action} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
   };
 
   const deletePosition = (id: string) => {
