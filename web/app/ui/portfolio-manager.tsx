@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import ConfirmDialog, { type Confirmation } from "./confirm-dialog";
+
 type PositionSnapshot = {
   firstBuyAmount: number;
   secondBuyAmount: number;
@@ -218,6 +220,23 @@ function TickerSearchField({ value, onChange }: { value: string; onChange: (valu
 }
 
 export default function PortfolioManager({ active = true }: { active?: boolean }) {
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const confirmationResolve = useRef<((confirmed: boolean) => void) | null>(null);
+  const requestConfirmation = (options: Confirmation) => {
+    if (confirmationResolve.current) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      confirmationResolve.current = resolve;
+      setConfirmation(options);
+    });
+  };
+  const closeConfirmation = (confirmed: boolean) => {
+    const resolve = confirmationResolve.current;
+    confirmationResolve.current = null;
+    setConfirmation(null);
+    resolve?.(confirmed);
+  };
+  useEffect(() => () => { confirmationResolve.current?.(false); }, []);
+
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
@@ -559,11 +578,16 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
     setMessage(`${stage}차 매수 금액이 반영됐습니다.`);
   };
 
-  const completeSellStage = (position: Position) => {
+  const completeSellStage = async (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 2 || position.sellStage >= 3) return;
     const nextStage = position.sellStage + 1;
     const target = plan.sellTargets[nextStage - 1];
-    if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?${nextStage === 3 ? " 완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다." : ""}`)) return;
+    if (!await requestConfirmation({
+      title: `${position.ticker} · ${target.label}`,
+      description: `목표 수익률 +${target.returnPct}% · 매도 비중 ${target.sellPct}%\n실제 매도 체결을 기록할까요?${nextStage === 3 ? "\n완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다." : ""}`,
+      confirmLabel: nextStage === 3 ? "매도 완료 · 종목 삭제" : "매도 완료 기록",
+      danger: nextStage === 3,
+    })) return;
     if (nextStage === 3) {
       updatePositions((old) => old.filter((item) => item.id !== position.id));
       setMessage(`${position.ticker} 3차 매도를 완료하고 종목을 삭제했습니다.`);
@@ -577,14 +601,19 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
     setMessage(`${position.ticker} ${nextStage}차 매도를 기록했습니다.`);
   };
 
-  const stopLossPosition = (position: Position) => {
+  const stopLossPosition = async (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 1) return;
-    if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요? 완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다.`)) return;
+    if (!await requestConfirmation({
+      title: `${position.ticker} · 손절 완료`,
+      description: `손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요?\n완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다.`,
+      confirmLabel: "손절 완료 · 종목 삭제",
+      danger: true,
+    })) return;
     updatePositions((old) => old.filter((item) => item.id !== position.id));
     setMessage(`${position.ticker} 손절을 완료하고 종목을 삭제했습니다.`);
   };
 
-  const undoLastProgress = (position: Position) => {
+  const undoLastProgress = async (position: Position) => {
     const last = position.undoHistory[position.undoHistory.length - 1];
     const canFallbackUndo = position.sellStage > 0 || position.exitStatus === "stopped";
     if (!last && !canFallbackUndo) return;
@@ -598,7 +627,11 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
         ? "이전 저장 이력이 없어 매도 단계를 한 단계 낮추고 매도 전 상태로 돌립니다."
         : "이전 저장 이력이 없어 손절 종료 표시만 해제합니다.";
 
-    if (!window.confirm(`${position.ticker}의 ‘${actionLabel}’ 기록을 되돌릴까요? ${fallbackDescription}`)) return;
+    if (!await requestConfirmation({
+      title: `${position.ticker} · 기록 되돌리기`,
+      description: `‘${actionLabel}’ 기록을 되돌릴까요?\n${fallbackDescription}`,
+      confirmLabel: "기록 되돌리기",
+    })) return;
 
     updatePositions((old) => old.map((item) => {
       if (item.id !== position.id) return item;
@@ -622,8 +655,15 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
     setMessage(`${position.ticker}의 ${actionLabel} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다.`);
   };
 
-  const deletePosition = (id: string) => {
-    if (!window.confirm("이 보유 종목을 삭제할까요?")) return;
+  const deletePosition = async (id: string) => {
+    const position = positionsRef.current.find((item) => item.id === id);
+    if (!position) return;
+    if (!await requestConfirmation({
+      title: `${position.ticker} · 종목 삭제`,
+      description: "보유 목록에서 이 종목을 삭제할까요?\n삭제하면 매수·매도 기록도 함께 사라지며 되돌릴 수 없습니다.",
+      confirmLabel: "종목 삭제",
+      danger: true,
+    })) return;
     updatePositions((old) => old.filter((item) => item.id !== id));
     if (editingId === id) closeEdit();
     if (buyStageEditor?.positionId === id) setBuyStageEditor(null);
@@ -650,6 +690,7 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
   </section>;
 
   return <section className="portfolio-page">
+    {confirmation && <ConfirmDialog {...confirmation} onClose={closeConfirmation} />}
     <div className="portfolio-heading-row">
       <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>스윙 투자 계산기의 종목당 배정금액을 기준으로 분할매수·매도 진행 상황을 관리합니다.</p></div>
       <button className="portfolio-logout" type="button" disabled={saving || !!saveError} onClick={logout}>로그아웃</button>
