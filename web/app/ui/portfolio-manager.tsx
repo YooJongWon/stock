@@ -563,27 +563,25 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
     if (position.exitStatus !== "active" || position.buyStage < 2 || position.sellStage >= 3) return;
     const nextStage = position.sellStage + 1;
     const target = plan.sellTargets[nextStage - 1];
-    if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?`)) return;
+    if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?${nextStage === 3 ? " 완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다." : ""}`)) return;
+    if (nextStage === 3) {
+      updatePositions((old) => old.filter((item) => item.id !== position.id));
+      setMessage(`${position.ticker} 3차 매도를 완료하고 종목을 삭제했습니다.`);
+      return;
+    }
     updatePositions((old) => old.map((item) => item.id === position.id ? {
       ...item,
       undoHistory: addUndoEntry(item, `${nextStage}차 매도`),
       sellStage: nextStage,
-      exitStatus: nextStage === 3 ? "completed" : "active",
     } : item));
-    setMessage(nextStage === 3
-      ? `${position.ticker} 분할매도 완료로 표시했습니다.`
-      : `${position.ticker} ${nextStage}차 매도를 기록했습니다.`);
+    setMessage(`${position.ticker} ${nextStage}차 매도를 기록했습니다.`);
   };
 
   const stopLossPosition = (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 1) return;
-    if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요?`)) return;
-    updatePositions((old) => old.map((item) => item.id === position.id ? {
-      ...item,
-      undoHistory: addUndoEntry(item, "손절 종료"),
-      exitStatus: "stopped",
-    } : item));
-    setMessage(`${position.ticker} 손절 종료로 표시했습니다.`);
+    if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요? 완료하면 종목이 목록에서 삭제되며 되돌릴 수 없습니다.`)) return;
+    updatePositions((old) => old.filter((item) => item.id !== position.id));
+    setMessage(`${position.ticker} 손절을 완료하고 종목을 삭제했습니다.`);
   };
 
   const undoLastProgress = (position: Position) => {
