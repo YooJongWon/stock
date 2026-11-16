@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:strategy": "node --test tests/swing-plan.test.cjs"
   },
   "dependencies": {
     "next": "16.4.0",
