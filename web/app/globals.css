@@ -460,3 +460,6 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .calculator-advanced summary:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
 .calculator-card{min-width:0}
 @media(max-width:600px){.calculator-section-title{align-items:flex-start;flex-wrap:wrap}.calculator-save-status{white-space:normal}.calculator-applied-plan{padding:12px}}
+.calculator-page .strategy-card .allocation-table{min-width:0}
+.calculator-page .strategy-card .allocation-table th,.calculator-page .strategy-card .allocation-table td{padding:12px 8px}
+.calculator-page .allocation-card .allocation-table td:last-child{white-space:normal;min-width:220px;line-height:1.7}

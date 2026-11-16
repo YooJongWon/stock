@@ -32,7 +32,7 @@ type Position = {
 
 const CALCULATOR_KEYS = [
   "total", "stockCount", "cashRatio", "firstBuyRatio", "stopLossRatio",
-  "firstTargetRatio", "finalTargetRatio", "firstEntryPrice", "secondEntryRisePct",
+  "firstTargetRatio", "finalTargetRatio", "secondEntryRisePct",
 ] as const;
 
 function supabaseConfig() {
