@@ -219,7 +219,7 @@ function TickerSearchField({ value, onChange }: { value: string; onChange: (valu
   </label>;
 }
 
-export default function PortfolioManager({ active = true }: { active?: boolean }) {
+export default function PortfolioManager({ active = true, calculatorSettings }: { active?: boolean; calculatorSettings?: Partial<CalculatorInputs> | null }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationResolve = useRef<((confirmed: boolean) => void) | null>(null);
   const requestConfirmation = (options: Confirmation) => {
@@ -355,7 +355,7 @@ export default function PortfolioManager({ active = true }: { active?: boolean }
     if (active && !saveRunning.current && !pendingSave.current) void load();
   }, [active, load]);
 
-  const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
+  const plan = useMemo(() => buildCalculatorPlan(calculatorSettings ?? calculatorInputs), [calculatorSettings, calculatorInputs]);
 
   const groupCounts = useMemo(() => {
     const counts: Record<PortfolioGroup, number> = {

@@ -444,3 +444,19 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .confirmation-actions button:hover{filter:brightness(1.1)}
 .confirmation-dialog button:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
 @media(max-width:600px){.confirmation-content{padding:20px}.confirmation-heading h2{font-size:18px}.confirmation-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}.confirmation-actions button{width:100%;min-width:0}}
+
+/* Simple calculator entry, optional strategy controls and price simulation. */
+.calculator-basic-input .calculator-field{grid-template-columns:minmax(0,1fr) minmax(120px,1.3fr);font-size:13px}
+.calculator-basic-input input{font-size:17px;padding:13px 0}
+.calculator-applied-plan{display:grid;gap:7px;margin:18px 0;padding:14px;border:1px solid #294c43;border-radius:9px;background:#10221d;color:#aebfba;font-size:11px;line-height:1.6}
+.calculator-applied-plan strong{color:var(--mint);font-size:12px}
+.calculator-advanced{margin-top:14px;border-top:1px solid var(--line);padding-top:14px;min-width:0}
+.calculator-advanced summary{color:#d4e2ed;cursor:pointer;font-size:12px;font-weight:600;line-height:1.7}
+.calculator-advanced summary span{display:block;margin:4px 0 0 14px;color:var(--muted);font-size:10px;font-weight:400}
+.calculator-advanced .calculator-inputs{margin-top:16px}
+.calculator-advanced .calculator-field{grid-template-columns:minmax(0,1fr) minmax(100px,1fr)}
+.calculator-advanced .calculator-reset-button{margin-top:12px;min-height:36px}
+.calculator-validation{margin-top:14px;color:var(--amber);font-size:11px;line-height:1.7}
+.calculator-advanced summary:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+.calculator-card{min-width:0}
+@media(max-width:600px){.calculator-section-title{align-items:flex-start;flex-wrap:wrap}.calculator-save-status{white-space:normal}.calculator-applied-plan{padding:12px}}
