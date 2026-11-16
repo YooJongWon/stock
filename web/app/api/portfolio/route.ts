@@ -1,3 +1,4 @@
+import { normalizeExitSettings, normalizeSellProgress } from "@/lib/swing-plan";
 import { NextRequest, NextResponse } from "next/server";
 import { isValidPortfolioSession, PORTFOLIO_COOKIE_NAME } from "@/lib/portfolio-auth";
 
@@ -10,6 +11,8 @@ type PositionSnapshot = {
   legacyInvestedAmount: number;
   buyStage: number;
   sellStage: number;
+  exitPlanVersion?: string;
+  legacySoldPct?: number;
   exitStatus: "active" | "stopped" | "completed";
 };
 type PositionUndoEntry = {
@@ -26,13 +29,15 @@ type Position = {
   legacyInvestedAmount: number;
   buyStage: number;
   sellStage: number;
+  exitPlanVersion?: string;
+  legacySoldPct?: number;
   exitStatus: "active" | "stopped" | "completed";
   undoHistory: PositionUndoEntry[];
 };
 
 const CALCULATOR_KEYS = [
   "total", "stockCount", "cashRatio", "firstBuyRatio", "stopLossRatio",
-  "firstTargetRatio", "finalTargetRatio", "secondEntryRisePct",
+  "firstTargetRatio", "finalTargetRatio", "secondEntryRisePct", "exitPlanVersion",
 ] as const;
 
 function supabaseConfig() {
@@ -77,7 +82,7 @@ async function readPortfolio() {
   const row = rows[0];
   return {
     cashBalance: row ? Number(row.cash_balance) || 0 : 0,
-    calculatorInputs: row?.calculator_settings || null,
+    calculatorInputs: row?.calculator_settings ? normalizeExitSettings(row.calculator_settings) : null,
     positions: normalizeStoredPositions(row?.positions),
   };
 }
@@ -106,7 +111,7 @@ function validUndoHistory(value: unknown): PositionUndoEntry[] | null {
         !["active", "stopped", "completed"].includes(String(exitStatus))) return null;
     history.push({
       action: row.action,
-      before: { firstBuyAmount, secondBuyAmount, legacyInvestedAmount, buyStage, sellStage, exitStatus: exitStatus as PositionSnapshot["exitStatus"] },
+      before: { firstBuyAmount, secondBuyAmount, legacyInvestedAmount, buyStage, ...normalizeSellProgress({ sellStage, exitStatus: String(exitStatus), exitPlanVersion: typeof before.exitPlanVersion === "string" ? before.exitPlanVersion : undefined, legacySoldPct: Number(before.legacySoldPct) || 0 }), exitStatus: exitStatus as PositionSnapshot["exitStatus"] },
       createdAt: typeof row.createdAt === "string" ? row.createdAt.slice(0, 40) : "",
     });
   }
@@ -151,7 +156,7 @@ function normalizeStoredPositions(value: unknown): Position[] {
       secondBuyAmount,
       legacyInvestedAmount,
       buyStage,
-      sellStage,
+      ...normalizeSellProgress({ sellStage, exitStatus: String(exitStatus), exitPlanVersion: typeof row.exitPlanVersion === "string" ? row.exitPlanVersion : undefined, legacySoldPct: Number(row.legacySoldPct) || 0 }),
       exitStatus,
       undoHistory,
     }];
@@ -173,6 +178,8 @@ function validPositions(value: unknown): Position[] | null {
     const sellStage = Number(row.sellStage);
     const exitStatus = row.exitStatus;
     const undoHistory = validUndoHistory(row.undoHistory);
+    if ((row.exitPlanVersion !== undefined && row.exitPlanVersion !== "2") ||
+        (row.exitPlanVersion === "2" && (sellStage > 2 || !Number.isFinite(Number(row.legacySoldPct ?? 0)) || ![0, 40, 70, 100].includes(Number(row.legacySoldPct ?? 0))))) return null;
     if (!id || id.length > 80 || !/^[A-Z0-9.-]{1,12}$/.test(ticker) ||
         !undoHistory ||
         !Number.isFinite(firstBuyAmount) || firstBuyAmount < 0 ||
@@ -181,8 +188,8 @@ function validPositions(value: unknown): Position[] | null {
         !Number.isInteger(buyStage) || buyStage < 0 || buyStage > 2 ||
         !Number.isInteger(sellStage) || sellStage < 0 || sellStage > 3 ||
         !["active", "stopped", "completed"].includes(String(exitStatus)) ||
-        (buyStage < 1 && (firstBuyAmount > 0 || secondBuyAmount > 0)) ||
-        (buyStage < 2 && (secondBuyAmount > 0 || sellStage > 0)) ||
+        (buyStage < 1 && (firstBuyAmount > 0 || secondBuyAmount > 0 || sellStage > 0)) ||
+        (buyStage < 2 && secondBuyAmount > 0) ||
         (exitStatus !== "active" && exitStatus !== "stopped" && exitStatus !== "completed")) return null;
 
     normalized.push({
@@ -193,7 +200,7 @@ function validPositions(value: unknown): Position[] | null {
       secondBuyAmount,
       legacyInvestedAmount,
       buyStage,
-      sellStage,
+      ...normalizeSellProgress({ sellStage, exitStatus: String(exitStatus), exitPlanVersion: typeof row.exitPlanVersion === "string" ? row.exitPlanVersion : undefined, legacySoldPct: Number(row.legacySoldPct) || 0 }),
       exitStatus,
       undoHistory,
     });
@@ -203,7 +210,7 @@ function validPositions(value: unknown): Position[] | null {
 
 function validCalculatorInputs(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const source = value as Record<string, unknown>;
+  const source = normalizeExitSettings(value as Record<string, unknown>);
   const normalized: Record<string, string> = {};
   for (const key of CALCULATOR_KEYS) {
     const entry = source[key];
