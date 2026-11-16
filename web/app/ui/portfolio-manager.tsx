@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type PositionSnapshot = {
   firstBuyAmount: number;
@@ -217,7 +217,7 @@ function TickerSearchField({ value, onChange }: { value: string; onChange: (valu
   </label>;
 }
 
-export default function PortfolioManager() {
+export default function PortfolioManager({ active = true }: { active?: boolean }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
@@ -232,8 +232,65 @@ export default function PortfolioManager() {
   const [buyStageEditor, setBuyStageEditor] = useState<BuyStageEditor | null>(null);
   const [buyAmountInput, setBuyAmountInput] = useState("");
   const [buyStageError, setBuyStageError] = useState("");
-  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [sessionExpired, setSessionExpired] = useState(false);
+  type PortfolioPatch = { cashBalance?: number; positions?: Position[] };
+  const pendingSave = useRef<PortfolioPatch | null>(null);
+  const saveRunning = useRef(false);
+  const positionsRef = useRef<Position[]>([]);
+
+  // Serialize writes and coalesce pending changes so older responses cannot
+  // overwrite a later action. Keep failed changes available for retry.
+  const queueSave = async (patch: PortfolioPatch) => {
+    pendingSave.current = { ...pendingSave.current, ...patch };
+    if (saveRunning.current) return;
+    saveRunning.current = true;
+    setSaving(true);
+    setSaveError("");
+    try {
+      while (pendingSave.current) {
+        const next = pendingSave.current;
+        pendingSave.current = null;
+        try {
+          const response = await fetch("/api/portfolio", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(next),
+          });
+          const payload = await response.json();
+          if (response.status === 401) {
+            setSessionExpired(true);
+            throw new Error("세션이 만료됐습니다. 다시 인증하면 변경사항을 자동 저장합니다.");
+          }
+          if (!response.ok) throw new Error(payload.error || "자동 저장에 실패했습니다.");
+        } catch (caught) {
+          pendingSave.current = Object.assign({}, next, pendingSave.current);
+          setSaveError(caught instanceof Error ? caught.message : "자동 저장에 실패했습니다.");
+          break;
+        }
+      }
+    } finally {
+      saveRunning.current = false;
+      setSaving(false);
+    }
+  };
+
+  const updatePositions = (update: (old: Position[]) => Position[]) => {
+    const next = update(positionsRef.current);
+    positionsRef.current = next;
+    setPositions(next);
+    void queueSave({ positions: next });
+  };
+
+  useEffect(() => {
+    const warnUnsaved = (event: BeforeUnloadEvent) => {
+      if (!saveRunning.current && !pendingSave.current) return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnUnsaved);
+    return () => window.removeEventListener("beforeunload", warnUnsaved);
+  }, []);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -251,7 +308,7 @@ export default function PortfolioManager() {
       const data = payload as PortfolioData;
       setCashBalance(String(data.cashBalance ?? 0));
       setCalculatorInputs({ ...DEFAULT_CALCULATOR_INPUTS, ...(data.calculatorInputs || {}) });
-      setPositions(Array.isArray(data.positions) ? data.positions.map((item) => ({
+      const loadedPositions: Position[] = Array.isArray(data.positions) ? data.positions.map((item) => ({
         id: item.id,
         ticker: item.ticker,
         note: item.note || "",
@@ -262,9 +319,10 @@ export default function PortfolioManager() {
         sellStage: Number.isInteger(item.sellStage) && item.sellStage >= 0 && item.sellStage <= 3 ? item.sellStage : 0,
         exitStatus: item.exitStatus === "stopped" || item.exitStatus === "completed" ? item.exitStatus : "active",
         undoHistory: Array.isArray(item.undoHistory) ? item.undoHistory.slice(-10) : [],
-      })) : []);
+      })) : [];
+      positionsRef.current = loadedPositions;
+      setPositions(loadedPositions);
       setAuthenticated(true);
-      setDirty(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "데이터를 불러오지 못했습니다.");
     } finally {
@@ -272,7 +330,11 @@ export default function PortfolioManager() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    // Preserve unsaved actions across dashboard tab changes. Refresh server data
+    // on return only when there are no local writes waiting to finish.
+    if (active && !saveRunning.current && !pendingSave.current) void load();
+  }, [active, load]);
 
   const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
 
@@ -328,7 +390,9 @@ export default function PortfolioManager() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "인증에 실패했습니다.");
       setPassword("");
-      await load();
+      setSessionExpired(false);
+      if (pendingSave.current) await queueSave({});
+      else await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "인증에 실패했습니다.");
     }
@@ -369,9 +433,8 @@ export default function PortfolioManager() {
       exitStatus: "active",
       undoHistory: [],
     };
-    setPositions((old) => [...old, next]);
+    updatePositions((old) => [...old, next]);
     setDraft(EMPTY_DRAFT);
-    setDirty(true);
     setError("");
     setMessage("종목과 1차 매수금액을 등록했습니다. 계산기 기준 2차 매수금액이 자동으로 계산됩니다.");
   };
@@ -454,11 +517,10 @@ export default function PortfolioManager() {
         buyStage: targetTotal > 0 ? 1 : 0,
       };
     }
-    setPositions((old) => old.map((item) => item.id === editingId ? adjusted : item));
+    updatePositions((old) => old.map((item) => item.id === editingId ? adjusted : item));
     setEditingId(null);
-    setDirty(true);
     setEditError("");
-    setMessage("총 매수금액을 수정했습니다. 차수별 금액에도 반영됐으니 변경사항 저장을 눌러 주세요.");
+    setMessage("총 매수금액을 수정했습니다. 차수별 금액에도 반영했습니다.");
   };
 
   const openBuyStageEditor = (position: Position, stage: 1 | 2) => {
@@ -484,18 +546,17 @@ export default function PortfolioManager() {
       setBuyStageError("현재 단계에서는 이 매수를 진행할 수 없습니다.");
       return;
     }
-    setPositions((old) => old.map((item) => {
+    updatePositions((old) => old.map((item) => {
       if (item.id !== positionId) return item;
       const undoHistory = addUndoEntry(item, `${stage}차 매수`);
       return stage === 1
         ? { ...item, undoHistory, firstBuyAmount: amount, buyStage: 1 }
         : { ...item, undoHistory, secondBuyAmount: amount, buyStage: 2 };
     }));
-    setDirty(true);
     setBuyStageEditor(null);
     setBuyAmountInput("");
     setBuyStageError("");
-    setMessage(`${stage}차 매수 금액이 반영됐습니다. 변경사항 저장을 눌러 저장하세요.`);
+    setMessage(`${stage}차 매수 금액이 반영됐습니다.`);
   };
 
   const completeSellStage = (position: Position) => {
@@ -503,28 +564,26 @@ export default function PortfolioManager() {
     const nextStage = position.sellStage + 1;
     const target = plan.sellTargets[nextStage - 1];
     if (!window.confirm(`${position.ticker} ${target.label} (+${target.returnPct}% · ${target.sellPct}%) 체결을 기록할까요?`)) return;
-    setPositions((old) => old.map((item) => item.id === position.id ? {
+    updatePositions((old) => old.map((item) => item.id === position.id ? {
       ...item,
       undoHistory: addUndoEntry(item, `${nextStage}차 매도`),
       sellStage: nextStage,
       exitStatus: nextStage === 3 ? "completed" : "active",
     } : item));
-    setDirty(true);
     setMessage(nextStage === 3
-      ? `${position.ticker} 분할매도 완료로 표시했습니다. 저장 버튼을 눌러 주세요.`
-      : `${position.ticker} ${nextStage}차 매도를 기록했습니다. 저장 버튼을 눌러 주세요.`);
+      ? `${position.ticker} 분할매도 완료로 표시했습니다.`
+      : `${position.ticker} ${nextStage}차 매도를 기록했습니다.`);
   };
 
   const stopLossPosition = (position: Position) => {
     if (position.exitStatus !== "active" || position.buyStage < 1) return;
     if (!window.confirm(`${position.ticker} 손절 기준 ${Math.abs(plan.stopLossRatio)}% 도달 후 실제 매도 체결을 기록할까요?`)) return;
-    setPositions((old) => old.map((item) => item.id === position.id ? {
+    updatePositions((old) => old.map((item) => item.id === position.id ? {
       ...item,
       undoHistory: addUndoEntry(item, "손절 종료"),
       exitStatus: "stopped",
     } : item));
-    setDirty(true);
-    setMessage(`${position.ticker} 손절 종료로 표시했습니다. 저장 버튼을 눌러 주세요.`);
+    setMessage(`${position.ticker} 손절 종료로 표시했습니다.`);
   };
 
   const undoLastProgress = (position: Position) => {
@@ -543,7 +602,7 @@ export default function PortfolioManager() {
 
     if (!window.confirm(`${position.ticker}의 ‘${actionLabel}’ 기록을 되돌릴까요? ${fallbackDescription}`)) return;
 
-    setPositions((old) => old.map((item) => {
+    updatePositions((old) => old.map((item) => {
       if (item.id !== position.id) return item;
       const latest = item.undoHistory[item.undoHistory.length - 1];
       if (latest) {
@@ -561,45 +620,16 @@ export default function PortfolioManager() {
       }
       return item;
     }));
-    setDirty(true);
     setSelectedGroup("all");
-    setMessage(`${position.ticker}의 ${actionLabel} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다. 변경사항 저장을 눌러 복구 상태를 보존하세요.`);
+    setMessage(`${position.ticker}의 ${actionLabel} 기록을 되돌렸습니다. 전체 종목 보기로 전환했습니다.`);
   };
 
   const deletePosition = (id: string) => {
     if (!window.confirm("이 보유 종목을 삭제할까요?")) return;
-    setPositions((old) => old.filter((item) => item.id !== id));
-    setDirty(true);
+    updatePositions((old) => old.filter((item) => item.id !== id));
     if (editingId === id) closeEdit();
     if (buyStageEditor?.positionId === id) setBuyStageEditor(null);
-    setMessage("삭제 내용이 반영됐습니다. 저장 버튼을 눌러 저장하세요.");
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setError("");
-    setMessage("");
-    try {
-      const cash = Number(cashBalance);
-      if (!Number.isFinite(cash) || cash < 0) throw new Error("예수금은 0 이상의 숫자로 입력해 주세요.");
-      const response = await fetch("/api/portfolio", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cashBalance: cash, positions }),
-      });
-      const payload = await response.json();
-      if (response.status === 401) {
-        setAuthenticated(false);
-        throw new Error("세션이 만료됐습니다. 다시 인증해 주세요.");
-      }
-      if (!response.ok) throw new Error(payload.error || "저장에 실패했습니다.");
-      setDirty(false);
-      setMessage("예수금과 보유 종목을 Supabase에 저장했습니다.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "저장에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
+    setMessage("삭제 내용이 반영됐습니다.");
   };
 
   const logout = async () => {
@@ -624,7 +654,7 @@ export default function PortfolioManager() {
   return <section className="portfolio-page">
     <div className="portfolio-heading-row">
       <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>스윙 투자 계산기의 종목당 배정금액을 기준으로 분할매수·매도 진행 상황을 관리합니다.</p></div>
-      <button className="portfolio-logout" type="button" onClick={logout}>로그아웃</button>
+      <button className="portfolio-logout" type="button" disabled={saving || !!saveError} onClick={logout}>로그아웃</button>
     </div>
 
     <div className="portfolio-summary portfolio-summary-simple">
@@ -649,8 +679,17 @@ export default function PortfolioManager() {
     <section className="portfolio-panel">
       <div className="portfolio-panel-heading"><div><div className="eyebrow">CASH BALANCE</div><h2>남은 예수금</h2><p>계좌의 남은 현금을 USD 기준으로 입력합니다.</p></div></div>
       <div className="portfolio-cash-row">
-        <NumericField label="예수금 (USD)" value={cashBalance} onChange={(value) => { setCashBalance(value); setDirty(true); }} step="0.01" />
-        <div className="portfolio-save-area"><span>{dirty ? "저장되지 않은 변경사항이 있습니다." : message || "모든 변경사항이 저장되었습니다."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
+        <NumericField label="예수금 (USD)" value={cashBalance} onChange={(value) => {
+          setCashBalance(value);
+          const cash = Number(value);
+          if (value.trim() === "" || !Number.isFinite(cash) || cash < 0) {
+            setError("예수금은 0 이상의 숫자로 입력해 주세요.");
+            return;
+          }
+          setError("");
+          void queueSave({ cashBalance: cash });
+        }} step="0.01" />
+        <div className="portfolio-save-area" role="status"><span>{saving ? "자동 저장 중…" : saveError ? "자동 저장 실패 · 다시 시도해 주세요." : "변경사항이 자동 저장됩니다."}</span></div>
       </div>
     </section>
 
@@ -870,7 +909,14 @@ export default function PortfolioManager() {
     </section>
 
     {error && <p className="portfolio-error portfolio-bottom-message">{error}</p>}
-    <div className="portfolio-bottom-actions"><span>{message || "종목 추가·수정·삭제 후 ‘변경사항 저장’을 눌러 주세요."}</span><button className="portfolio-primary" type="button" onClick={save} disabled={!dirty || saving}>{saving ? "저장 중…" : "변경사항 저장"}</button></div>
-    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 예상 회수액과 차익은 실제 누적 매수금액을 기준으로 각 매도 비중을 배분한 추정치이며 수수료·세금·체결 오차를 제외합니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 변경사항 저장을 눌러 Supabase에 반영하세요.</div>
+    <div className="portfolio-bottom-actions">
+      <span role="status">{saving ? "자동 저장 중…" : saveError ? "저장되지 않은 변경사항이 있습니다." : message ? `${message} 자동 저장됐습니다.` : "모든 변경사항이 자동 저장됩니다."}</span>
+      {saveError && <div role="alert"><span className="portfolio-error">{saveError}</span> <button className="portfolio-secondary" type="button" onClick={() => void queueSave({})} disabled={saving}>저장 다시 시도</button></div>}
+      {sessionExpired && <form onSubmit={authenticate}>
+        <label className="portfolio-field"><span>접근 비밀번호</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
+        <button className="portfolio-primary" type="submit" disabled={saving}>다시 인증하고 자동 저장</button>
+      </form>}
+    </div>
+    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 예상 회수액과 차익은 실제 누적 매수금액을 기준으로 각 매도 비중을 배분한 추정치이며 수수료·세금·체결 오차를 제외합니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 각 변경사항은 자동으로 저장됩니다.</div>
   </section>;
 }

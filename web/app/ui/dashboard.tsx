@@ -309,6 +309,7 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
 }
 
 export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
+  const [portfolioOpened, setPortfolioOpened] = useState(false);
   const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals" | "portfolio">("screener");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
@@ -341,12 +342,13 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스크리너</button>
           <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => setActiveMenu("calculator")}>스윙 투자 계산기</button>
           <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
-          <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => setActiveMenu("portfolio")}>내 포트폴리오</button>
+          <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => { setPortfolioOpened(true); setActiveMenu("portfolio"); }}>내 포트폴리오</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
-      {activeMenu === "portfolio" ? <PortfolioManager /> : activeMenu === "calculator" ? <InvestmentCalculator /> : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} /></div>}
+      {activeMenu === "portfolio" ? null : activeMenu === "calculator" ? <InvestmentCalculator /> : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
