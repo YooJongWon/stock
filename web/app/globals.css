@@ -424,3 +424,23 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .portfolio-undo-button{border:1px solid #765332!important;border-radius:7px!important;background:#2b2116!important;color:#f2c78e!important;padding:7px 10px!important;font:600 10px system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif!important;cursor:pointer}
 .portfolio-undo-button:hover{border-color:#d29a55!important;background:#3a2a18!important;color:#ffe1b5!important}
 @media(max-width:650px){.portfolio-card-actions{width:100%}.portfolio-undo-button{width:100%;min-height:36px}}
+
+/* Site-styled confirmation dialogs; native modal focus and keyboard handling. */
+.confirmation-dialog{width:min(460px,calc(100% - 32px));max-width:none;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);margin:auto;padding:0;overflow:auto;overscroll-behavior:contain;border:1px solid #37556d;border-radius:16px;background:#101b27;color:var(--text);font-family:inherit;box-shadow:0 24px 80px #0009}
+.confirmation-dialog::backdrop{background:rgba(2,7,12,.8);backdrop-filter:blur(5px)}
+.confirmation-content{padding:24px;overflow-wrap:anywhere}
+.confirmation-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.confirmation-heading>div{min-width:0}
+.confirmation-heading span{color:var(--mint);font-size:11px;font-weight:600}
+.confirmation-heading h2{margin:8px 0 0;font-size:20px;line-height:1.4;letter-spacing:-.025em}
+.confirmation-heading .portfolio-modal-close{flex-shrink:0}
+.confirmation-content>p{margin:20px 0 24px;color:#b9c9d8;font-size:14px;line-height:1.8;white-space:pre-line}
+.confirmation-actions{display:flex;justify-content:flex-end;gap:10px}
+.confirmation-actions button{min-height:44px;min-width:88px;padding:11px 16px;border:1px solid #375166;border-radius:9px;font:600 13px system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;cursor:pointer}
+.confirmation-cancel{background:#142331;color:#c1cfdd}
+.confirmation-accept{background:#60e0b3;color:#09251c;border-color:#60e0b3!important}
+.confirmation-danger .confirmation-heading span{color:#ffb6bf}
+.confirmation-danger .confirmation-accept{background:#ef8792;border-color:#ef8792!important;color:#2e1015}
+.confirmation-actions button:hover{filter:brightness(1.1)}
+.confirmation-dialog button:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
+@media(max-width:600px){.confirmation-content{padding:20px}.confirmation-heading h2{font-size:18px}.confirmation-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}.confirmation-actions button{width:100%;min-width:0}}
