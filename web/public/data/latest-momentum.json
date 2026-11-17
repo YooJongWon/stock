@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "data_date": "2026-11-16",
+  "generated_at": "2026-11-17T01:27:14.847430+00:00",
+  "research_generated_at": "2026-11-17T01:04:37.325488+00:00",
+  "status": "not_validated",
+  "candidates": [],
+  "diagnostics": [
+    {
+      "error": "실제 연구의 검증 게이트 미충족: 추천·점수 미표시"
+    }
+  ],
+  "universe_count": 0
+}

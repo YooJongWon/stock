@@ -1,0 +1,2261 @@
+{
+  "schema_version": 1,
+  "status": "not_validated",
+  "generated_at": "2026-11-17T01:04:37.325488+00:00",
+  "period": {
+    "start": "2025-11-17",
+    "end": "2026-11-16",
+    "split": "2026-07-01"
+  },
+  "universe_count": 5420,
+  "requested_count": 5420,
+  "downloaded_count": 3679,
+  "analyzed_count": 1894,
+  "observations": 334290,
+  "limitations": [
+    "현재 상장 디렉터리로 구성: 생존자 편향. 상장폐지·합병 소멸 종목 미포함.",
+    "무료 Yahoo 일봉: intraday 경로·호가·거래정지 체결 검증 불가. 동일 봉 충돌은 손절 우선.",
+    "분할 발생 종목은 엔진 지원 전까지 제외: 기업행동 선택 편향. 현금배당 재투자 미반영.",
+    "공시시점 시가총액 미확인 종목은 별도 unknown 그룹. 현재 시총·섹터 소급 대입 금지.",
+    "시점별 섹터 이력 미확보: unknown으로 표시. 섹터별 유효성 미검증.",
+    "여러 조건 탐색 및 시장 내 상관관계로 과최적화 가능. 단일 검증 구간은 성과 보장이 아님.",
+    "Wilson 구간은 기술통계: 종목·기간 간 의존성을 교정한 통계적 유의성 검정이 아님.",
+    "검증 게이트 미충족: 채택 조건 없음. 점수와 후보 추천 비활성."
+  ],
+  "adopted_model": null,
+  "validation": {
+    "metrics": {
+      "trades": 67,
+      "target_rate": 0.2537313433,
+      "stop_rate": 0.7164179104,
+      "win_rate": 0.2686567164,
+      "mean_return": -0.0125236582,
+      "profit_factor": 0.6835116722,
+      "max_drawdown": -0.2126311679,
+      "expectancy": -0.0125236582
+    }
+  },
+  "cap_known_observations": 0,
+  "train_observations": 208829,
+  "validation_observations": 125461,
+  "train_tickers": 1787,
+  "validation_tickers": 1795,
+  "risk_quantiles": {
+    "rsi14": 68.11245330000273,
+    "rvol": 1.5531027525287526,
+    "atr_pct": 0.062425484247080124,
+    "return5": 0.07705999752940326
+  },
+  "daily_universe": [
+    {
+      "ticker": "MU",
+      "cik": null,
+      "name": "Micron Technology, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "META",
+      "cik": null,
+      "name": "Meta Platforms, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AAPL",
+      "cik": null,
+      "name": "Apple Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TSLA",
+      "cik": null,
+      "name": "Tesla, Inc.  - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AMD",
+      "cik": null,
+      "name": "Advanced Micro Devices, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "INTC",
+      "cik": null,
+      "name": "Intel Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MSFT",
+      "cik": null,
+      "name": "Microsoft Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AMZN",
+      "cik": null,
+      "name": "Amazon.com, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GOOGL",
+      "cik": null,
+      "name": "Alphabet Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GOOG",
+      "cik": null,
+      "name": "Alphabet Inc. - Class C Capital Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MRVL",
+      "cik": null,
+      "name": "Marvell Technology, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ORCL",
+      "cik": null,
+      "name": "Oracle Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TSM",
+      "cik": null,
+      "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LITE",
+      "cik": null,
+      "name": "Lumentum Holdings Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PLTR",
+      "cik": null,
+      "name": "Palantir Technologies Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BE",
+      "cik": null,
+      "name": "Bloom Energy Corporation Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DELL",
+      "cik": null,
+      "name": "Dell Technologies Inc. Class C Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "STX",
+      "cik": null,
+      "name": "Seagate Technology Holdings PLC - Ordinary Shares (Ireland)",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MRNA",
+      "cik": null,
+      "name": "Moderna, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AMAT",
+      "cik": null,
+      "name": "Applied Materials, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "JPM",
+      "cik": null,
+      "name": "JP Morgan Chase & Co. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LLY",
+      "cik": null,
+      "name": "Eli Lilly and Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ASML",
+      "cik": null,
+      "name": "ASML Holding N.V. - New York Registry Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CRM",
+      "cik": null,
+      "name": "Salesforce, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "QCOM",
+      "cik": null,
+      "name": "QUALCOMM Incorporated - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BAC",
+      "cik": null,
+      "name": "Bank of America Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "WMT",
+      "cik": null,
+      "name": "Walmart Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HOOD",
+      "cik": null,
+      "name": "Robinhood Markets, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MDT",
+      "cik": null,
+      "name": "Medtronic plc. Ordinary Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BRK-B",
+      "cik": null,
+      "name": "Berkshire Hathaway Inc. New Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "V",
+      "cik": null,
+      "name": "Visa Inc.",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GS",
+      "cik": null,
+      "name": "Goldman Sachs Group, Inc. (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "COST",
+      "cik": null,
+      "name": "Costco Wholesale Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GEV",
+      "cik": null,
+      "name": "GE Vernova Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "COHR",
+      "cik": null,
+      "name": "Coherent Corp. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CAT",
+      "cik": null,
+      "name": "Caterpillar, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CSCO",
+      "cik": null,
+      "name": "Cisco Systems, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CVX",
+      "cik": null,
+      "name": "Chevron Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "JNJ",
+      "cik": null,
+      "name": "Johnson & Johnson Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "IREN",
+      "cik": null,
+      "name": "IREN Limited - Ordinary Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "COIN",
+      "cik": null,
+      "name": "Coinbase Global, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MA",
+      "cik": null,
+      "name": "Mastercard Incorporated Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CRDO",
+      "cik": null,
+      "name": "Credo Technology Group Holding Ltd - Ordinary Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TXN",
+      "cik": null,
+      "name": "Texas Instruments Incorporated - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HD",
+      "cik": null,
+      "name": "Home Depot, Inc. (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TMO",
+      "cik": null,
+      "name": "Thermo Fisher Scientific Inc Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BA",
+      "cik": null,
+      "name": "Boeing Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SHOP",
+      "cik": null,
+      "name": "Shopify Inc. - Class A Subordinate Voting Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SNOW",
+      "cik": null,
+      "name": "Snowflake Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NKE",
+      "cik": null,
+      "name": "Nike, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MCD",
+      "cik": null,
+      "name": "McDonald's Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "APP",
+      "cik": null,
+      "name": "Applovin Corporation - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "RKLB",
+      "cik": null,
+      "name": "Rocket Lab Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MRK",
+      "cik": null,
+      "name": "Merck & Company, Inc. Common Stock (new)",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HPE",
+      "cik": null,
+      "name": "Hewlett Packard Enterprise Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "KO",
+      "cik": null,
+      "name": "Coca-Cola Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ACN",
+      "cik": null,
+      "name": "Accenture plc Class A Ordinary Shares (Ireland)",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GE",
+      "cik": null,
+      "name": "GE Aerospace Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ALAB",
+      "cik": null,
+      "name": "Astera Labs, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "VLO",
+      "cik": null,
+      "name": "Valero Energy Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "VRT",
+      "cik": null,
+      "name": "Vertiv Holdings, LLC Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PEP",
+      "cik": null,
+      "name": "PepsiCo, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PG",
+      "cik": null,
+      "name": "Procter & Gamble Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "IBM",
+      "cik": null,
+      "name": "International Business Machines Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "C",
+      "cik": null,
+      "name": "Citigroup, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ABBV",
+      "cik": null,
+      "name": "AbbVie Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AMGN",
+      "cik": null,
+      "name": "Amgen Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ADBE",
+      "cik": null,
+      "name": "Adobe Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ADI",
+      "cik": null,
+      "name": "Analog Devices, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GLW",
+      "cik": null,
+      "name": "Corning Incorporated Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "UBER",
+      "cik": null,
+      "name": "Uber Technologies, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TJX",
+      "cik": null,
+      "name": "TJX Companies, Inc. (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "VZ",
+      "cik": null,
+      "name": "Verizon Communications Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MS",
+      "cik": null,
+      "name": "Morgan Stanley Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NU",
+      "cik": null,
+      "name": "Nu Holdings Ltd. Class A Ordinary Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MPC",
+      "cik": null,
+      "name": "Marathon Petroleum Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "INTU",
+      "cik": null,
+      "name": "Intuit Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CIEN",
+      "cik": null,
+      "name": "Ciena Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "T",
+      "cik": null,
+      "name": "AT&T Inc.",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SNPS",
+      "cik": null,
+      "name": "Synopsys, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MELI",
+      "cik": null,
+      "name": "MercadoLibre, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TWLO",
+      "cik": null,
+      "name": "Twilio Inc. Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NET",
+      "cik": null,
+      "name": "Cloudflare, Inc. Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AXP",
+      "cik": null,
+      "name": "American Express Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "IONQ",
+      "cik": null,
+      "name": "IonQ, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TER",
+      "cik": null,
+      "name": "Teradyne, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LIN",
+      "cik": null,
+      "name": "Linde plc - Ordinary Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AAOI",
+      "cik": null,
+      "name": "Applied Optoelectronics, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MDB",
+      "cik": null,
+      "name": "MongoDB, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "VST",
+      "cik": null,
+      "name": "Vistra Corp. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MPWR",
+      "cik": null,
+      "name": "Monolithic Power Systems, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AZO",
+      "cik": null,
+      "name": "AutoZone, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NEE",
+      "cik": null,
+      "name": "NextEra Energy, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DHR",
+      "cik": null,
+      "name": "Danaher Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TMUS",
+      "cik": null,
+      "name": "T-Mobile US, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ABT",
+      "cik": null,
+      "name": "Abbott Laboratories Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ETN",
+      "cik": null,
+      "name": "Eaton Corporation, PLC Ordinary Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DIS",
+      "cik": null,
+      "name": "Walt Disney Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ISRG",
+      "cik": null,
+      "name": "Intuitive Surgical, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PM",
+      "cik": null,
+      "name": "Philip Morris International Inc Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PFE",
+      "cik": null,
+      "name": "Pfizer, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GILD",
+      "cik": null,
+      "name": "Gilead Sciences, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SCHW",
+      "cik": null,
+      "name": "Charles Schwab Corporation (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ON",
+      "cik": null,
+      "name": "ON Semiconductor Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "COP",
+      "cik": null,
+      "name": "ConocoPhillips Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AAL",
+      "cik": null,
+      "name": "American Airlines Group, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DE",
+      "cik": null,
+      "name": "Deere & Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BSX",
+      "cik": null,
+      "name": "Boston Scientific Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SBUX",
+      "cik": null,
+      "name": "Starbucks Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SYK",
+      "cik": null,
+      "name": "Stryker Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ONDS",
+      "cik": null,
+      "name": "Ondas Inc - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "FCX",
+      "cik": null,
+      "name": "Freeport-McMoRan, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "RTX",
+      "cik": null,
+      "name": "RTX Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NXPI",
+      "cik": null,
+      "name": "NXP Semiconductors N.V. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "P",
+      "cik": null,
+      "name": "Everpure, Inc. Class A common stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BMY",
+      "cik": null,
+      "name": "Bristol-Myers Squibb Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PSX",
+      "cik": null,
+      "name": "Phillips 66 Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DDOG",
+      "cik": null,
+      "name": "Datadog, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ASTS",
+      "cik": null,
+      "name": "AST SpaceMobile, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "POET",
+      "cik": null,
+      "name": "POET Technologies Inc. - Common Shares",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CVS",
+      "cik": null,
+      "name": "CVS Health Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CDNS",
+      "cik": null,
+      "name": "Cadence Design Systems, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CLS",
+      "cik": null,
+      "name": "Celestica, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SPOT",
+      "cik": null,
+      "name": "Spotify Technology S.A. Ordinary Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SOFI",
+      "cik": null,
+      "name": "SoFi Technologies, Inc.  - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "COF",
+      "cik": null,
+      "name": "Capital One Financial Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "OKTA",
+      "cik": null,
+      "name": "Okta, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "FICO",
+      "cik": null,
+      "name": "Fair Isaac Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NEM",
+      "cik": null,
+      "name": "Newmont Corporation",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "RCL",
+      "cik": null,
+      "name": "Royal Caribbean Cruises Ltd. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MCK",
+      "cik": null,
+      "name": "McKesson Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ABNB",
+      "cik": null,
+      "name": "Airbnb, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HWM",
+      "cik": null,
+      "name": "Howmet Aerospace Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DASH",
+      "cik": null,
+      "name": "DoorDash, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "RDDT",
+      "cik": null,
+      "name": "Reddit, Inc. Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "FTNT",
+      "cik": null,
+      "name": "Fortinet, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SWKS",
+      "cik": null,
+      "name": "Skyworks Solutions, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MCHP",
+      "cik": null,
+      "name": "Microchip Technology Incorporated - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SLB",
+      "cik": null,
+      "name": "SLB Limited Common Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "UNP",
+      "cik": null,
+      "name": "Union Pacific Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NTRA",
+      "cik": null,
+      "name": "Natera, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PYPL",
+      "cik": null,
+      "name": "PayPal Holdings, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AXTI",
+      "cik": null,
+      "name": "AXT Inc - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PGR",
+      "cik": null,
+      "name": "Progressive Corporation (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PTC",
+      "cik": null,
+      "name": "PTC Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BLK",
+      "cik": null,
+      "name": "BlackRock, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SMTC",
+      "cik": null,
+      "name": "Semtech Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LMT",
+      "cik": null,
+      "name": "Lockheed Martin Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LOW",
+      "cik": null,
+      "name": "Lowe's Companies, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HL",
+      "cik": null,
+      "name": "Hecla Mining Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AKAM",
+      "cik": null,
+      "name": "Akamai Technologies, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CDE",
+      "cik": null,
+      "name": "Coeur Mining, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CIFR",
+      "cik": null,
+      "name": "Cipher Digital Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BNY",
+      "cik": null,
+      "name": "The Bank of New York Mellon Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "GM",
+      "cik": null,
+      "name": "General Motors Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DAL",
+      "cik": null,
+      "name": "Delta Air Lines, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "WELL",
+      "cik": null,
+      "name": "Welltower Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CMI",
+      "cik": null,
+      "name": "Cummins Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AON",
+      "cik": null,
+      "name": "Aon plc Class A Ordinary Shares (Ireland)",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HCA",
+      "cik": null,
+      "name": "HCA Healthcare, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "EXPE",
+      "cik": null,
+      "name": "Expedia Group, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PWR",
+      "cik": null,
+      "name": "Quanta Services, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "VRTX",
+      "cik": null,
+      "name": "Vertex Pharmaceuticals Incorporated - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TGT",
+      "cik": null,
+      "name": "Target Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CCL",
+      "cik": null,
+      "name": "Carnival Corporation Ltd. Common Shares",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "FANG",
+      "cik": null,
+      "name": "Diamondback Energy, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "F",
+      "cik": null,
+      "name": "Ford Motor Company Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "BX",
+      "cik": null,
+      "name": "Blackstone Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "FIX",
+      "cik": null,
+      "name": "Comfort Systems USA, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "HUM",
+      "cik": null,
+      "name": "Humana Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MO",
+      "cik": null,
+      "name": "Altria Group, Inc.",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TT",
+      "cik": null,
+      "name": "Trane Technologies plc",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "REGN",
+      "cik": null,
+      "name": "Regeneron Pharmaceuticals, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TEAM",
+      "cik": null,
+      "name": "Atlassian Corporation  - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "WMB",
+      "cik": null,
+      "name": "Williams Companies, Inc. (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "DVN",
+      "cik": null,
+      "name": "Devon Energy Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ADP",
+      "cik": null,
+      "name": "Automatic Data Processing, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "OXY",
+      "cik": null,
+      "name": "Occidental Petroleum Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PATH",
+      "cik": null,
+      "name": "UiPath, Inc. Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "RBLX",
+      "cik": null,
+      "name": "Roblox Corporation Class A Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SO",
+      "cik": null,
+      "name": "Southern Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ALL",
+      "cik": null,
+      "name": "Allstate Corporation (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NTAP",
+      "cik": null,
+      "name": "NetApp, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "APLD",
+      "cik": null,
+      "name": "Applied Digital Corporation - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PBR",
+      "cik": null,
+      "name": "Petroleo Brasileiro S.A. Petrobras ADS",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "NVO",
+      "cik": null,
+      "name": "Novo Nordisk A/S Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "SHW",
+      "cik": null,
+      "name": "Sherwin-Williams Company (The) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CB",
+      "cik": null,
+      "name": "Chubb Limited  Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "MAR",
+      "cik": null,
+      "name": "Marriott International - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PLD",
+      "cik": null,
+      "name": "Prologis, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "AMT",
+      "cik": null,
+      "name": "American Tower Corporation (REIT) Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "ELV",
+      "cik": null,
+      "name": "Elevance Health, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TEM",
+      "cik": null,
+      "name": "Tempus AI, Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "CME",
+      "cik": null,
+      "name": "CME Group Inc. - Class A Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "LNG",
+      "cik": null,
+      "name": "Cheniere Energy, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TTWO",
+      "cik": null,
+      "name": "Take-Two Interactive Software, Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "EBAY",
+      "cik": null,
+      "name": "eBay Inc. - Common Stock",
+      "exchange": "NASDAQ",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "JCI",
+      "cik": null,
+      "name": "Johnson Controls International plc Ordinary Share",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "TRV",
+      "cik": null,
+      "name": "The Travelers Companies, Inc. Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    },
+    {
+      "ticker": "PH",
+      "cik": null,
+      "name": "Parker-Hannifin Corporation Common Stock",
+      "exchange": "NYSE",
+      "universe_source": "Nasdaq Trader (no SEC CIK match)"
+    }
+  ],
+  "training_search": [
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          }
+        ],
+        "score_threshold": 50
+      },
+      "metrics": {
+        "trades": 122,
+        "target_rate": 0.4180327869,
+        "stop_rate": 0.5573770492,
+        "win_rate": 0.4344262295,
+        "mean_return": 0.0112233999,
+        "profit_factor": 1.3570029552,
+        "max_drawdown": -0.1214741948,
+        "expectancy": 0.0112233999
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          }
+        ],
+        "score_threshold": 65
+      },
+      "metrics": {
+        "trades": 122,
+        "target_rate": 0.4180327869,
+        "stop_rate": 0.5573770492,
+        "win_rate": 0.4344262295,
+        "mean_return": 0.0112233999,
+        "profit_factor": 1.3570029552,
+        "max_drawdown": -0.1214741948,
+        "expectancy": 0.0112233999
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          }
+        ],
+        "score_threshold": 80
+      },
+      "metrics": {
+        "trades": 122,
+        "target_rate": 0.4180327869,
+        "stop_rate": 0.5573770492,
+        "win_rate": 0.4344262295,
+        "mean_return": 0.0112233999,
+        "profit_factor": 1.3570029552,
+        "max_drawdown": -0.1214741948,
+        "expectancy": 0.0112233999
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          }
+        ],
+        "score_threshold": 95
+      },
+      "metrics": {
+        "trades": 122,
+        "target_rate": 0.4180327869,
+        "stop_rate": 0.5573770492,
+        "win_rate": 0.4344262295,
+        "mean_return": 0.0112233999,
+        "profit_factor": 1.3570029552,
+        "max_drawdown": -0.1214741948,
+        "expectancy": 0.0112233999
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          }
+        ],
+        "score_threshold": 50
+      },
+      "metrics": {
+        "trades": 151,
+        "target_rate": 0.3973509934,
+        "stop_rate": 0.5894039735,
+        "win_rate": 0.4105960265,
+        "mean_return": 0.0085657816,
+        "profit_factor": 1.2760265452,
+        "max_drawdown": -0.1464013088,
+        "expectancy": 0.0085657816
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          }
+        ],
+        "score_threshold": 65
+      },
+      "metrics": {
+        "trades": 151,
+        "target_rate": 0.3973509934,
+        "stop_rate": 0.5894039735,
+        "win_rate": 0.4105960265,
+        "mean_return": 0.0085657816,
+        "profit_factor": 1.2760265452,
+        "max_drawdown": -0.1464013088,
+        "expectancy": 0.0085657816
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          }
+        ],
+        "score_threshold": 80
+      },
+      "metrics": {
+        "trades": 151,
+        "target_rate": 0.3973509934,
+        "stop_rate": 0.5894039735,
+        "win_rate": 0.4105960265,
+        "mean_return": 0.0085657816,
+        "profit_factor": 1.2760265452,
+        "max_drawdown": -0.1464013088,
+        "expectancy": 0.0085657816
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          }
+        ],
+        "score_threshold": 95
+      },
+      "metrics": {
+        "trades": 151,
+        "target_rate": 0.3973509934,
+        "stop_rate": 0.5894039735,
+        "win_rate": 0.4105960265,
+        "mean_return": 0.0085657816,
+        "profit_factor": 1.2760265452,
+        "max_drawdown": -0.1464013088,
+        "expectancy": 0.0085657816
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          },
+          {
+            "feature": "ema20_gap",
+            "direction": -1,
+            "threshold": 0.0047642901,
+            "weight": 0.017825743
+          },
+          {
+            "feature": "return20",
+            "direction": -1,
+            "threshold": 0.0130246244,
+            "weight": 0.0160757189
+          },
+          {
+            "feature": "body_ratio",
+            "direction": 1,
+            "threshold": 0.4399986267,
+            "weight": 0.0142326107
+          }
+        ],
+        "score_threshold": 50
+      },
+      "metrics": {
+        "trades": 139,
+        "target_rate": 0.381294964,
+        "stop_rate": 0.5827338129,
+        "win_rate": 0.3956834532,
+        "mean_return": 0.0084470066,
+        "profit_factor": 1.2721576257,
+        "max_drawdown": -0.1493993902,
+        "expectancy": 0.0084470066
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          },
+          {
+            "feature": "ema20_gap",
+            "direction": -1,
+            "threshold": 0.0047642901,
+            "weight": 0.017825743
+          },
+          {
+            "feature": "return20",
+            "direction": -1,
+            "threshold": 0.0130246244,
+            "weight": 0.0160757189
+          },
+          {
+            "feature": "body_ratio",
+            "direction": 1,
+            "threshold": 0.4399986267,
+            "weight": 0.0142326107
+          }
+        ],
+        "score_threshold": 65
+      },
+      "metrics": {
+        "trades": 139,
+        "target_rate": 0.381294964,
+        "stop_rate": 0.5827338129,
+        "win_rate": 0.3956834532,
+        "mean_return": 0.0084470066,
+        "profit_factor": 1.2721576257,
+        "max_drawdown": -0.1493993902,
+        "expectancy": 0.0084470066
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          },
+          {
+            "feature": "ema20_gap",
+            "direction": -1,
+            "threshold": 0.0047642901,
+            "weight": 0.017825743
+          },
+          {
+            "feature": "return20",
+            "direction": -1,
+            "threshold": 0.0130246244,
+            "weight": 0.0160757189
+          },
+          {
+            "feature": "body_ratio",
+            "direction": 1,
+            "threshold": 0.4399986267,
+            "weight": 0.0142326107
+          }
+        ],
+        "score_threshold": 80
+      },
+      "metrics": {
+        "trades": 139,
+        "target_rate": 0.381294964,
+        "stop_rate": 0.5827338129,
+        "win_rate": 0.3956834532,
+        "mean_return": 0.0084470066,
+        "profit_factor": 1.2721576257,
+        "max_drawdown": -0.1493993902,
+        "expectancy": 0.0084470066
+      }
+    },
+    {
+      "model": {
+        "rules": [
+          {
+            "feature": "atr_pct",
+            "direction": 1,
+            "threshold": 0.034127373,
+            "weight": 0.1161222438
+          },
+          {
+            "feature": "high20_gap",
+            "direction": -1,
+            "threshold": -0.0580684575,
+            "weight": 0.0839997786
+          },
+          {
+            "feature": "high252_gap",
+            "direction": -1,
+            "threshold": -0.1527147891,
+            "weight": 0.0705186869
+          },
+          {
+            "feature": "rsi14",
+            "direction": -1,
+            "threshold": 51.517043257,
+            "weight": 0.031665195
+          },
+          {
+            "feature": "sma200_gap",
+            "direction": 1,
+            "threshold": 0.0530545975,
+            "weight": 0.0230140827
+          },
+          {
+            "feature": "ema20_gap",
+            "direction": -1,
+            "threshold": 0.0047642901,
+            "weight": 0.017825743
+          },
+          {
+            "feature": "return20",
+            "direction": -1,
+            "threshold": 0.0130246244,
+            "weight": 0.0160757189
+          },
+          {
+            "feature": "body_ratio",
+            "direction": 1,
+            "threshold": 0.4399986267,
+            "weight": 0.0142326107
+          }
+        ],
+        "score_threshold": 95
+      },
+      "metrics": {
+        "trades": 139,
+        "target_rate": 0.381294964,
+        "stop_rate": 0.5827338129,
+        "win_rate": 0.3956834532,
+        "mean_return": 0.0084470066,
+        "profit_factor": 1.2721576257,
+        "max_drawdown": -0.1493993902,
+        "expectancy": 0.0084470066
+      }
+    }
+  ],
+  "selected_model": {
+    "rules": [
+      {
+        "feature": "atr_pct",
+        "direction": 1,
+        "threshold": 0.034127373,
+        "weight": 0.1161222438
+      },
+      {
+        "feature": "high20_gap",
+        "direction": -1,
+        "threshold": -0.0580684575,
+        "weight": 0.0839997786
+      },
+      {
+        "feature": "high252_gap",
+        "direction": -1,
+        "threshold": -0.1527147891,
+        "weight": 0.0705186869
+      }
+    ],
+    "score_threshold": 50
+  },
+  "training_metrics": {
+    "trades": 122,
+    "target_rate": 0.4180327869,
+    "stop_rate": 0.5573770492,
+    "win_rate": 0.4344262295,
+    "mean_return": 0.0112233999,
+    "profit_factor": 1.3570029552,
+    "max_drawdown": -0.1214741948,
+    "expectancy": 0.0112233999
+  },
+  "baselines": {
+    "simple_momentum": {
+      "metrics": {
+        "trades": 83,
+        "target_rate": 0.2409638554,
+        "stop_rate": 0.7228915663,
+        "win_rate": 0.265060241,
+        "mean_return": -0.0132711213,
+        "profit_factor": 0.6522784043,
+        "max_drawdown": -0.2771016353,
+        "expectancy": -0.0132711213
+      }
+    },
+    "spy_same_exits": {
+      "metrics": {
+        "trades": 4,
+        "target_rate": 0.0,
+        "stop_rate": 0.0,
+        "win_rate": 0.25,
+        "mean_return": 0.0010923788,
+        "profit_factor": 1.1560150619,
+        "max_drawdown": -0.0343648556,
+        "expectancy": 0.0010923788
+      }
+    },
+    "spy_buy_hold_return": -0.0097537073
+  },
+  "target_rate_wilson95": [
+    0.1648777958,
+    0.3692942161
+  ],
+  "validation_gates": {
+    "sample": false,
+    "positive_expectancy": false,
+    "profit_factor": false,
+    "baseline_expectancy": true,
+    "full_universe": true,
+    "cap_coverage": false
+  },
+  "audit_notes": [
+    "SPY 단일 슬롯의 첫 손실 후 잔여 현금 재투자가 차단되는 비교전략 버그를 수정하고 SPY 비교만 재계산. 학습 선택 조건·전략 검증 거래·단순 모멘텀 결과는 그대로 동결.",
+    "전체 가격 캐시의 과거 세션 누락 감사: CASK 3개 세션 누락. CASK의 적격 관측은 0개로 분석·백테스트에 영향 없음."
+  ],
+  "verification": {
+    "recomputed_validation_trades": 154,
+    "train_label_boundary": "passed",
+    "trade_fills_and_returns": "passed",
+    "daily_equity_metrics": "passed",
+    "duplicate_and_capacity": "passed",
+    "historical_session_gap_audit": {
+      "ticker": "CASK",
+      "missing_sessions": 3,
+      "eligible_observations": 0
+    }
+  },
+  "validation_traded_tickers": 9,
+  "event_groups": {
+    "success_observations": 87839,
+    "failure_observations": 246451,
+    "tickers_with_success": 1824,
+    "tickers_with_failure": 1892,
+    "pre_event_rows": 4011480
+  },
+  "data_sources": {
+    "prices": "Yahoo Finance raw OHLCV",
+    "universe": "Current SEC/Nasdaq directory; Nasdaq fallback used because local SEC identity is not configured",
+    "sec_identity_configured": false,
+    "point_in_time_sector": "unavailable",
+    "historical_market_cap_known": 0
+  },
+  "execution": {
+    "entry": "next_session_open",
+    "target": 0.1,
+    "stop": -0.05,
+    "max_sessions": 20,
+    "slippage_one_way": 0.001,
+    "fee_one_way": 0.0005,
+    "max_positions": 5,
+    "position_size_initial_capital": 0.2,
+    "intraday_collision": "stop_first",
+    "reuse_exit_day_capital": false,
+    "dividends": "excluded_price_return"
+  },
+  "provenance": {
+    "base_commit": "6042be31fdf97efd8935541d169fd916947f9de6",
+    "code_commit": "485d7111079ce8028efc8eb30368c2b25664e9d0",
+    "packages": {
+      "pandas": "2.3.3",
+      "numpy": "2.5.5",
+      "yfinance": "1.8.0",
+      "exchange-calendars": "4.13.3"
+    },
+    "price_file_count": 3680,
+    "price_cache_sha256": "0990d9832d1b0ace177026bcfd40fb9bb79f4884310b57c6c859355fd174f394",
+    "published_at": "2026-11-17T01:27:12.808735+00:00"
+  },
+  "data_error_count": 1741,
+  "data_error_examples": [
+    {
+      "ticker": "AAC",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AACI",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AACO",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AACP",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AADX",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AAPG",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AARD",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "AAUC",
+      "error": "split in observation/warmup period; excluded, corporate-action coverage limitation"
+    },
+    {
+      "ticker": "ABTC",
+      "error": "split in observation/warmup period; excluded, corporate-action coverage limitation"
+    },
+    {
+      "ticker": "ACAA",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACCL",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACCV",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACET",
+      "error": "split in observation/warmup period; excluded, corporate-action coverage limitation"
+    },
+    {
+      "ticker": "ACGC",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACOG",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACON",
+      "error": "split in observation/warmup period; excluded, corporate-action coverage limitation"
+    },
+    {
+      "ticker": "ACTU",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ACXP",
+      "error": "split in observation/warmup period; excluded, corporate-action coverage limitation"
+    },
+    {
+      "ticker": "ADAC",
+      "error": "too many missing OHLCV values"
+    },
+    {
+      "ticker": "ADBT",
+      "error": "too many missing OHLCV values"
+    }
+  ],
+  "data_error_categories": {
+    "too many missing OHLCV values": 782,
+    "split in observation/warmup period; excluded, corporate-action coverage limitation": 848,
+    "stale price": 110,
+    "nonpositive price": 1
+  },
+  "metadata_error_count": 0,
+  "metadata_error_examples": []
+}
