@@ -125,9 +125,6 @@ def run(args):
     report['train_observations'], report['validation_observations'] = len(train), len(validation)
     report['train_tickers'], report['validation_tickers'] = train.ticker.nunique(), validation.ticker.nunique()
     report['risk_quantiles'] = {name: float(train[name].quantile(.9)) for name in ('rsi14', 'rvol', 'atr_pct', 'return5')}
-    latest = frame.sort_values('date').groupby('ticker').tail(1).sort_values('dollar_volume30', ascending=False).head(200)
-    by_ticker = {m['ticker']: m for m in members}
-    report['daily_universe'] = [by_ticker[t] for t in latest.ticker]
     rules = fit(train)
     if rules is None or validation.empty:
         report['limitations'] += ['학습 표본 부족: 최소 200 관측·20종목·성공/실패 모두 필요. 추천 비활성.']

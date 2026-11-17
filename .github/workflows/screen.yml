@@ -40,6 +40,13 @@ jobs:
             args+=(--scheduled --skip-unchanged)
           fi
           python scripts/run_cloud.py "${args[@]}"
+      - name: Restore full-market momentum cache
+        uses: actions/cache@v4
+        with:
+          path: work/momentum/daily-prices
+          key: momentum-market-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            momentum-market-${{ runner.os }}-
       - id: momentum
         name: Run independent lightweight momentum screening
         continue-on-error: true

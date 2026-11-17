@@ -30,17 +30,12 @@ def main():
     report = json.loads((source / 'research.json').read_text())
     if not report.get('generated_at') or not report.get('period'):
         raise ValueError('Missing real research provenance')
-    # Attach frozen daily coverage and risk quantiles for older run-schema compatibility.
+    # Attach training risk quantiles; live screening uses the current exchange directory.
     observations_path = source / 'observations.csv'
     if observations_path.exists():
         observations = pd.read_csv(observations_path)
         train = observations[observations.partition == 'train']
         report['risk_quantiles'] = {k: float(train[k].quantile(.9)) for k in ('rsi14', 'rvol', 'atr_pct', 'return5')}
-        if 'daily_universe' not in report:
-            from momentum.data import universe
-            members = {m['ticker']:m for m in universe()}
-            latest = observations.sort_values('date').groupby('ticker').tail(1).sort_values('dollar_volume30', ascending=False).head(200)
-            report['daily_universe'] = [members[t] for t in latest.ticker if t in members]
     report['execution'] = {'entry':'next_session_open', 'target':.10, 'stop':-.05, 'max_sessions':20, 'slippage_one_way':.001, 'fee_one_way':.0005, 'max_positions':5, 'position_size_initial_capital':.2, 'intraday_collision':'stop_first', 'reuse_exit_day_capital':False, 'dividends':'excluded_price_return'}
     report['provenance'] = {'base_commit':subprocess.check_output(['git','merge-base','HEAD','origin/main'], text=True).strip(), 'code_commit':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(), 'packages':{p:importlib.metadata.version(p) for p in ('pandas','numpy','yfinance','exchange-calendars')}, 'price_file_count':0, 'price_cache_sha256':None, 'published_at':datetime.now(timezone.utc).isoformat()}
     digest = hashlib.sha256()
@@ -54,7 +49,7 @@ def main():
         display_members = universe()
     except Exception:
         # A display-name lookup failure must not block publishing audited trades.
-        display_members = report.get('daily_universe', [])
+        display_members = report.get('daily_universe', [])  # legacy display-name fallback only
     write_json(destination / 'momentum-backtest-trades.json', trade_snapshot(report, display_members))
     # Publish small audit CSVs separately; the UI fetch stays compact.
     trade_rows, equity_rows = [], []

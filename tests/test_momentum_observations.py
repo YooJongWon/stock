@@ -86,6 +86,7 @@ def test_daily_shadow_run_keeps_gate_closed_and_deduplicates(monkeypatch, tmp_pa
         calls.append(True)
         return {'SPY':data,'A':data},errors
     monkeypatch.setattr(screen,'collect',collect)
+    monkeypatch.setattr(screen,'current_us_universe',lambda:[{'ticker':'A','exchange':'NASDAQ'}])
     monkeypatch.setattr(screen,'latest_completed_session',lambda:end)
     monkeypatch.setattr(sys,'argv',['screen','--research',str(source),'--output',str(output),'--skip-unchanged'])
     screen.main()

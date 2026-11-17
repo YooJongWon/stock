@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import pandas as pd
 from market_calendar import latest_completed_session
-from momentum.data import collect, write_json, shares_facts, asof_cap
+from momentum.data import collect, write_json, shares_facts, asof_cap, current_us_universe, US_EXCHANGES, US_UNIVERSE_SCOPE
 from momentum.features import features, FEATURES, session_windows
 from momentum.model import score
 from momentum.observations import build_observations
@@ -78,25 +78,28 @@ def main():
     path = Path(args.output)
     if args.skip_unchanged and path.exists():
         current = json.loads(path.read_text())
-        if current.get('data_date') == str(reference) and current.get('research_generated_at') == report.get('generated_at') and current.get('status') in ('success', 'not_validated') and current.get('observations', {}).get('version') == 1 and current.get('observations', {}).get('status') in ('success', 'not_applicable', 'expired'):
+        same_session = current.get('data_date') == str(reference) and current.get('research_generated_at') == report.get('generated_at')
+        current_scope = current.get('universe_scope', {}).get('id') == US_UNIVERSE_SCOPE
+        completed = current.get('scan_complete') or current.get('observations', {}).get('status') in ('not_applicable', 'expired')
+        if same_session and current_scope and completed:
             print('Already published this session and frozen model; skipped.')
             return
-    payload = {'schema_version': 1, 'data_date': str(reference), 'generated_at': datetime.now(timezone.utc).isoformat(), 'research_generated_at': report.get('generated_at'), 'status': 'not_validated', 'candidates': [], 'diagnostics': [], 'universe_count': 0}
+    payload = {'schema_version': 1, 'data_date': str(reference), 'generated_at': datetime.now(timezone.utc).isoformat(), 'research_generated_at': report.get('generated_at'), 'status': 'not_validated', 'candidates': [], 'diagnostics': [], 'universe_count': 0, 'universe_scope':{'id':US_UNIVERSE_SCOPE,'exchanges':list(US_EXCHANGES),'limited':False}, 'scan_complete':False}
     if not report.get('adopted_model') and not report.get('selected_model'):
         payload['diagnostics'] = [{'error':'선택된 학습 기술조건이 없어 현재 관찰 목록을 보류합니다.'}]
         payload['observations'] = {'version':1,'status':'not_applicable','reference_date':str(reference),'research_generated_at':report.get('generated_at'),'items':[],'stages':[]}
         write_json(path,payload)
         return
-    members = report.get('daily_universe', [])
-    if not members or len(members) > 200:
-        raise ValueError('Frozen daily universe must contain 1..200 members')
     if (reference - date.fromisoformat(report['period']['end'])).days > 90:
         payload['diagnostics'] = [{'error':'연구 종료 후 90일 초과: 수동 재검증 필요'}]
         payload['observations'] = {'version':1,'status':'expired','items':[],'stages':[]}
     else:
+        members = current_us_universe()
+        payload['universe_scope']['exchange_counts'] = {exchange:sum(m['exchange']==exchange for m in members) for exchange in US_EXCHANGES}
+        payload['universe_scope']['listing_checked_at'] = datetime.now(timezone.utc).isoformat()
         prices, errors = collect(members, reference, reference, args.cache)
         observation = build_observations(prices,members,report,reference)
-        payload.update(observations=observation,universe_count=len(members),diagnostics=list(errors))
+        payload.update(observations=observation,universe_count=len(members),diagnostics=list(errors),scan_complete=observation['status'] in ('success','degraded') and any(stage['key']=='data' and stage['count']>0 for stage in observation['stages']))
         if report.get('status') != 'validated_exploratory' or not report.get('adopted_model'):
             payload['diagnostics'].append({'error':'실제 연구의 검증 게이트 미충족: 관찰 종목은 추천이 아니며 추천·점수는 비활성'})
         else:
