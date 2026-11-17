@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 import json
 import math
+from functools import lru_cache
 import pandas as pd
 import yfinance as yf
 from data_provider import UniverseProvider
@@ -74,11 +75,17 @@ def collect(members, start, end, cache, refresh=False):
     return prices, errors
 
 
+@lru_cache(maxsize=1)
+def _shares_provider():
+    # Share HTTP sessions and the existing SEC rate limiter across the full scan.
+    return SECFundamentalProvider()
+
+
 def shares_facts(member):
     """Reuse SEC transport/cache/filing filters; never use current Yahoo market cap."""
     if not member.get('cik'):
         return []
-    provider = SECFundamentalProvider()
+    provider = _shares_provider()
     cik = str(member['cik']).zfill(10)
     facts = provider._get_json(f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json', f'companyfacts_{cik}', 86400)
     records = []
@@ -118,3 +125,23 @@ def write_json(path, payload):
     temp = path.with_suffix('.tmp')
     temp.write_text(content + '\n', encoding='utf8')
     temp.replace(path)
+
+
+US_EXCHANGES = ('NASDAQ', 'NYSE', 'NYSE American')
+US_UNIVERSE_SCOPE = 'us-common-nasdaq-nyse-american-v1'
+
+
+def current_us_universe():
+    """Current exchange-directory common stocks, not a research-time top-N list."""
+    aliases = {'NASDAQ':'NASDAQ', 'NYSE':'NYSE', 'NYSE AMERICAN':'NYSE American', 'AMEX':'NYSE American'}
+    members = []
+    for row in universe():
+        venue = aliases.get(str(row.get('exchange') or '').strip().upper())
+        # SEC-only fallback cannot establish common-stock/ETF listing flags.
+        if venue is None or 'nasdaq' not in str(row.get('universe_source') or '').lower():
+            continue
+        members.append({**row, 'exchange':venue})
+    unique = {m['ticker']:m for m in members}
+    if not unique:
+        raise RuntimeError('No verified NASDAQ/NYSE/NYSE American common stocks in current listing directory')
+    return sorted(unique.values(),key=lambda item:item['ticker'])
