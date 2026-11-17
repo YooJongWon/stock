@@ -39,7 +39,20 @@ def main():
         digest.update(hashlib.sha256(path.read_bytes()).digest())
         report['provenance']['price_file_count'] += 1
     report['provenance']['price_cache_sha256'] = digest.hexdigest()
-    # Detailed trades/equity remain in the reproducible manual artifact, compact metrics in web.
+    # Publish small audit CSVs separately; the UI fetch stays compact.
+    trade_rows, equity_rows = [], []
+    portfolios = {'momentum':report.get('validation')}
+    portfolios.update({k:report.get('baselines', {}).get(k) for k in ('simple_momentum','spy_same_exits')})
+    for strategy, result in portfolios.items():
+        if result:
+            trade_rows.extend({'strategy':strategy, **t} for t in result.get('trades', []))
+            equity_rows.extend({'strategy':strategy, **t} for t in result.get('equity', []))
+    destination.mkdir(parents=True, exist_ok=True)
+    if trade_rows:
+        pd.DataFrame(trade_rows).to_csv(destination / 'momentum-backtest-trades.csv', index=False)
+    if equity_rows:
+        pd.DataFrame(equity_rows).to_csv(destination / 'momentum-backtest-equity.csv', index=False)
+    # Detailed trades/equity also remain in the reproducible manual artifact, compact metrics in web.
     if report.get('validation'):
         report['validation'] = {'metrics':report['validation']['metrics']}
     for key in ('simple_momentum','spy_same_exits'):

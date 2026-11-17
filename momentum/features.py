@@ -29,3 +29,14 @@ def features(bars, spy):
     out["body_ratio"] = (c - bars.Open).abs() / span
     out["upper_wick_ratio"] = (bars.High - pd.concat([c, bars.Open], axis=1).max(axis=1)) / span
     return out.replace([np.inf, -np.inf], np.nan)
+
+
+def session_windows(bars, spy, lookback=252, horizon=20):
+    """Contiguous completed exchange sessions, not merely N available vendor rows.
+
+    Past quality mask uses past dates only. Future quality mask censors missing labels.
+    """
+    position = pd.Series(np.arange(len(spy)), index=spy.index).reindex(bars.index)
+    past = (position - position.shift(lookback - 1)) == lookback - 1
+    future = (position.shift(-horizon) - position) == horizon
+    return past, future

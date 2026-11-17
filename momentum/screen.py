@@ -1,12 +1,12 @@
 """Lightweight screening from a frozen, validated research artifact. No model refit."""
 import argparse
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 import json
 from pathlib import Path
 import pandas as pd
 from market_calendar import latest_completed_session
 from momentum.data import collect, write_json, shares_facts, asof_cap
-from momentum.features import features, FEATURES
+from momentum.features import features, FEATURES, session_windows
 from momentum.model import score
 
 
@@ -25,6 +25,9 @@ def build_candidates(prices, members, report, reference_date):
         bars = prices.get(ticker)
         if bars is None or bars.index[-1] != reference_date:
             diagnostics.append({'ticker': ticker, 'error': '가격 누락 또는 오래된 데이터'})
+            continue
+        if not session_windows(bars, spy)[0].iloc[-1]:
+            diagnostics.append({'ticker': ticker, 'error': '과거 252거래일 가격 누락 또는 이력 부족'})
             continue
         row = features(bars, spy).iloc[-1]
         if row[FEATURES].isna().any():
@@ -87,7 +90,7 @@ def main():
         if (reference - date.fromisoformat(report['period']['end'])).days > 90:
             payload['diagnostics'] = [{'error': '연구 종료 후 90일 초과: 수동 재검증 필요'}]
         else:
-            prices, errors = collect(members, reference - pd.Timedelta(days=365), reference, args.cache)
+            prices, errors = collect(members, reference, reference, args.cache)
             rows, diagnostics = build_candidates(prices, members, report, reference)
             payload.update(status='degraded' if errors or diagnostics else 'success', candidates=rows, diagnostics=errors + diagnostics, universe_count=len(members))
     write_json(path, payload)

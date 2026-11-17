@@ -191,3 +191,58 @@ def test_collector_rejects_split_and_stale_data_and_deduplicates_failures(tmp_pa
     assert set(again) == {'SPY'}
     assert same_errors == errors
     assert len(calls) == 1
+
+
+def test_single_slot_spy_benchmark_reinvests_after_first_loss():
+    data = bars(70)
+    data.loc[:, ['Open','High','Low','Close']] = [100,101,99,100]
+    signals = pd.DataFrame({'date':data.index[:50], 'ticker':'SPY', 'score':100.})
+    result = portfolio(signals,{'SPY':data},data.index,max_positions=1)
+    assert len(result['trades']) == 3
+    assert result['trades'][0]['return'] < 0  # round trip costs, not an inability to buy again
+    assert result['trades'][1]['allocation'] < 1
+
+
+def test_missing_vendor_session_is_not_counted_as_an_extra_holding_day():
+    from momentum.features import session_windows
+    spy = bars(600)
+    missing = spy.index[300]
+    stock = spy.drop(missing)
+    past, future = session_windows(stock,spy)
+    assert past.loc[spy.index[299]]
+    assert not past.loc[spy.index[301]]
+    assert past.loc[spy.index[553]]
+    assert future.loc[spy.index[279]]
+    assert not future.loc[spy.index[280]]  # would otherwise stretch 20 bars over 21 sessions
+    assert not future.iloc[-1]
+    # The past mask is invariant to future gaps/outcomes.
+    cutoff = spy.index[299]
+    assert past.loc[:cutoff].equals(session_windows(stock.loc[:cutoff],spy.loc[:cutoff])[0])
+
+
+def test_frozen_model_json_retains_full_float_precision(tmp_path):
+    import json
+    precise = .03412737297656643
+    path=tmp_path/'model.json'
+    write_json(path, {'model':{'threshold':precise},'numpy':np.float64(precise)})
+    restored=json.loads(path.read_text())
+    assert restored['model']['threshold'] == precise
+    assert restored['numpy'] == precise
+
+
+def test_failed_momentum_run_clears_candidates_without_touching_swing_result(tmp_path):
+    import json
+    from scripts.write_momentum_failure import record_failure
+    legacy = tmp_path/'latest-results.json'
+    legacy.write_text('{"status":"success","buy_count":3}')
+    before=legacy.read_bytes()
+    snapshot=tmp_path/'latest-momentum.json'
+    snapshot.write_text('{"status":"success","candidates":[{"ticker":"OLD"}]}')
+    research=tmp_path/'research.json'
+    research.write_text('{"generated_at":"frozen"}')
+    record_failure(snapshot,research)
+    result=json.loads(snapshot.read_text())
+    assert result['status']=='failed'
+    assert result['candidates']==[]
+    assert result['research_generated_at']=='frozen'
+    assert legacy.read_bytes()==before

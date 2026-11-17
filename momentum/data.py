@@ -1,7 +1,8 @@
 """Free sources, persistent raw OHLCV cache, explicit point-in-time metadata."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 import json
+import math
 import pandas as pd
 import yfinance as yf
 from data_provider import UniverseProvider
@@ -21,7 +22,7 @@ def collect(members, start, end, cache, refresh=False):
     cache.mkdir(parents=True, exist_ok=True)
     yf.set_tz_cache_location(str(cache / 'yahoo'))
     prices, errors = {}, []
-    warmup = pd.Timestamp(start) - pd.Timedelta(days=550)
+    warmup = (start if isinstance(start, date) else date.fromisoformat(str(start)[:10])) - timedelta(days=550)
     symbols = list(dict.fromkeys(['SPY'] + [m['ticker'] for m in members]))
     missing = []
     for ticker in symbols:
@@ -50,7 +51,7 @@ def collect(members, start, end, cache, refresh=False):
         chunk = missing[offset:offset + 100]
         print(f'OHLCV {offset + 1}..{offset + len(chunk)}/{len(missing)}', flush=True)
         try:
-            downloaded = yf.download(chunk, start=str(warmup.date()), end=str(end + pd.Timedelta(days=1)), auto_adjust=False, actions=True, group_by='ticker', threads=8, progress=False, timeout=20)
+            downloaded = yf.download(chunk, start=str(warmup), end=str(end + timedelta(days=1)), auto_adjust=False, actions=True, group_by='ticker', threads=8, progress=False, timeout=20)
         except Exception as exc:
             errors.extend({'ticker': t, 'error': str(exc)} for t in chunk)
             continue
@@ -99,9 +100,21 @@ def asof_cap(records, day, close):
 def write_json(path, payload):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # pandas normalizes numpy/date types and NaNs, then strict JSON rejects remaining nonfinite values.
-    clean = json.loads(pd.Series([payload]).to_json(orient='values', date_format='iso'))[0]
-    content = json.dumps(clean, ensure_ascii=False, indent=2, allow_nan=False)
+    def clean(value):
+        if isinstance(value, dict):
+            return {str(k): clean(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [clean(v) for v in value]
+        if value is pd.NA or value is pd.NaT:
+            return None
+        if hasattr(value, 'item'):
+            return clean(value.item())
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        return value
+    content = json.dumps(clean(payload), ensure_ascii=False, indent=2, allow_nan=False)
     temp = path.with_suffix('.tmp')
     temp.write_text(content + '\n', encoding='utf8')
     temp.replace(path)

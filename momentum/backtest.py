@@ -51,7 +51,8 @@ def metrics(trades, equity=None):
 def portfolio(signals, prices, calendar, max_positions=5, costs=Costs()):
     """Equal fixed 1/N capital slots; no leverage, duplicate ticker or exit-day reuse.
 
-    Mark positions to daily close for drawdown. No forward outcome selects entries.
+    Single-slot benchmark reinvests available cash; multi-slot strategies use fixed
+    initial-capital allocations. Mark daily close; outcomes never select entries.
     """
     cash, active, completed, curve = 1., [], [], []
     by_day = {str(day): group.sort_values(["score", "ticker"], ascending=[False, True]) for day, group in signals.groupby("date")}
@@ -62,12 +63,12 @@ def portfolio(signals, prices, calendar, max_positions=5, costs=Costs()):
         if pending is not None:
             for _, signal in pending.iterrows():
                 ticker = signal.ticker
-                if len(active) >= max_positions or any(t["ticker"] == ticker for t in active) or cash < 1 / max_positions - 1e-10:
+                if len(active) >= max_positions or any(t["ticker"] == ticker for t in active) or cash <= 1e-10 or (max_positions > 1 and cash < 1 / max_positions - 1e-10):
                     continue
                 result = trade(prices[ticker], signal.date, costs=costs)
                 if result is None or result["entry_date"] != key:
                     continue
-                allocation = 1 / max_positions
+                allocation = cash if max_positions == 1 else 1 / max_positions
                 cash -= allocation
                 active.append({**result, "ticker": ticker, "allocation": allocation})
         remaining = []

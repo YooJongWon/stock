@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from momentum.data import universe, collect, shares_facts, asof_cap, write_json
-from momentum.features import features, FEATURES
+from momentum.features import features, FEATURES, session_windows
 from momentum.backtest import trade, portfolio, Costs, label_outcomes
 from momentum.model import fit, candidates, score, uncertainty
 
@@ -37,7 +37,8 @@ def observations(prices, members, start, end, split, metadata_errors):
             metadata_errors.append({'ticker': ticker, 'error': str(exc)})
         f['market_cap'] = [asof_cap(records, d, c) for d, c in zip(f.index, f.close)]
         last_label = pd.Series(bars.index, index=bars.index).shift(-20)
-        mature = last_label.notna()
+        past_complete, future_complete = session_windows(bars, spy)
+        mature = last_label.notna() & future_complete & past_complete
         eligible = (f.index >= start) & (f.index <= end) & f[FEATURES].notna().all(axis=1) & (f.close >= 10) & (f.dollar_volume30 >= 20_000_000) & (f.market_cap.isna() | (f.market_cap >= 1_000_000_000)) & mature
         # Full-horizon purge even when target/stop occurs early.
         eligible &= (f.index >= split) | (last_label.fillna(end) < split)
@@ -157,9 +158,10 @@ def run(args):
     spy_bars = prices['SPY'].loc[(calendar >= split) & (calendar <= end)]
     buy_hold = float(spy_bars.Close.iloc[-1] * (1-.001) * (1-.0005) / (spy_bars.Open.iloc[0] * (1+.001) * (1+.0005)) - 1)
     m = tested['metrics']
+    report['validation_traded_tickers'] = len({t['ticker'] for t in tested['trades']})
     report.update(status='not_validated', selected_model=model, training_metrics=chosen['metrics'], validation=tested, baselines={'simple_momentum': simple_result, 'spy_same_exits': spy_result, 'spy_buy_hold_return': buy_hold}, target_rate_wilson95=uncertainty(tested['trades']))
     # Conservative operational gate, not a claim of statistical significance.
-    gates = {'sample': m['trades'] >= 100 and validation.ticker.nunique() >= 30, 'positive_expectancy': (m['expectancy'] or 0) > 0, 'profit_factor': (m['profit_factor'] or 0) > 1, 'baseline_expectancy': (m['expectancy'] or 0) > (simple_result['metrics']['expectancy'] or 0), 'full_universe': not bool(args.limit), 'cap_coverage': report['cap_known_observations'] == len(frame)}
+    gates = {'sample': m['trades'] >= 100 and len({t['ticker'] for t in tested['trades']}) >= 30, 'positive_expectancy': (m['expectancy'] or 0) > 0, 'profit_factor': (m['profit_factor'] or 0) > 1, 'baseline_expectancy': (m['expectancy'] or 0) > (simple_result['metrics']['expectancy'] or 0), 'full_universe': not bool(args.limit), 'cap_coverage': report['cap_known_observations'] == len(frame)}
     report['validation_gates'] = gates
     if all(gates.values()):
         report.update(status='validated_exploratory', adopted_model=model)
