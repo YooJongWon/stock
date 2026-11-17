@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MomentumTrades from "./momentum-trades";
+import MomentumObservations, { type Observation } from "./momentum-observations";
 
 type Metrics = { trades: number; target_rate: number | null; stop_rate: number | null; win_rate: number | null; mean_return: number | null; profit_factor: number | null; max_drawdown: number | null; expectancy: number | null };
 type Candidate = { ticker: string; name?: string; score: number; stage: string; rsi14: number; rvol: number; atr_pct: number; relative_strength: number; return5: number; return10: number; return20: number; reasons: string[]; warnings: string[] };
@@ -9,7 +10,7 @@ type GroupStats = { n: number; mean: number | null; median: number | null; q25: 
 type FeatureStats = { horizon: number; lag: number; feature: string; success: GroupStats; failure: GroupStats; mean_difference: number | null };
 type Model = { score_threshold: number; rules: { feature: string; threshold: number; direction: number; weight: number }[] };
 type Research = { train_observations?: number; validation_observations?: number; training_metrics?: Metrics; selected_model?: Model; status: string; generated_at?: string; period?: { start: string; end: string; split: string }; universe_count?: number; requested_count?: number; downloaded_count?: number; analyzed_count?: number; observations?: number; cap_known_observations?: number; validation?: { metrics: Metrics }; baselines?: { simple_momentum: { metrics: Metrics }; spy_same_exits: { metrics: Metrics }; spy_buy_hold_return: number }; limitations?: string[]; validation_gates?: Record<string, boolean>; adopted_model?: Model | null };
-type Snapshot = { status: string; data_date?: string; generated_at?: string; research_generated_at?: string; candidates?: Candidate[]; diagnostics?: { ticker?: string; error: string }[]; universe_count?: number };
+type Snapshot = { observations?: Observation; status: string; data_date?: string; generated_at?: string; research_generated_at?: string; candidates?: Candidate[]; diagnostics?: { ticker?: string; error: string }[]; universe_count?: number };
 const pct = (v: number | null | undefined) => v == null ? "—" : `${(v * 100).toFixed(2)}%`;
 const num = (v: number | null | undefined) => v == null ? "—" : v.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
 const kst = (v?: string) => v ? new Date(v).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : "—";
@@ -50,6 +51,7 @@ export default function Momentum() {
     <div className="run-meta"><div><span>분석 기준 미국장</span><strong>{s.data_date ?? "—"}</strong></div><div><span>데이터 갱신 · 한국 시간</span><strong>{kst(s.generated_at)}</strong></div><div><span>연구 갱신 · 한국 시간</span><strong>{kst(r.generated_at)}</strong></div></div>
     <div className="momentum-notice" role="status">{failed ? "모멘텀 스크리닝 실행 실패 · 진단을 확인하세요." : active ? "탐색적 검증 통과 · 통계적 유의성과 미래 수익을 보장하지 않습니다." : "검증 게이트 미충족 · 최종 채택 조건 없음 · 추천과 모멘텀 점수는 비활성입니다."}{stale && " 데이터가 오래되었거나 갱신 시간이 없습니다."}</div>
     <p className="momentum-muted">연구 {r.period?.start ?? "—"} ~ {r.period?.end ?? "—"} · 검증 시작 {r.period?.split ?? "—"} · 유니버스 {num(r.universe_count)} / 요청 {num(r.requested_count)} / 가격 확보 {num(r.downloaded_count)} / 실제 분석 {num(r.analyzed_count)}종목 · {num(r.observations)}관측 · 시총 확인 {num(r.cap_known_observations)}관측</p>
+    <MomentumObservations observation={s.observations} referenceDate={s.data_date} researchGeneratedAt={r.generated_at} generatedAt={s.generated_at} finalCount={rows.length} validationExpectancy={r.validation?.metrics.expectancy} />
     <section className="momentum-section"><h2>실제 분석 요약</h2><div className="momentum-summary-grid">
       {[["분석 종목", `${num(r.analyzed_count)}종목`], ["학습 관측", num(r.train_observations)], ["검증 관측", num(r.validation_observations)], ["실제 검증 거래", r.validation ? `${num(r.validation.metrics.trades)}건` : "미실행"]].map(([label, value]) => label === "실제 검증 거래" ? <button type="button" className="momentum-summary-link" key={label} disabled={!r.validation?.metrics.trades} onClick={() => setTradesOpen(true)} aria-haspopup="dialog"><span>{label}</span><strong>{value}</strong><small>종목·거래 내역 보기 ↗</small></button> : <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </div><p className="momentum-muted">{r.validation ? `학습에서 선택한 조건을 이후 기간에 적용한 결과, 거래당 기대수익은 ${pct(r.validation.metrics.expectancy)}, 목표 달성률은 ${pct(r.validation.metrics.target_rate)}입니다.` : "완료된 검증 결과가 없습니다."} {r.adopted_model ? "채택 조건은 아래에서 확인할 수 있습니다." : "수익성·표본·데이터 확인 기준을 모두 통과하지 못해 추천을 보류합니다."}</p><p className="momentum-risk">시점별 시총 확인 {num(r.cap_known_observations)}관측. 시총 미확인 표본과 현재 상장 종목의 생존자 편향을 포함한 탐색 결과입니다.</p></section>
