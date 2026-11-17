@@ -1,0 +1,16 @@
+[
+  {
+    "partition": "train",
+    "sector": "unknown",
+    "cap_group": "unknown",
+    "observations": 208829,
+    "success_rate": 0.2798126697
+  },
+  {
+    "partition": "validation",
+    "sector": "unknown",
+    "cap_group": "unknown",
+    "observations": 125461,
+    "success_rate": 0.2343835933
+  }
+]

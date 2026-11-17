@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   screen:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +40,15 @@ jobs:
             args+=(--scheduled --skip-unchanged)
           fi
           python scripts/run_cloud.py "${args[@]}"
+      - id: momentum
+        name: Run independent lightweight momentum screening
+        continue-on-error: true
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python -m momentum.screen --skip-unchanged
+      - name: Record independent momentum failure
+        if: steps.momentum.outcome == 'failure'
+        run: python -m scripts.write_momentum_failure
       - name: Commit refreshed dashboard data
         if: steps.screener.outcome == 'success'
         run: |
@@ -47,6 +57,9 @@ jobs:
           git add web/public/data/latest-results.json
           git add web/public/data/latest-candidates.md
           git add web/public/data/latest-run-status.json
+          if [[ -f web/public/data/latest-momentum.json ]]; then
+            git add web/public/data/latest-momentum.json
+          fi
           if [[ -f web/public/data/latest-candidates.csv ]]; then
             git add web/public/data/latest-candidates.csv
           fi
@@ -69,9 +82,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/public/data/latest-run-status.json
+          if [[ -f web/public/data/latest-momentum.json ]]; then
+            git add web/public/data/latest-momentum.json
+          fi
           git commit -m "Record screener run failure"
           git pull --rebase origin main
           git push
       - name: Mark failed screening run as failed
-        if: steps.screener.outcome == 'failure'
+        if: steps.screener.outcome == 'failure' || steps.momentum.outcome == 'failure'
         run: exit 1

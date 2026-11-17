@@ -1,0 +1,68 @@
+name: MOMENTUM 10+ manual research and screening
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Full research (artifact only) or lightweight frozen-model screening'
+        type: choice
+        options: [screen, research]
+        default: screen
+
+permissions:
+  contents: write
+
+# Shared with the legacy screener: external cron dispatches cannot overlap publishers.
+concurrency:
+  group: us-stock-screener
+  cancel-in-progress: false
+
+jobs:
+  momentum:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            work/momentum/prices
+            work/momentum/daily-prices
+            cache/sec
+            cache/universe
+          key: momentum-${{ inputs.mode }}-${{ github.run_id }}
+          restore-keys: |
+            momentum-${{ inputs.mode }}-
+      - name: Execute independent engine
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          if [[ "${{ inputs.mode }}" == "research" ]]; then
+            python -m momentum.research
+          else
+            python -m momentum.screen --skip-unchanged
+          fi
+      - name: Save manual research artifacts (never auto-promote a model)
+        if: inputs.mode == 'research'
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentum-research-${{ github.run_id }}
+          path: work/momentum/research/
+          retention-days: 30
+      - name: Publish lightweight screening only
+        if: inputs.mode == 'screen'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/public/data/latest-momentum.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update independent momentum screening data'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
