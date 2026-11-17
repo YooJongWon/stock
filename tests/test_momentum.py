@@ -246,3 +246,20 @@ def test_failed_momentum_run_clears_candidates_without_touching_swing_result(tmp
     assert result['candidates']==[]
     assert result['research_generated_at']=='frozen'
     assert legacy.read_bytes()==before
+
+
+def test_published_trade_popup_uses_only_actual_validation_and_display_metadata():
+    from copy import deepcopy
+    from scripts.publish_momentum_research import trade_snapshot
+    trade = {'ticker':'ABC','entry_date':'2026-07-02','return':-.05,'reason':'stop'}
+    unknown = {'ticker':'XYZ','entry_date':'2026-07-03','return':.09,'reason':'target'}
+    report = {'generated_at':'frozen', 'adopted_model':None, 'validation':{'trades':[trade,unknown]},'baselines':{'simple_momentum':{'trades':[{'ticker':'OTHER'}]}}}
+    original = deepcopy(report)
+    snapshot = trade_snapshot(report,[{'ticker':'ABC','name':'ABC Corporation','exchange':'NYSE'}])
+    assert snapshot['research_generated_at']=='frozen'
+    assert [t['ticker'] for t in snapshot['trades']]==['ABC','XYZ']
+    assert snapshot['trades'][0]['company_name']=='ABC Corporation'
+    assert snapshot['trades'][0]['return']==trade['return']
+    assert snapshot['trades'][1]['company_name']=='XYZ'
+    assert snapshot['trades'][1]['exchange'] is None
+    assert report==original

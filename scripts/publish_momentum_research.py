@@ -10,6 +10,16 @@ import pandas as pd
 from momentum.data import write_json
 
 
+def trade_snapshot(report, members):
+    """Display metadata only; it never changes scores, fills, labels or adoption."""
+    by_ticker = {m['ticker']: m for m in members}
+    trades = []
+    for trade in (report.get('validation') or {}).get('trades', []):
+        member = by_ticker.get(trade['ticker'], {})
+        trades.append({**trade, 'company_name':member.get('name') or trade['ticker'], 'exchange':member.get('exchange')})
+    return {'schema_version':1, 'research_generated_at':report['generated_at'], 'trades':trades}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', default='work/momentum/research')
@@ -39,6 +49,13 @@ def main():
         digest.update(hashlib.sha256(path.read_bytes()).digest())
         report['provenance']['price_file_count'] += 1
     report['provenance']['price_cache_sha256'] = digest.hexdigest()
+    try:
+        from momentum.data import universe
+        display_members = universe()
+    except Exception:
+        # A display-name lookup failure must not block publishing audited trades.
+        display_members = report.get('daily_universe', [])
+    write_json(destination / 'momentum-backtest-trades.json', trade_snapshot(report, display_members))
     # Publish small audit CSVs separately; the UI fetch stays compact.
     trade_rows, equity_rows = [], []
     portfolios = {'momentum':report.get('validation')}
