@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MomentumTrades from "./momentum-trades";
 import MomentumObservations, { type Observation, type UniverseScope } from "./momentum-observations";
 
 type Metrics = { trades: number; target_rate: number | null; stop_rate: number | null; win_rate: number | null; mean_return: number | null; profit_factor: number | null; max_drawdown: number | null; expectancy: number | null };
@@ -23,7 +22,6 @@ export default function Momentum() {
   const [data, setData] = useState<{ research: Research; snapshot: Snapshot; statistics: FeatureStats[] } | null>(null);
   const [horizon, setHorizon] = useState(20);
   const [lag, setLag] = useState(1);
-  const [tradesOpen, setTradesOpen] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
@@ -53,7 +51,7 @@ export default function Momentum() {
     <p className="momentum-muted">연구 {r.period?.start ?? "—"} ~ {r.period?.end ?? "—"} · 검증 시작 {r.period?.split ?? "—"} · 유니버스 {num(r.universe_count)} / 요청 {num(r.requested_count)} / 가격 확보 {num(r.downloaded_count)} / 실제 분석 {num(r.analyzed_count)}종목 · {num(r.observations)}관측 · 시총 확인 {num(r.cap_known_observations)}관측</p>
     <MomentumObservations observation={s.observations} referenceDate={s.data_date} researchGeneratedAt={r.generated_at} generatedAt={s.generated_at} finalCount={rows.length} validationExpectancy={r.validation?.metrics.expectancy} universeScope={s.universe_scope} />
     <section className="momentum-section"><h2>실제 분석 요약</h2><div className="momentum-summary-grid">
-      {[["분석 종목", `${num(r.analyzed_count)}종목`], ["학습 관측", num(r.train_observations)], ["검증 관측", num(r.validation_observations)], ["실제 검증 거래", r.validation ? `${num(r.validation.metrics.trades)}건` : "미실행"]].map(([label, value]) => label === "실제 검증 거래" ? <button type="button" className="momentum-summary-link" key={label} disabled={!r.validation?.metrics.trades} onClick={() => setTradesOpen(true)} aria-haspopup="dialog"><span>{label}</span><strong>{value}</strong><small>종목·거래 내역 보기 ↗</small></button> : <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+      {[["분석 종목", `${num(r.analyzed_count)}종목`], ["학습 관측", num(r.train_observations)], ["검증 관측", num(r.validation_observations)], ["실제 검증 거래", r.validation ? `${num(r.validation.metrics.trades)}건` : "미실행"]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </div><p className="momentum-muted">{r.validation ? `학습에서 선택한 조건을 이후 기간에 적용한 결과, 거래당 기대수익은 ${pct(r.validation.metrics.expectancy)}, 목표 달성률은 ${pct(r.validation.metrics.target_rate)}입니다.` : "완료된 검증 결과가 없습니다."} {r.adopted_model ? "채택 조건은 아래에서 확인할 수 있습니다." : "수익성·표본·데이터 확인 기준을 모두 통과하지 못해 추천을 보류합니다."}</p><p className="momentum-risk">시점별 시총 확인 {num(r.cap_known_observations)}관측. 시총 미확인 표본과 현재 상장 종목의 생존자 편향을 포함한 탐색 결과입니다.</p></section>
     <section className="momentum-section"><h2>급등 전 공통 패턴 · 성공과 실패 비교</h2><div className="momentum-controls"><label>목표 관측 기간 <select value={horizon} onChange={e => setHorizon(Number(e.target.value))}>{[5,10,20].map(n => <option value={n} key={n}>{n}거래일 내 +10%</option>)}</select></label><label>지표 시점 <select value={lag} onChange={e => setLag(Number(e.target.value))}>{[1,3,5,10].map(n => <option value={n} key={n}>진입 {n}거래일 전</option>)}</select></label></div>
     <p className="momentum-muted">성공은 +10% 목표가 -5% 손절보다 먼저 발생한 관측입니다. 전체 연구 기간의 설명용 통계이며, 중복 관측을 포함합니다. 지표 차이가 검증된 매수 조건을 뜻하지 않습니다. 표는 좌우로 스크롤할 수 있습니다.</p>
@@ -64,7 +62,6 @@ export default function Momentum() {
     ] as [string, (m: Metrics) => string][]).map(([label, format]) => <tr key={label}><th>{label}</th>{metrics.map(m => <td key={m.label}>{m.value ? format(m.value) : "미실행"}</td>)}</tr>)}</tbody></table></div><p className="momentum-muted">SPY 매수 후 보유 수익률: {pct(r.baselines?.spy_buy_hold_return)} · 미실행 성과는 숫자로 대체하지 않습니다. 이 결과는 후보 추천 조건으로 채택되었다는 뜻이 아닙니다.</p></section>
     {r.selected_model && !r.adopted_model && <section className="momentum-section"><h2>학습에서 선택했지만 채택하지 않은 조건</h2><p className="momentum-muted">학습 구간에서만 방향·중앙값·가중치를 도출한 탐색 모델입니다. 아래 조건은 검증에 실패했으며 현재 추천에 사용하지 않습니다. 가중 합산 점수 {r.selected_model.score_threshold} 이상으로 평가했습니다.</p><ul>{r.selected_model.rules.map(rule => <li key={rule.feature}>{featureLabels[rule.feature] ?? rule.feature} {rule.direction > 0 ? "≥" : "≤"} {featureValue(rule.feature,rule.threshold)} · 점수 비중 {pct(rule.weight / r.selected_model!.rules.reduce((sum, r) => sum + r.weight, 0))}</li>)}</ul><p className="momentum-muted">학습 거래당 기대수익 {pct(r.training_metrics?.expectancy)} → 검증 거래당 기대수익 {pct(r.validation?.metrics.expectancy)}. 검증 결과로 다른 조건을 다시 고르지 않았습니다.</p></section>}
     {r.adopted_model && <section className="momentum-section"><h2>최종 채택 조건</h2><p>점수 {r.adopted_model.score_threshold}점 이상</p><ul>{r.adopted_model.rules.map(rule => <li key={rule.feature}>{rule.feature} {rule.direction > 0 ? "≥" : "≤"} {num(rule.threshold)} · 가중치 {num(rule.weight)}</li>)}</ul></section>}
-    {tradesOpen && <MomentumTrades researchGeneratedAt={r.generated_at} expectedCount={r.validation?.metrics.trades ?? 0} onClose={() => setTradesOpen(false)} />}
     <section className="momentum-section"><h2>검증 및 데이터 진단</h2>{r.validation_gates && <ul>{Object.entries(r.validation_gates).map(([name, ok]) => <li key={name}>{gateLabels[name] ?? name}: {ok ? "충족" : "미충족"}</li>)}</ul>}<ul>{s.diagnostics?.slice(0, 20).map((d, i) => <li key={i}>{d.ticker ? `${d.ticker}: ` : ""}{d.error}</li>)}</ul><details><summary>분석 한계와 주의사항</summary><ul>{r.limitations?.map(l => <li key={l}>{l}</li>)}</ul></details><p><a href="/data/momentum-research.json" download>연구 결과 JSON</a> · <a href="/data/latest-momentum.json" download>현재 스크리닝 JSON</a> · <a href="/data/momentum-feature-statistics.json" download>지표별 성공·실패 통계</a> · <a href="/data/momentum-group-statistics.json" download>섹터·시총 그룹 통계</a> · <a href="/data/momentum-backtest-trades.csv" download>실제 거래 내역</a> · <a href="/data/momentum-backtest-equity.csv" download>일별 평가금액</a></p></section>
   </section>;
 }
