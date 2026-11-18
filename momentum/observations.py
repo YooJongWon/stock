@@ -1,6 +1,5 @@
 """Current technical observations, independent from validated recommendations."""
 from datetime import date
-from math import ceil
 from momentum.data import shares_facts, asof_cap
 from momentum.features import features, FEATURES, session_windows
 
@@ -54,11 +53,9 @@ def build_observations(prices, members, report, reference_date):
             cumulative = cumulative and passed
             if cumulative:
                 condition_counts[i] += 1
-        pass_count = sum(check['passed'] for check in checks)
-        if pass_count < ceil(len(checks) * 0.8):
+        if not cumulative:
             continue
-        if cumulative:
-            technical_count += 1
+        technical_count += 1
         try:
             cap = asof_cap(shares_facts(member),reference_date,float(row.close))
         except Exception as exc:
@@ -75,7 +72,7 @@ def build_observations(prices, members, report, reference_date):
             warnings.append('전략 수익성·표본 검증 미통과')
         if reference_date == research_end:
             warnings.append('연구 종료일과 같은 기준일: 신규 구간 검증 아님')
-        if strategy_valid and cumulative and cap is not None and reference_date > research_end:
+        if strategy_valid and cap is not None and reference_date > research_end:
             # Verified stocks are handled by the existing recommendation path.
             continue
         already = bool(row.return5 >= .10 or row.return10 >= .10 or row.return20 >= .10)
@@ -85,13 +82,24 @@ def build_observations(prices, members, report, reference_date):
             threshold = report.get('risk_quantiles',{}).get(name)
             if threshold is not None and row[name] > threshold:
                 warnings.append(f'{name}: 학습 표본 상위 10% 위험 구간')
-        result['items'].append({**row.to_dict(),'ticker':ticker,'name':member.get('name') or ticker,'exchange':member.get('exchange'),'market_cap':cap,'market_cap_status':'unknown' if cap is None else 'verified','technical_pass_count':pass_count,'technical_total':len(checks),'checks':checks,'warnings':warnings,'stage':'already_surged' if already else 'early'})
-    result['items'].sort(key=lambda item:(-item['technical_pass_count']/item['technical_total'],-item['dollar_volume30'],item['ticker']))
+        # Secondary watchlist review only: not a learned model or trading signal.
+        review_checks = [
+            {'label':'시총 확인', 'passed': cap is not None},
+            {'label':'급등 전 구간', 'passed': not already},
+            {'label':'SPY 대비 강세', 'passed': float(row.relative_strength) > 0},
+            {'label':'20일선 위', 'passed': float(row.ema20_gap) > 0},
+            {'label':'50일선 위', 'passed': float(row.sma50_gap) > 0},
+            {'label':'거래량 1.2배 이상', 'passed': float(row.rvol) >= 1.2},
+            {'label':'RSI 50~70', 'passed': 50 <= float(row.rsi14) <= 70},
+        ]
+        priority = all(check['passed'] for check in review_checks)
+        result['items'].append({**row.to_dict(),'ticker':ticker,'name':member.get('name') or ticker,'exchange':member.get('exchange'),'market_cap':cap,'market_cap_status':'unknown' if cap is None else 'verified','technical_pass_count':len(checks),'technical_total':len(checks),'checks':checks,'priority_watch':priority,'review_checks':review_checks,'warnings':warnings,'stage':'already_surged' if already else 'early'})
+    result['items'].sort(key=lambda item:(not item['priority_watch'],-item['dollar_volume30'],item['ticker']))
     result['stages'] = [{'key':'universe','label':'관찰 유니버스','count':len(members)},{'key':'data','label':'가격·지표 이력 확인','count':data_count},{'key':'liquidity','label':'주가 $10 · 평균 거래대금 $20M','count':liquid_count}]
     def label(rule):
         threshold = f"{rule['threshold']:.2f}" if rule['feature'] in ('rsi14','rvol') else f"{rule['threshold']*100:.2f}%"
         return f"{LABELS.get(rule['feature'],rule['feature'])} {'≥' if rule['direction']>0 else '≤'} {threshold}"
     result['stages'] += [{'key':f'technical_{i+1}','label':label(rule),'count':condition_counts[i]} for i,rule in enumerate(rules)]
-    result['stages'].append({'key':'observations','label':'80% 이상 통과 · 관찰 후보','count':len(result['items'])})
-    result.update(status='degraded' if result['diagnostics'] else 'success',technical_pass_count=technical_count,known_small_cap_excluded=below_cap,market_cap_unknown_count=sum(item['market_cap'] is None for item in result['items']),sort='pass_rate_desc_then_dollar_volume30_desc_then_ticker',note='학습 선택 조건 중 80% 이상을 만족한 현재 관찰 종목입니다. 통과 개수는 검증된 승률이나 매수 점수가 아닙니다. 현재 매수·준비 추천이 아닙니다.')
+    result['stages'].append({'key':'observations','label':'기술조건 전체 통과 · 관찰 후보','count':len(result['items'])})
+    result.update(status='degraded' if result['diagnostics'] else 'success',technical_pass_count=technical_count,known_small_cap_excluded=below_cap,market_cap_unknown_count=sum(item['market_cap'] is None for item in result['items']),sort='priority_watch_then_dollar_volume30_desc_then_ticker',note='연구 기술조건을 모두 통과한 종목만 관찰합니다. 우선 관찰은 시총 확인·미급등·상대강도·추세·거래량·RSI 등 보조 체크 7개를 모두 만족한 경우이며 성과 검증된 매수 신호가 아닙니다.')
     return result
