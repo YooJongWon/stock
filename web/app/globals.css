@@ -475,3 +475,11 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .momentum-stage-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.momentum-stage{display:grid;gap:10px;padding:15px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--text);font:inherit;text-align:left}.momentum-stage span{font-size:12px;color:var(--muted);line-height:1.6}.momentum-stage strong{font-size:23px}.momentum-stage-observe{border-color:#3b756b;cursor:pointer}.momentum-stage-observe strong,.momentum-stage-observe small{color:var(--mint)}.momentum-stage-observe:hover{background:#10271e}.momentum-stage-observe:focus-visible{outline:2px solid var(--mint)}.momentum-observation-table{min-width:850px}.momentum-observation-table a{display:grid;gap:6px;min-width:140px;max-width:220px}.momentum-observation-table a span,.momentum-observation-table small{display:block;font-size:11px;line-height:1.7}.momentum-observation-table ul{padding-left:16px;min-width:200px;font-size:11px;line-height:1.8}.momentum-observation-table td{vertical-align:top}
 @media(max-width:900px){.momentum-stage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .momentum-observation-pages{display:flex;gap:12px;align-items:center;justify-content:center;margin:18px 0;flex-wrap:wrap}.momentum-observation-pages button{padding:9px 16px;background:var(--bg);border:1px solid var(--line);border-radius:7px;color:var(--mint);font:inherit;cursor:pointer}.momentum-observation-pages button:disabled{opacity:.4;cursor:default}.momentum-observation-pages span{font-size:12px;color:var(--muted)}
+
+/* Momentum observation match-rate hierarchy and per-rule outcomes. */
+.momentum-watch{color:var(--amber)}
+.momentum-check-pass{color:var(--mint)}
+.momentum-check-fail{color:#ff9da5;font-weight:600}
+.momentum-observation-table td:nth-child(3) strong{font-size:17px}
+.momentum-observation-table td:nth-child(3) small{color:var(--muted)}
+.momentum-observation-table td:nth-child(4) li{overflow-wrap:anywhere}
