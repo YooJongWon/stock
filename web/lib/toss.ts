@@ -56,6 +56,8 @@ export type TossHolding = {
   lastPrice: string | null;
   value: string | null;
   profitLoss: string | null;
+  purchaseAmount?: string | null;
+  returnRate?: string | null;
 };
 
 const cashCurrencies = ["KRW", "USD"] as const;
@@ -97,6 +99,8 @@ export async function fetchTossSnapshot(clientId: string, clientSecret: string):
         lastPrice: item.lastPrice ?? null,
         value: item.marketValue?.amount ?? null,
         profitLoss: item.profitLoss?.amount ?? null,
+        purchaseAmount: item.marketValue?.purchaseAmount ?? null,
+        returnRate: item.profitLoss?.rate ?? null,
       })),
     };
   }));

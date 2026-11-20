@@ -2,19 +2,23 @@
 
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 
-import type { TossSnapshot } from "@/lib/toss";
+import { buildCalculatorPlan, type CalculatorInputs } from "@/lib/calculator-plan";
+import type { TossHolding, TossSnapshot } from "@/lib/toss";
 
 const refreshMs = 30_000;
 const koreaTime = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "medium" });
 
-export default function TossConnection() {
+export default function TossConnection({ calculatorSettings }: { calculatorSettings: CalculatorInputs | null }) {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [snapshot, setSnapshot] = useState<TossSnapshot | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [savedSettings, setSavedSettings] = useState<Partial<CalculatorInputs> | null>(null);
   const inFlight = useRef(false);
+  const hasSnapshot = snapshot !== null;
+  const plan = buildCalculatorPlan(calculatorSettings ?? savedSettings);
 
   async function checkConnection(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -63,6 +67,23 @@ export default function TossConnection() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!hasSnapshot || calculatorSettings) return;
+    const controller = new AbortController();
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/portfolio", { cache: "no-store", signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!controller.signal.aborted) setSavedSettings(data.calculatorInputs ?? null);
+      } catch {
+        // The same defaults apply when saved calculator settings are unavailable.
+      }
+    }
+    void loadSettings();
+    return () => controller.abort();
+  }, [hasSnapshot, calculatorSettings]);
 
   const refresh = useEffectEvent(() => {
     if (!needsAuth && document.visibilityState === "visible") void checkConnection();
@@ -113,6 +134,17 @@ export default function TossConnection() {
           {snapshot ? (
             <>
               <p className="toss-status" role="status">계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>
+              <section className="portfolio-plan-banner" aria-label="스윙 투자 배정">
+                <div className="portfolio-plan-banner-heading">
+                  <div><span>스윙 투자 계산기{!calculatorSettings && !savedSettings && " · 기본 설정"}</span><strong>종목당 목표 투자금 {usd.format(plan.perStockAmount)}</strong></div>
+                </div>
+                <div className="portfolio-plan-amounts toss-plan-amounts">
+                  <div><small>1차 매수 배정</small><strong>{usd.format(plan.firstBuyAmount)}</strong></div>
+                  <div><small>2차 매수 추가 배정</small><strong>{usd.format(plan.secondBuyAmount)}</strong></div>
+                  <div><small>2차 매수 기준</small><strong>1차 체결가 대비 +{plan.secondEntryRisePct.toFixed(1)}%</strong></div>
+                </div>
+                <p>USD 보유 종목의 현재 매입금액으로 배정 도달 여부를 확인합니다. 체결별 매수 차수를 확인하려면 토스증권 주문 내역을 봐주세요.</p>
+              </section>
               {snapshot.accounts.length === 0 && <div className="portfolio-panel">조회 가능한 토스증권 계좌가 없습니다.</div>}
               {snapshot.accounts.map(({ holdings, buyingPower }, index) => (
                 <section key={index} className="portfolio-panel" aria-label={`토스증권 계좌 ${index + 1}`}>
@@ -144,22 +176,53 @@ export default function TossConnection() {
                         <thead>
                           <tr>
                             <th scope="col">종목</th>
+                            <th scope="col">수익률</th>
+                            <th scope="col">매수 배정 진행</th>
                             <th scope="col">수량</th>
                             <th scope="col">현재가</th>
                             <th scope="col">평가금액</th>
-                            <th scope="col">평가손익</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {holdings.map(({ symbol, name, currency, quantity, lastPrice, value, profitLoss }) => (
-                            <tr key={`${currency}:${symbol}`}>
-                              <td><strong>{symbol}</strong><small>{name}</small></td>
-                              <td>{formatNumber(quantity)}</td>
-                              <td>{formatMoney(lastPrice, currency)}</td>
-                              <td>{formatMoney(value, currency)}</td>
-                              <td className={profitLossClass(profitLoss)}>{formatMoney(profitLoss, currency)}</td>
-                            </tr>
-                          ))}
+                          {holdings.map((holding) => {
+                            const { symbol, name, currency, quantity, lastPrice, value, profitLoss } = holding;
+                            const cost = holdingCost(holding);
+                            const rate = readNumber(holding.returnRate) ?? (cost ? divide(profitLoss, cost) : null);
+                            const costCents = cost === null ? 0 : Math.round(cost * 100);
+                            const firstReached = costCents >= Math.round(plan.firstBuyAmount * 100);
+                            const secondReached = costCents >= Math.round(plan.perStockAmount * 100);
+                            const trackBudget = currency === "USD" && cost !== null && plan.perStockAmount > 0;
+                            return (
+                              <tr key={`${currency}:${symbol}`}>
+                                <td><strong>{symbol}</strong><small>{name}</small></td>
+                                <td className={`toss-return ${profitLossClass(rate)}`}>
+                                  <span>{rate === null ? "—" : percent.format(rate)}</span>
+                                  <small>{formatMoney(profitLoss, currency)}</small>
+                                </td>
+                                <td className="toss-budget">
+                                  {trackBudget ? (
+                                    <>
+                                      <div className="toss-buy-stages">
+                                        <span className={firstReached && plan.firstBuyAmount > 0 ? "reached" : undefined}>
+                                          1차 {plan.firstBuyAmount === 0 ? "배정 없음" : firstReached ? "도달" : "미달"}
+                                        </span>
+                                        <span className={secondReached && plan.secondBuyAmount > 0 ? "reached" : undefined}>
+                                          2차 {plan.secondBuyAmount === 0 ? "배정 없음" : secondReached ? "도달" : "미달"}
+                                        </span>
+                                      </div>
+                                      <small>{usd.format(cost)} / {usd.format(plan.perStockAmount)}</small>
+                                      <div className="portfolio-budget-track" aria-hidden="true">
+                                        <span style={{ width: `${Math.min(100, cost / plan.perStockAmount * 100)}%` }} />
+                                      </div>
+                                    </>
+                                  ) : <small>{currency !== "USD" ? "USD 투자 계획 대상 아님" : "배정 확인 불가"}</small>}
+                                </td>
+                                <td>{formatNumber(quantity)}</td>
+                                <td>{formatMoney(lastPrice, currency)}</td>
+                                <td>{formatMoney(value, currency)}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -187,7 +250,33 @@ function formatMoney(amount: string | null, currency: string) {
   return amount == null ? "—" : `${formatNumber(amount)} ${currency}`;
 }
 
-function profitLossClass(amount: string | null) {
-  if (amount === null || Number(amount) === 0) return undefined;
-  return amount.startsWith("-") ? "negative" : "positive";
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const percent = new Intl.NumberFormat("ko-KR", {
+  style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
+function readNumber(amount: string | null | undefined) {
+  if (typeof amount !== "string" || amount.trim() === "") return null;
+  const number = Number(amount);
+  return Number.isFinite(number) ? number : null;
+}
+
+function holdingCost(holding: TossHolding) {
+  const purchaseAmount = readNumber(holding.purchaseAmount);
+  if (purchaseAmount !== null) return purchaseAmount >= 0 ? purchaseAmount : null;
+  const value = readNumber(holding.value);
+  const profit = readNumber(holding.profitLoss);
+  if (value === null || profit === null) return null;
+  const cost = value - profit;
+  return Number.isFinite(cost) && cost >= 0 ? cost : null;
+}
+
+function divide(amount: string | null, cost: number) {
+  const value = readNumber(amount);
+  return value === null ? null : value / cost;
+}
+
+function profitLossClass(rate: number | null) {
+  if (rate === null || Math.abs(rate) < 0.00005) return "";
+  return rate < 0 ? "negative" : "positive";
 }
