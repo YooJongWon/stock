@@ -493,8 +493,12 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .toss-holdings .portfolio-table:has(.toss-budget){min-width:620px}
 .toss-holdings .toss-return>span{font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}
 .toss-holdings .toss-return small,.toss-holdings .toss-budget small{color:var(--muted)}
-.toss-buy-stages{display:flex;justify-content:flex-end;gap:5px}
-.toss-buy-stages span{padding:3px 5px;border:1px solid var(--line);border-radius:5px;color:var(--muted)}
-.toss-buy-stages .reached{border-color:#315a4b;background:#10231e;color:var(--mint)}
+.toss-stage-filters{margin-bottom:14px}
+.toss-stage-button{padding:6px 8px;border:1px solid;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}
+.toss-stage-button:focus-visible{outline:2px solid #e1edf7;outline-offset:2px}
+.toss-stage-button span{margin-left:3px}
+.toss-stage-0{border-color:#7b4a39;background:#321e19;color:#ffc09b}
+.toss-stage-1{border-color:#315d7b;background:#0f2130;color:#a5d7fd}
+.toss-stage-2{border-color:#315a4b;background:#10231e;color:#9fefd2}
 .toss-budget .portfolio-budget-track{margin-bottom:0}
 @media(max-width:650px){.toss-plan-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}}
