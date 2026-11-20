@@ -489,3 +489,12 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .toss-holdings .portfolio-table{min-width:480px}
 .toss-holdings .portfolio-table th:not(:first-child),
 .toss-holdings .portfolio-table td:not(:first-child){text-align:right}
+.toss-plan-amounts{grid-template-columns:repeat(3,minmax(0,1fr))}
+.toss-holdings .portfolio-table:has(.toss-budget){min-width:620px}
+.toss-holdings .toss-return>span{font-size:16px;font-weight:750;font-variant-numeric:tabular-nums}
+.toss-holdings .toss-return small,.toss-holdings .toss-budget small{color:var(--muted)}
+.toss-buy-stages{display:flex;justify-content:flex-end;gap:5px}
+.toss-buy-stages span{padding:3px 5px;border:1px solid var(--line);border-radius:5px;color:var(--muted)}
+.toss-buy-stages .reached{border-color:#315a4b;background:#10231e;color:var(--mint)}
+.toss-budget .portfolio-budget-track{margin-bottom:0}
+@media(max-width:650px){.toss-plan-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}}

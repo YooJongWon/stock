@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
 import PortfolioManager from "./portfolio-manager";
+import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculator-plan";
 import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
@@ -356,7 +357,7 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
 
       {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} calculatorSettings={calculatorSettings} /></div>}
       {calculatorOpened && <div hidden={activeMenu !== "calculator"}><InvestmentCalculator active={activeMenu === "calculator"} onSettingsChange={setCalculatorSettings} /></div>}
-      {activeMenu === "toss" ? <TossConnection /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      {activeMenu === "toss" ? <TossConnection calculatorSettings={calculatorSettings} /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
@@ -553,18 +554,6 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
     </section>
   </section>;
 }
-
-type CalculatorInputs = {
-  total: string; stockCount: string; cashRatio: string; firstBuyRatio: string;
-  stopLossRatio: string; firstTargetRatio: string; finalTargetRatio: string;
-  secondEntryRisePct: string; exitPlanVersion: string;
-};
-
-const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
-  total: "14000", stockCount: "5", cashRatio: "5", firstBuyRatio: "60",
-  stopLossRatio: "-5", firstTargetRatio: "6", finalTargetRatio: "10",
-  secondEntryRisePct: "4", exitPlanVersion: "2",
-};
 
 const CALCULATOR_FIELDS: { key: keyof CalculatorInputs; label: string; suffix: string; min: number; max?: number; step: number }[] = [
   { key: "total", label: "총 투자금", suffix: "USD", min: 0, step: 100 },
