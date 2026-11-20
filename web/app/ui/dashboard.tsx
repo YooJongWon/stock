@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
 import PortfolioManager from "./portfolio-manager";
+import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
 type Result = {
@@ -314,7 +315,7 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
   const [calculatorSettings, setCalculatorSettings] = useState<CalculatorInputs | null>(null);
   const [calculatorOpened, setCalculatorOpened] = useState(false);
   const [portfolioOpened, setPortfolioOpened] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals" | "portfolio" | "momentum">("screener");
+  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals" | "portfolio" | "momentum" | "toss">("screener");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
@@ -348,13 +349,14 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
           <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => { setCalculatorOpened(true); setActiveMenu("calculator"); }}>스윙 투자 계산기</button>
           <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => { setPortfolioOpened(true); setActiveMenu("portfolio"); }}>내 포트폴리오</button>
+          <button type="button" role="tab" id="toss-tab" aria-controls="toss-panel" aria-selected={activeMenu === "toss"} className={activeMenu === "toss" ? "active" : ""} onClick={() => setActiveMenu("toss")}>토스</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
       {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} calculatorSettings={calculatorSettings} /></div>}
       {calculatorOpened && <div hidden={activeMenu !== "calculator"}><InvestmentCalculator active={activeMenu === "calculator"} onSettingsChange={setCalculatorSettings} /></div>}
-      {activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      {activeMenu === "toss" ? <TossConnection /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
