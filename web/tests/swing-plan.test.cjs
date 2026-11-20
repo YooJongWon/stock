@@ -33,7 +33,7 @@ test('API saves first-buy-only exits, legacy progress and undo history without c
   process.env.SUPABASE_URL = 'https://test.invalid';
   process.env.SUPABASE_SECRET_KEY = 'sb_secret_local_test';
   const auth = load('lib/portfolio-auth.ts');
-  const route = load('app/api/portfolio/route.ts', { '@/lib/portfolio-auth': auth, '@/lib/swing-plan': plan });
+  const route = load('app/api/portfolio/route.ts', { '@/lib/portfolio-auth': auth, '@/lib/swing-plan': plan, '@/lib/portfolio-supabase': load('lib/portfolio-supabase.ts') });
   const { NextRequest } = require('next/server');
   const token = auth.createPortfolioSession().token;
   const originalFetch = global.fetch;
