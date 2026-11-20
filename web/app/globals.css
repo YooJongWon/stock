@@ -483,3 +483,9 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .momentum-observation-table td:nth-child(3) strong{font-size:17px}
 .momentum-observation-table td:nth-child(3) small{color:var(--muted)}
 .momentum-observation-table td:nth-child(4) li{overflow-wrap:anywhere}
+
+.toss-refresh{align-self:center;white-space:nowrap}
+.toss-status{margin:0 0 14px;color:var(--muted);font-size:12px;line-height:1.6}
+.toss-holdings .portfolio-table{min-width:480px}
+.toss-holdings .portfolio-table th:not(:first-child),
+.toss-holdings .portfolio-table td:not(:first-child){text-align:right}
