@@ -8,16 +8,38 @@ import type { TossHolding, TossSnapshot } from "@/lib/toss";
 const refreshMs = 30_000;
 const koreaTime = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "medium" });
 
-const buyStages = ["1차 미달", "2차 매수 대기", "2차 달성"] as const;
-type BuyStage = 0 | 1 | 2;
-const nextStage: Record<BuyStage, BuyStage> = { 0: 1, 1: 2, 2: 0 };
-const stageStorageKey = "toss-buy-stages";
+const buyStages = { 1: "1차매수", 2: "2차매수" } as const;
+type BuyStage = keyof typeof buyStages;
+type StageRow = { holding_key: string; stage: BuyStage };
+const legacyStorageKey = "toss-buy-stages";
 const stageFilters = [
   { value: "all", label: "전체" },
-  { value: 0, label: buyStages[0] },
   { value: 1, label: buyStages[1] },
   { value: 2, label: buyStages[2] },
 ] as const;
+
+function legacyStageRows(): StageRow[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem(legacyStorageKey) ?? "{}");
+    return Object.entries(stored).flatMap(([holding_key, stage]): StageRow[] =>
+      holding_key.length > 0 && holding_key.length <= 120 && (stage === 0 || stage === 1 || stage === 2)
+        ? [{ holding_key, stage: stage === 2 ? 2 : 1 }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function saveStages(stages: StageRow[], options?: { importLegacy: true; signal: AbortSignal }) {
+  const response = await fetch("/api/toss/stages", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stages, importLegacy: options?.importLegacy }),
+    signal: options?.signal,
+  });
+  if (!response.ok) throw new Error("Could not save Toss buy stages");
+}
 
 export default function TossConnection({ calculatorSettings }: { calculatorSettings: CalculatorInputs | null }) {
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -28,34 +50,52 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
   const [refreshing, setRefreshing] = useState(false);
   const [savedSettings, setSavedSettings] = useState<Partial<CalculatorInputs> | null>(null);
   const [stageFilter, setStageFilter] = useState<"all" | BuyStage>("all");
-  const [manualStages, setManualStages] = useState<Record<string, BuyStage>>({});
-  const [stageSaveError, setStageSaveError] = useState(false);
+  const [manualStages, setManualStages] = useState<Record<string, BuyStage> | null>(null);
+  const [stageError, setStageError] = useState("");
+  const [savingStage, setSavingStage] = useState(false);
+  const [stageLoadAttempt, setStageLoadAttempt] = useState(0);
   const inFlight = useRef(false);
   const hasSnapshot = snapshot !== null;
   const plan = buildCalculatorPlan(calculatorSettings ?? savedSettings);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(stageStorageKey) ?? "{}");
-      if (stored && typeof stored === "object") {
-        setManualStages(Object.fromEntries(
-          Object.entries(stored).filter((entry): entry is [string, BuyStage] =>
-            entry[1] === 0 || entry[1] === 1 || entry[1] === 2),
-        ));
+    if (!hasSnapshot) return;
+    const controller = new AbortController();
+    async function loadStages() {
+      try {
+        const legacy = legacyStageRows();
+        for (let offset = 0; offset < legacy.length; offset += 500) {
+          await saveStages(legacy.slice(offset, offset + 500), { importLegacy: true, signal: controller.signal });
+        }
+        const response = await fetch("/api/toss/stages", { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error("Could not load Toss buy stages");
+        const data: { stages: StageRow[] } = await response.json();
+        if (controller.signal.aborted) return;
+        setManualStages(Object.fromEntries(data.stages.map(({ holding_key, stage }) => [holding_key, stage])));
+        setStageError("");
+        if (legacy.length > 0) {
+          try { localStorage.removeItem(legacyStorageKey); } catch { /* Import is safe to repeat. */ }
+        }
+      } catch {
+        if (!controller.signal.aborted) setStageError("저장된 매수 상태를 불러오지 못했습니다.");
       }
-    } catch {
-      // Invalid or unavailable storage falls back to the allocation status.
     }
-  }, []);
+    void loadStages();
+    return () => controller.abort();
+  }, [hasSnapshot, stageLoadAttempt]);
 
-  function advanceStage(key: string, stage: BuyStage) {
-    const updated = { ...manualStages, [key]: nextStage[stage] };
-    setManualStages(updated);
+  async function advanceStage(key: string, stage: BuyStage) {
+    if (!manualStages || savingStage) return;
+    const next: BuyStage = stage === 1 ? 2 : 1;
+    setSavingStage(true);
+    setStageError("");
     try {
-      localStorage.setItem(stageStorageKey, JSON.stringify(updated));
-      setStageSaveError(false);
+      await saveStages([{ holding_key: key, stage: next }]);
+      setManualStages((current) => current && { ...current, [key]: next });
     } catch {
-      setStageSaveError(true);
+      setStageError("매수 상태를 저장하지 못했습니다. 상태 버튼을 다시 눌러 주세요.");
+    } finally {
+      setSavingStage(false);
     }
   }
 
@@ -88,6 +128,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
         setNeedsAuth(true);
         setRefreshing(false);
         setSnapshot(null);
+        setManualStages(null);
         return;
       }
 
@@ -182,7 +223,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
                   <div><small>2차 매수 추가 배정</small><strong>{usd.format(plan.secondBuyAmount)}</strong></div>
                   <div><small>2차 매수 기준</small><strong>1차 체결가 대비 +{plan.secondEntryRisePct.toFixed(1)}%</strong></div>
                 </div>
-                <p>USD 종목의 기본 상태는 매입금액으로 표시합니다. 상태 버튼을 누르면 다음 단계로 바뀌며 이 브라우저에 저장됩니다.</p>
+                <p>USD 종목은 매입금액이 목표액에 도달하면 기본 상태가 2차매수로 표시됩니다. 버튼으로 바꾼 상태는 자동 저장됩니다.</p>
               </section>
               {snapshot.accounts.some(({ holdings }) => holdings.length > 0) && (
                 <div className="portfolio-group-filter-tabs toss-stage-filters" role="group" aria-label="매수 상태별 종목 보기">
@@ -193,19 +234,24 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
                   ))}
                 </div>
               )}
-              {stageSaveError && <p className="portfolio-error" role="alert">이 브라우저에 매수 상태를 저장하지 못했습니다.</p>}
+              {stageError && <p className="portfolio-error" role="alert">{stageError}</p>}
+              {!manualStages && stageError && (
+                <button type="button" className="portfolio-secondary toss-stage-retry" onClick={() => {
+                  setStageError("");
+                  setStageLoadAttempt((attempt) => attempt + 1);
+                }}>상태 다시 불러오기</button>
+              )}
+              {savingStage && <p className="toss-status" role="status">매수 상태 저장 중…</p>}
               {snapshot.accounts.length === 0 && <div className="portfolio-panel">조회 가능한 토스증권 계좌가 없습니다.</div>}
               {snapshot.accounts.map(({ holdings, buyingPower }, index) => {
                 const visibleHoldings = holdings.map((holding) => {
                   const cost = holdingCost(holding);
                   const trackBudget = holding.currency === "USD" && cost !== null && plan.perStockAmount > 0;
                   const costCents = cost === null ? 0 : Math.round(cost * 100);
-                  const hasSecondAllocation = plan.secondBuyAmount > 0;
-                  let automaticStage: BuyStage = 0;
-                  if (trackBudget && costCents >= Math.round(plan.perStockAmount * 100)) automaticStage = 2;
-                  else if (trackBudget && hasSecondAllocation && costCents >= Math.round(plan.firstBuyAmount * 100)) automaticStage = 1;
+                  const automaticStage: BuyStage = trackBudget && plan.secondBuyAmount > 0 &&
+                    costCents >= Math.round(plan.perStockAmount * 100) ? 2 : 1;
                   const key = JSON.stringify([index, holding.currency, holding.symbol]);
-                  const stage = manualStages[key] ?? automaticStage;
+                  const stage = manualStages?.[key] ?? automaticStage;
                   return { holding, key, cost, trackBudget, stage };
                 }).filter(({ stage }) => stageFilter === "all" || stageFilter === stage);
 
@@ -261,8 +307,9 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
                                     <button
                                       type="button"
                                       className={`toss-stage-button toss-stage-${stage}`}
-                                      aria-label={`${symbol} ${buyStages[stage]}. ${buyStages[nextStage[stage]]}(으)로 변경`}
-                                      onClick={() => advanceStage(key, stage)}
+                                      aria-label={`${symbol} ${buyStages[stage]}. ${buyStages[stage === 1 ? 2 : 1]}(으)로 변경`}
+                                      disabled={!manualStages || savingStage}
+                                      onClick={() => void advanceStage(key, stage)}
                                     >
                                       {buyStages[stage]} <span aria-hidden="true">↻</span>
                                     </button>
