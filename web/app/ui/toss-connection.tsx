@@ -81,7 +81,7 @@ export default function TossConnection() {
     <section className="portfolio-page" role="tabpanel" id="toss-panel" aria-labelledby="toss-tab">
       <div className="hero portfolio-hero">
         <h1>토스</h1>
-        <p>토스증권 보유 종목을 조회합니다. 연결 후 이 탭을 보는 동안 30초마다 갱신됩니다.</p>
+        <p>토스증권 현금 매수 가능 금액과 보유 종목을 조회합니다. 연결 후 이 탭을 보는 동안 30초마다 갱신됩니다.</p>
       </div>
       <form className="portfolio-login" onSubmit={checkConnection}>
         {needsAuth && (
@@ -96,9 +96,22 @@ export default function TossConnection() {
         {error && <p className="portfolio-error" role="alert">{error}</p>}
         {snapshot && <p role="status">조회 가능한 계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>}
       </form>
-      {snapshot?.accounts.map(({ holdings }, index) => (
+      {snapshot?.accounts.map(({ holdings, buyingPower }, index) => (
         <section key={index} className="portfolio-login">
           <h2>계좌 {index + 1}</h2>
+          <h3>현금 매수 가능 금액</h3>
+          <p>토스증권 Open API에서 제공하는 미수 없는 매수 가능 금액입니다. 예수금 잔액은 API에서 제공하지 않습니다.</p>
+          {buyingPower ? (
+            <dl>
+              {buyingPower.map(({ currency, amount }) => (
+                <div key={currency}>
+                  <dt>{currency === "KRW" ? "원화" : "달러"}</dt>
+                  <dd>{amount === null ? "조회 실패" : `${amount.replace(/^-?\d+/, (integer) => integer.replace(/\B(?=(\d{3})+$)/g, ","))} ${currency}`}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : <p>중계 서버를 업데이트하면 조회할 수 있습니다.</p>}
+          <h3>보유 종목</h3>
           {holdings.length === 0 ? <p>보유 종목이 없습니다.</p> : (
             <ul>
               {holdings.map((holding) => (
