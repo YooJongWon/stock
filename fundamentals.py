@@ -48,6 +48,8 @@ class FallbackFundamentalProvider:
                     }
                 if missing:
                     errors.append("SEC missing required fields: " + ", ".join(missing))
+                    if result.get("warning"):
+                        errors.append(str(result["warning"]))
                 else:
                     errors.append(str(result.get("error") or "SEC result marked unavailable"))
             else:
@@ -106,6 +108,10 @@ class FallbackFundamentalProvider:
                 if combined.get(field) is None and yahoo.get(field) is not None:
                     combined[field] = yahoo[field]
                     yahoo_filled.append(field)
+                    if field == "sales_growth_5y":
+                        combined["sales_growth_periods"] = yahoo.get("sales_growth_periods")
+                    elif field == "market_cap":
+                        combined["market_cap_source"] = yahoo.get("market_cap_source") or "Yahoo Finance"
 
             # Cross-derive P/E only when SEC has positive TTM net income.
             if (

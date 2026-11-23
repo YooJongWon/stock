@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 import time
 
@@ -43,6 +44,7 @@ class YFinanceProvider:
 
     def history(self, ticker: str, reference_date, period="2y"):
         errors = []
+        reference = pd.Timestamp(reference_date)
         candidates = [ticker]
         if "-" in ticker:
             candidates.append(ticker.replace("-", "."))
@@ -72,7 +74,21 @@ class YFinanceProvider:
                         break
                     cleaned = _clean_nonpositive_ohlc(raw)
                     df = normalize_ohlcv(cleaned, reference_date)
-                    return df
+                    if df.index[-1] == reference.date():
+                        return df
+
+                    errors.append(f"stale daily close: received {df.index[-1]}, expected {reference.date()}")
+                    if period == "2y":
+                        try:
+                            recovered = self._history_by_date(sym, reference)
+                            if recovered.index[-1] == reference.date():
+                                return recovered
+                            errors.append(
+                                f"date-range request returned {recovered.index[-1]}, expected {reference.date()}"
+                            )
+                        except Exception as exc:
+                            errors.append(f"date-range request: {type(exc).__name__}: {exc}")
+                    break
                 except ValueError as exc:
                     errors.append(f"{type(exc).__name__}: {exc}")
                     break
@@ -84,6 +100,20 @@ class YFinanceProvider:
                     LOG.warning("yfinance history failure for %s: %s; retrying in %ss", sym, exc, delay)
                     time.sleep(delay)
         raise RuntimeError("yfinance failed: " + " | ".join(errors))
+
+    def _history_by_date(self, symbol, reference):
+        # Request a fresh full history so differently adjusted series are never joined.
+        if self.history_delay:
+            time.sleep(self.history_delay)
+        raw = yf.Ticker(symbol).history(
+            start=(reference - pd.DateOffset(years=2)).date().isoformat(),
+            end=(reference.date() + timedelta(days=1)).isoformat(),
+            interval="1d",
+            auto_adjust=True,
+            actions=False,
+            timeout=25,
+        )
+        return normalize_ohlcv(_clean_nonpositive_ohlc(raw), reference)
 
     def instrument_info(self, ticker: str) -> dict:
         """Yahoo quote metadata is advisory; the universe source remains the listing authority."""
