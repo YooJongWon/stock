@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
+import re
 import time
 
 import requests
@@ -105,7 +106,7 @@ class _InlineXBRLParser(HTMLParser):
 
         if self._context is not None:
             self._context_depth += 1
-            if local == "segment":
+            if local in ("segment", "scenario"):
                 self._context["segmented"] = True
             elif local in ("startdate", "enddate", "instant"):
                 self._context_field = local
@@ -284,7 +285,7 @@ class SECFundamentalProvider:
             )
         return False
 
-    def _inline_records_from_filing(self, cik, accession, primary_document, filing_date, form, ref):
+    def _inline_records_from_filing(self, cik, accession, primary_document, filing_date, form, ref, *, standard=False):
         accession_plain = str(accession).replace("-", "")
         cik_number = str(int(str(cik)))
         url = (
@@ -292,6 +293,13 @@ class SECFundamentalProvider:
             f"{accession_plain}/{primary_document}"
         )
         body = self._get_text(url, f"{cik_number}:{accession_plain}:{primary_document}")
+        # Resolve single-measure units only. Compound units such as USD/share
+        # cannot be used for statement totals or outstanding shares.
+        units = dict(re.findall(
+            r'<(?:[\w.-]+:)?unit\s+id=["\']([^"\']+)["\']\s*>\s*'
+            r'<(?:[\w.-]+:)?measure>\s*([^<]+?)\s*</(?:[\w.-]+:)?measure>\s*</(?:[\w.-]+:)?unit>',
+            body, re.IGNORECASE,
+        )) if standard else {}
         parser = _InlineXBRLParser()
         parser.feed(body)
         filed = date.fromisoformat(str(filing_date)[:10])
@@ -299,8 +307,17 @@ class SECFundamentalProvider:
         for fact in parser.facts:
             name = str(fact.get("name") or "")
             prefix = name.split(":")[0].lower() if ":" in name else ""
-            if prefix in ("us-gaap", "dei", "ifrs-full", "srt"):
+            if standard != (prefix in ("us-gaap", "dei", "ifrs-full", "srt")):
                 continue
+            unit = fact.get("unit_ref")
+            if standard:
+                measure = units.get(unit, "")
+                if measure == "xbrli:shares":
+                    unit = "shares"
+                elif re.fullmatch(r"iso4217:[A-Z]{3}", measure):
+                    unit = measure.split(":")[1]
+                else:
+                    continue
             if fact.get("nil") in ("true", "1"):
                 continue
             context = parser.contexts.get(fact.get("context_ref"))
@@ -331,13 +348,13 @@ class SECFundamentalProvider:
                 "fy": end.year,
                 "fp": "FY" if str(form).startswith(("10-K", "20-F", "40-F")) else None,
                 "val": value,
-                "unit": fact.get("unit_ref"),
+                "unit": unit,
                 "context_id": fact.get("context_ref"),
                 "source": "SEC Inline XBRL filing",
             })
         return records
 
-    def _extension_records(self, cik, ref, need_revenue, need_equity, need_shares):
+    def _extension_records(self, cik, ref, need_revenue, need_equity, need_shares, *, standard=False):
         """Read point-in-time Inline XBRL facts from a small, targeted set of original SEC filings."""
         if not cik:
             return {
@@ -387,6 +404,8 @@ class SECFundamentalProvider:
         selected = []
         if (need_equity or need_shares) and rows:
             selected.append(rows[0])
+        if standard:
+            selected.extend(rows[:5])
         if need_revenue and annual_rows:
             latest_annual = annual_rows[0]
             selected.append(latest_annual)
@@ -418,7 +437,7 @@ class SECFundamentalProvider:
             try:
                 extracted.extend(self._inline_records_from_filing(
                     cik, row["accession"], row["primary_document"],
-                    row["filing_date"], row["form"], ref,
+                    row["filing_date"], row["form"], ref, standard=standard,
                 ))
                 used_filings.append({
                     "form": row["form"],
@@ -432,6 +451,29 @@ class SECFundamentalProvider:
                     f"{row['form']} filed {row['filing_date']}: {type(exc).__name__}: {exc}"
                 )
                 continue
+
+        if standard:
+            facts = {}
+            for row in extracted:
+                namespace = row["tag"].split(":")[0].lower()
+                tag = row["local_tag"]
+                unit = row["unit"]
+                if tag in SHARES_TAGS:
+                    if unit != "shares" or tag not in SHARES_TAGS[:2]:
+                        continue
+                elif tag in REVENUE_TAGS:
+                    if unit == "shares":
+                        continue
+                elif tag in NET_INCOME_TAGS + EQUITY_TAGS + ASSETS_TAGS + LIABILITIES_TAGS:
+                    if unit != "USD":
+                        continue
+                else:
+                    continue
+                entry = {**row, "filed": str(row["filed"]), "end": str(row["end"]),
+                         "start": str(row["start"]) if row["start"] else None}
+                fact = facts.setdefault(namespace, {}).setdefault(tag, {"units": {}})
+                fact["units"].setdefault(unit, []).append(entry)
+            return {"facts": facts, "filings": used_filings, "errors": filing_errors}
 
         extension = {
             row["tag"] for row in extracted
@@ -673,9 +715,23 @@ class SECFundamentalProvider:
     def get_fundamentals(self, cik, reference_date, price):
         ref = date.fromisoformat(str(reference_date)[:10])
         cik = str(cik).zfill(10)
-        facts_payload = self._get_json(
-            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", cik, 86400
-        )
+        inline_recovery = None
+        try:
+            facts_payload = self._get_json(
+                f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", cik, 86400
+            )
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            inline_recovery = self._extension_records(cik, ref, True, True, True, standard=True)
+            if not inline_recovery["facts"]:
+                checked = ", ".join(filing["form"] for filing in inline_recovery["filings"])
+                detail = "; ".join(inline_recovery["errors"])
+                raise ValueError(
+                    f"SEC companyfacts 404 for CIK {cik}; no usable Inline XBRL facts "
+                    f"(filings checked: {checked or 'none'}{'; ' + detail if detail else ''})"
+                ) from exc
+            facts_payload = inline_recovery
         facts = facts_payload.get("facts", {})
 
         tag_rev, rev_obj = self._best_fact(facts, REVENUE_TAGS, ref, "annual")
@@ -683,8 +739,11 @@ class SECFundamentalProvider:
         tag_eq, eq_obj = self._best_fact(facts, EQUITY_TAGS, ref, "instant")
         tag_shares, shares_obj = self._best_fact(facts, SHARES_TAGS, ref, "instant")
 
-        # Use primary tag records first, supplemented by merged records across all candidate tags
-        revenue_records = self._records(rev_obj, ref) + self._merged_records(facts, REVENUE_TAGS, ref)
+        # For a 404 recovery, keep the original filing's revenue tag and
+        # reporting currency consistent across the comparison period.
+        revenue_records = self._records(rev_obj, ref)
+        if not inline_recovery:
+            revenue_records += self._merged_records(facts, REVENUE_TAGS, ref)
         net_income_records = self._records(ni_obj, ref)
         if len(self._quarters(net_income_records)) < 4:
             net_income_records = self._merged_records(facts, NET_INCOME_TAGS, ref)
@@ -714,12 +773,7 @@ class SECFundamentalProvider:
                     else latest_ni_row.get("start", latest_ni_row["end"])
                 )
                 trailing = [{**latest_ni_row, "period_start": start_dt, "quarter_value": ttm_net_income}]
-            else:
-                if len(net_income_quarters) < 4:
-                    raise ValueError("SEC has fewer than four usable discrete net-income quarters")
-                raise ValueError("SEC TTM periods are not contiguous enough")
-
-        nonpositive_earnings = ttm_net_income <= 0
+        nonpositive_earnings = ttm_net_income is not None and ttm_net_income <= 0
 
         # Build instant equity series; fall back to Assets - Liabilities if direct Equity tags are absent
         equity_by_end = {}
@@ -746,7 +800,7 @@ class SECFundamentalProvider:
         latest_equity = equity_instants[-1] if equity_instants else None
         prior_equity = [
             row for row in equity_instants
-            if row["end"] < trailing[0]["end"]
+            if trailing and row["end"] < trailing[0]["end"]
         ]
         if not prior_equity and len(equity_instants) >= 2:
             prior_equity = [equity_instants[-2]]
@@ -754,7 +808,8 @@ class SECFundamentalProvider:
 
         roe = None
         if (
-            latest_equity is not None
+            ttm_net_income is not None
+            and latest_equity is not None
             and opening_equity is not None
             and float(opening_equity) > 0
             and float(latest_equity["val"]) > 0
@@ -762,7 +817,7 @@ class SECFundamentalProvider:
             roe = ttm_net_income / (
                 (float(opening_equity) + float(latest_equity["val"])) / 2
             )
-        elif latest_equity is not None and float(latest_equity["val"]) > 0:
+        elif ttm_net_income is not None and latest_equity is not None and float(latest_equity["val"]) > 0:
             roe = ttm_net_income / float(latest_equity["val"])
 
         annual_revenue = self._annual_records(revenue_records)
@@ -773,7 +828,7 @@ class SECFundamentalProvider:
             latest_year = years[-1]
             # 1st priority: 4-6 year span; 2nd priority: 3-year span fallback
             eligible_bases = [y for y in years[:-1] if 4 <= latest_year - y <= 6]
-            if not eligible_bases:
+            if not eligible_bases and not inline_recovery and ttm_net_income is not None:
                 eligible_bases = [y for y in years[:-1] if 2 <= latest_year - y <= 3]
             if eligible_bases:
                 base_year = min(eligible_bases, key=lambda year: abs(year - (latest_year - 5)))
@@ -800,15 +855,15 @@ class SECFundamentalProvider:
         latest_shares = float(latest_shares_record["val"]) if latest_shares_record else None
         valid_price = float(price) if price is not None and float(price) > 0 else None
         market_cap = valid_price * latest_shares if valid_price and latest_shares and latest_shares > 0 else None
-        pe = market_cap / ttm_net_income if market_cap is not None and ttm_net_income > 0 else None
+        pe = market_cap / ttm_net_income if market_cap is not None and ttm_net_income is not None and ttm_net_income > 0 else None
 
         extension_info = {"filings": [], "tags": {}}
         need_extension = {
             "revenue": sales_growth is None,
-            "equity": roe is None,
+            "equity": roe is None and ttm_net_income is not None,
             "shares": market_cap is None,
         }
-        if any(need_extension.values()):
+        if any(need_extension.values()) and not inline_recovery:
             try:
                 extension_info = self._extension_records(
                     cik, ref, need_extension["revenue"],
@@ -825,7 +880,9 @@ class SECFundamentalProvider:
                 extension_growth, extension_period = self._growth_from_annual_records(
                     extension_info["revenue"]
                 )
-                if extension_growth is not None:
+                if extension_growth is not None and (
+                    ttm_net_income is not None or 4 <= extension_period["years"] <= 6
+                ):
                     sales_growth = extension_growth
                     sales_period = extension_period
                     revenue_records = extension_info["revenue"] + revenue_records
@@ -840,7 +897,7 @@ class SECFundamentalProvider:
                             equity_by_end[row["end"]] = row
                 equity_instants = sorted(equity_by_end.values(), key=lambda row: row["end"])
                 latest_equity = equity_instants[-1] if equity_instants else None
-                prior_equity = [row for row in equity_instants if row["end"] < trailing[0]["end"]]
+                prior_equity = [row for row in equity_instants if trailing and row["end"] < trailing[0]["end"]]
                 if not prior_equity and len(equity_instants) >= 2:
                     prior_equity = [equity_instants[-2]]
                 opening_equity = prior_equity[-1]["val"] if prior_equity else (
@@ -865,10 +922,10 @@ class SECFundamentalProvider:
                 latest_shares = float(latest_shares_record["val"]) if latest_shares_record else None
                 if latest_shares and latest_shares > 0 and valid_price:
                     market_cap = valid_price * latest_shares
-                    pe = market_cap / ttm_net_income if ttm_net_income > 0 else None
+                    pe = market_cap / ttm_net_income if ttm_net_income is not None and ttm_net_income > 0 else None
 
         latest_revenue = max(self._quarters(revenue_records), key=lambda row: (row["end"], row["filed"]), default=None)
-        latest_net_income = max(trailing, key=lambda row: (row["end"], row["filed"]))
+        latest_net_income = max(trailing or [], key=lambda row: (row["end"], row["filed"]), default={})
         missing = [
             field for field, value in (
                 ("market_cap", market_cap),
@@ -891,6 +948,8 @@ class SECFundamentalProvider:
         has_usable_metrics = any(value is not None for value in (market_cap, pe, roe, sales_growth))
         quality = "HIGH" if not missing and not nonpositive_earnings else "LOW" if has_usable_metrics else "UNAVAILABLE"
         warnings = []
+        if ttm_net_income is None:
+            warnings.append("SEC net income lacks a usable trailing or annual reporting period")
         if market_cap is None:
             warnings.append("SEC shares outstanding unavailable; market cap cannot be calculated")
         if roe is None:
@@ -899,13 +958,19 @@ class SECFundamentalProvider:
             warnings.append("SEC annual revenue history insufficient for a 4–6 year growth calculation")
 
         field_diagnostics = {}
+        if ttm_net_income is None:
+            for field in ("pe", "roe"):
+                field_diagnostics[field] = {
+                    "reason": "기준일까지 확인 가능한 연간 또는 최근 4개 분기 순이익이 부족합니다.",
+                    "attempted_tags": list(NET_INCOME_TAGS),
+                }
         if market_cap is None:
             field_diagnostics["market_cap"] = {
                 "reason": "기준일까지 제출된 SEC 공시에서 시가총액 계산에 쓸 발행주식 수를 확인하지 못했습니다.",
                 "attempted_tags": list(SHARES_TAGS),
                 "filings_checked": extension_info.get("filings", []),
             }
-        if roe is None:
+        if roe is None and ttm_net_income is not None:
             field_diagnostics["roe"] = {
                 "reason": "기준일까지 확인 가능한 기초·기말 자본총계 또는 자산·부채 자료가 부족해 ROE를 계산하지 못했습니다.",
                 "attempted_tags": list(EQUITY_TAGS) + list(ASSETS_TAGS) + list(LIABILITIES_TAGS),
@@ -918,14 +983,18 @@ class SECFundamentalProvider:
                 "extension_tags": (extension_info.get("tags") or {}).get("extension_names_seen", []),
                 "filings_checked": extension_info.get("filings", []),
             }
-        extension_errors = list(extension_info.get("errors") or [])
+        if inline_recovery:
+            for detail in field_diagnostics.values():
+                detail["filings_checked"] = inline_recovery["filings"]
+        extension_errors = list((inline_recovery or {}).get("errors") or [])
+        extension_errors.extend(extension_info.get("errors") or [])
         if extension_info.get("error"):
             extension_errors.append(extension_info["error"])
         if extension_errors:
             for detail in field_diagnostics.values():
                 detail["filing_lookup_error"] = "; ".join(extension_errors)[:1200]
 
-        if market_cap is not None and latest_shares_record is not None and extension_info.get("shares"):
+        if market_cap is not None and latest_shares_record is not None and (inline_recovery or extension_info.get("shares")):
             market_cap_source = "SEC Inline XBRL filing"
         else:
             market_cap_source = "SEC" if market_cap is not None else None
@@ -948,15 +1017,15 @@ class SECFundamentalProvider:
                 "inline_extension": (extension_info.get("tags") or {}),
             },
             "field_diagnostics": field_diagnostics,
-            "extension_filings": extension_info.get("filings", []),
+            "extension_filings": (inline_recovery or {}).get("filings", []) + extension_info.get("filings", []),
             "ttm_net_income": ttm_net_income,
-            "ttm_period_end": str(trailing[-1]["end"]),
-            "filing_date": str(max(row["filed"] for row in trailing)),
-            "period_start": str(trailing[0].get("period_start", trailing[0]["end"])),
-            "period_end": str(trailing[-1]["end"]),
+            "ttm_period_end": str(trailing[-1]["end"]) if trailing else None,
+            "filing_date": str(max(row["filed"] for row in trailing)) if trailing else None,
+            "period_start": str(trailing[0].get("period_start", trailing[0]["end"])) if trailing else None,
+            "period_end": str(trailing[-1]["end"]) if trailing else None,
             "form": latest_net_income.get("form"),
-            "fundamental_basis": "SEC companyfacts; filing_date <= reference_date and period_end <= reference_date",
-            "source_detail": "SEC EDGAR XBRL companyfacts",
+            "fundamental_basis": "SEC EDGAR XBRL; filing_date <= reference_date and period_end <= reference_date",
+            "source_detail": "SEC EDGAR Inline XBRL (companyfacts 404)" if inline_recovery else "SEC EDGAR XBRL companyfacts",
             "equity_period_end": str(latest_equity["end"]) if latest_equity else None,
             "shares_period_end": str(latest_shares_record["end"]) if latest_shares_record else None,
             "shares_filing_date": str(latest_shares_record["filed"]) if latest_shares_record else None,

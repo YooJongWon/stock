@@ -234,3 +234,70 @@ def test_inline_xbrl_number_handles_parentheses_and_negative_sign():
     assert SECFundamentalProvider._inline_number("1200", scale="3", sign="-") == -1_200_000
     assert SECFundamentalProvider._inline_number("—") is None
     assert SECFundamentalProvider._inline_number("1.234,56", format_name="ixt:num-comma-decimal") == 1234.56
+
+
+def test_missing_income_preserves_independent_companyfacts_fields(monkeypatch):
+    provider = SECFundamentalProvider()
+    payload = {"facts": {"us-gaap": {
+        "Revenues": {"units": {"USD": [
+            {"start": f"{year}-01-01", "end": f"{year}-12-31", "filed": f"{year + 1}-02-01",
+             "form": "10-K", "val": value}
+            for year, value in ((2020, 100), (2025, 200))
+        ]}},
+        "CommonStockSharesOutstanding": {"units": {"shares": [
+            {"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "val": 20},
+        ]}},
+    }}}
+    monkeypatch.setattr(provider, "_get_json", lambda *args: payload)
+    result = provider.get_fundamentals("1", "2026-11-20", 50)
+    assert result["market_cap"] == 1000
+    assert result["sales_growth_5y"] == 2 ** (1 / 5) - 1
+    assert result["ttm_net_income"] is None
+    assert result["missing_fields"] == ["pe", "roe"]
+
+
+def test_companyfacts_404_recovers_original_revenue_and_respects_filing_cutoff(monkeypatch):
+    import requests
+    import pytest
+
+    provider = SECFundamentalProvider()
+    submissions = {"filings": {"recent": {
+        "accessionNumber": ["future", "current", "base"],
+        "filingDate": ["2026-11-21", "2026-03-01", "2021-03-01"],
+        "form": ["20-F", "20-F", "20-F"],
+        "reportDate": ["2026-09-30", "2025-12-31", "2020-12-31"],
+        "primaryDocument": ["future.htm", "current.htm", "base.htm"],
+    }}}
+
+    def get_json(url, *_):
+        if "/submissions/" in url:
+            return submissions
+        response = requests.Response()
+        response.status_code = 404
+        raise requests.HTTPError(response=response)
+
+    checked = []
+
+    def get_text(url, *_):
+        checked.append(url)
+        year, value = (2025, 200) if url.endswith("current.htm") else (2020, 100)
+        return f"""
+          <xbrli:unit id="u"><xbrli:measure>iso4217:INR</xbrli:measure></xbrli:unit>
+          <xbrli:context id="annual"><xbrli:period><xbrli:startDate>{year}-01-01</xbrli:startDate>
+          <xbrli:endDate>{year}-12-31</xbrli:endDate></xbrli:period></xbrli:context>
+          <ix:nonFraction name="ifrs-full:Revenue" contextRef="annual" unitRef="u">{value}</ix:nonFraction>
+          <ix:nonFraction name="ifrs-full:ProfitLoss" contextRef="annual" unitRef="u">50</ix:nonFraction>
+        """
+
+    monkeypatch.setattr(provider, "_get_json", get_json)
+    monkeypatch.setattr(provider, "_get_text", get_text)
+    result = provider.get_fundamentals("1", "2026-11-20", 50)
+    assert len(checked) == 2
+    assert all("future.htm" not in url for url in checked)
+    assert result["sales_growth_5y"] == 2 ** (1 / 5) - 1
+    assert result["ttm_net_income"] is None  # No USD net income for P/E.
+    assert "Inline XBRL" in result["source_detail"]
+
+    submissions["filings"]["recent"]["form"] = ["13F-HR"] * 3
+    with pytest.raises(ValueError, match="companyfacts 404.*filings checked: none"):
+        provider.get_fundamentals("1", "2026-11-20", 50)
