@@ -244,6 +244,11 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
               {savingStage && <p className="toss-status" role="status">매수 상태 저장 중…</p>}
               {snapshot.accounts.length === 0 && <div className="portfolio-panel">조회 가능한 토스증권 계좌가 없습니다.</div>}
               {snapshot.accounts.map(({ holdings, buyingPower }, index) => {
+                const usdValue = sumHoldingValues(holdings, "USD");
+                const krwValue = holdings.some(({ currency }) => currency === "KRW") ? sumHoldingValues(holdings, "KRW") : undefined;
+                const usdBuyingPower = readNumber(buyingPower?.find(({ currency }) => currency === "USD")?.amount);
+                const usdTotal = usdValue === null || usdBuyingPower === null ? null : usdValue + usdBuyingPower;
+
                 const visibleHoldings = holdings.map((holding) => {
                   const cost = holdingCost(holding);
                   const trackBudget = holding.currency === "USD" && cost !== null && plan.perStockAmount > 0;
@@ -258,25 +263,29 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
                 return (
                   <section key={index} className="portfolio-panel" aria-label={`토스증권 계좌 ${index + 1}`}>
                     <div className="portfolio-panel-heading">
-                      <div>
-                        <h2>계좌 {index + 1}</h2>
-                        <p>현금 매수 가능 금액은 토스증권 Open API에서 미수 없이 매수할 수 있는 금액으로 제공됩니다.</p>
-                      </div>
+                      <h2>계좌 {index + 1}</h2>
                     </div>
-                    <div className="portfolio-summary">
-                      {cashCurrencies.map(({ currency, label }) => {
-                        const amount = buyingPower?.find((item) => item.currency === currency)?.amount;
-                        return (
-                          <article key={currency}>
-                            <span>{label} 매수 가능</span>
-                            <strong>{amount == null ? "—" : formatNumber(amount)}</strong>
-                            <small>{!buyingPower ? "중계 서버 업데이트 필요" : amount == null ? "조회 실패" : currency}</small>
-                          </article>
-                        );
-                      })}
-                      <article><span>보유 종목</span><strong>{holdings.length}개</strong></article>
+                    <div className="portfolio-summary toss-account-summary">
+                      <article className="toss-account-total">
+                        <span>달러 합계</span>
+                        <strong>{usdTotal === null ? "—" : usd.format(usdTotal)}</strong>
+                        <small>달러 주식 평가금액 + 달러 매수 가능</small>
+                      </article>
+                      <article>
+                        <span>총 주식 평가금액</span>
+                        <strong>{usdValue === null ? "—" : usd.format(usdValue)}</strong>
+                        {krwValue !== undefined && <small>원화 평가액 {krwValue === null ? "조회 불가" : krw.format(krwValue)}</small>}
+                      </article>
+                      <article>
+                        <span>달러 매수 가능</span>
+                        <strong>{usdBuyingPower === null ? "—" : usd.format(usdBuyingPower)}</strong>
+                        {usdBuyingPower === null && <small>조회 불가</small>}
+                      </article>
                     </div>
-                    <div className="portfolio-panel-heading"><h2>보유 종목</h2></div>
+                    <div className="portfolio-panel-heading">
+                      <h2>보유 종목</h2>
+                      <span className="portfolio-count">{holdings.length}개</span>
+                    </div>
                     {visibleHoldings.length === 0 ? (
                       <p className="toss-status">{holdings.length === 0 ? "보유 종목이 없습니다." : "이 상태에 해당하는 종목이 없습니다."}</p>
                     ) : (
@@ -343,11 +352,6 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
   );
 }
 
-const cashCurrencies = [
-  { currency: "KRW", label: "원화" },
-  { currency: "USD", label: "달러" },
-] as const;
-
 function formatNumber(amount: string) {
   return amount.replace(/^-?\d+/, (integer) => integer.replace(/\B(?=(\d{3})+$)/g, ","));
 }
@@ -357,6 +361,7 @@ function formatMoney(amount: string | null, currency: string) {
 }
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const krw = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW" });
 const percent = new Intl.NumberFormat("ko-KR", {
   style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
@@ -365,6 +370,17 @@ function readNumber(amount: string | null | undefined) {
   if (typeof amount !== "string" || amount.trim() === "") return null;
   const number = Number(amount);
   return Number.isFinite(number) ? number : null;
+}
+
+function sumHoldingValues(holdings: TossHolding[], currency: "USD" | "KRW") {
+  let total = 0;
+  for (const holding of holdings) {
+    if (holding.currency !== currency) continue;
+    const value = readNumber(holding.value);
+    if (value === null) return null;
+    total += value;
+  }
+  return total;
 }
 
 function holdingCost(holding: TossHolding) {

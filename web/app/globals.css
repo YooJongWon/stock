@@ -503,3 +503,13 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .toss-stage-2{border-color:#315a4b;background:#10231e;color:#9fefd2}
 .toss-budget .portfolio-budget-track{margin-bottom:0}
 @media(max-width:650px){.toss-plan-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.portfolio-summary.toss-account-summary{grid-template-columns:1.2fr 1fr 1fr}
+.toss-account-summary article{align-content:start}
+.toss-account-summary article small{color:#9cadbe}
+.toss-account-summary .toss-account-total{border-color:#39766b;background:#122824}
+.portfolio-page .toss-account-summary .toss-account-total strong{color:#a8efd8;font-size:26px}
+@media(max-width:650px){
+  .portfolio-summary.toss-account-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .toss-account-summary .toss-account-total{grid-column:1/-1}
+}
