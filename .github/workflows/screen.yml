@@ -30,7 +30,7 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r requirements.txt
       - id: screener
-        name: Run screener and validate the latest close
+        name: Update monthly momentum and check closing prices
         continue-on-error: true
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
@@ -39,7 +39,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.scheduled }}" == "true" ]]; then
             args+=(--scheduled --skip-unchanged)
           fi
-          python scripts/run_cloud.py "${args[@]}"
+          python -m scripts.run_monthly "${args[@]}"
       - name: Restore full-market momentum cache
         uses: actions/cache@v4
         with:
@@ -62,16 +62,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add web/public/data/latest-results.json
-          git add web/public/data/latest-candidates.md
           git add web/public/data/latest-run-status.json
           if [[ -f web/public/data/latest-momentum.json ]]; then
             git add web/public/data/latest-momentum.json
-          fi
-          if [[ -f web/public/data/latest-candidates.csv ]]; then
-            git add web/public/data/latest-candidates.csv
-          fi
-          if [[ -f web/public/data/latest-fundamental-diagnostics.csv ]]; then
-            git add web/public/data/latest-fundamental-diagnostics.csv
           fi
           if git diff --cached --quiet; then
             echo "Dashboard data did not change."
