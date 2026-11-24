@@ -229,7 +229,7 @@ function displaySector(value: unknown): string {
   return SECTOR_LABELS[sector] ?? sector;
 }
 
-function tradingViewUrl(candidate: Candidate) {
+function tradingViewUrl(candidate: Pick<Candidate, "Ticker" | "Exchange">) {
   const rawExchange = String(candidate.Exchange || "").toUpperCase();
   const exchange = rawExchange.includes("NYSE") || rawExchange === "NYQ" ? "NYSE"
     : rawExchange.includes("NASDAQ") || ["NMS", "NGM", "NCM"].includes(rawExchange) ? "NASDAQ"
@@ -477,11 +477,11 @@ function MonthlyMomentumList({ momentum, candidates }: { momentum?: MonthlyMomen
         <>
           <p className="monthly-momentum-meta">{momentum.period_start}~{momentum.period_end} 수익률 · 대상 {count(momentum.eligible_count)}종목{momentum.source === "existing_momentum_price_cache" && " · 기존 가격 캐시 기준"}</p>
           <ol className="monthly-momentum-list">
-            {momentum.items.map(({ ticker, name, return_pct }, index) => (
+            {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => (
               <li key={ticker}>
                 <span className="monthly-momentum-rank" aria-label={`순위 ${index + 1}`}>{index + 1}</span>
                 <div className="monthly-momentum-stock">
-                  <a href={`https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/chart/`} target="_blank" rel="noreferrer">{ticker}<span className="monthly-momentum-link" aria-hidden="true"> ↗</span></a>
+                  <a href={tradingViewUrl({ Ticker: ticker, Exchange: exchange ?? undefined })} target="_blank" rel="noreferrer">{ticker}<span className="monthly-momentum-link" aria-hidden="true"> ↗</span></a>
                   {name && <small title={name}>{name}</small>}
                 </div>
                 {dailyTickers.has(ticker) && <span className="monthly-momentum-tag">오늘 후보</span>}
