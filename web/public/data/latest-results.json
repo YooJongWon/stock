@@ -82,43 +82,53 @@
       "items": {
         "AXTI": {
           "status": "severe",
-          "drawdown_pct": -32.5169
+          "drawdown_pct": -32.5169,
+          "rebalance_return_pct": -32.5169
         },
         "MRNA": {
           "status": "severe",
-          "drawdown_pct": -21.1599
+          "drawdown_pct": -21.1599,
+          "rebalance_return_pct": -5.389
         },
         "TXG": {
           "status": "severe",
-          "drawdown_pct": -18.006
+          "drawdown_pct": -18.006,
+          "rebalance_return_pct": -18.006
         },
         "ERAS": {
           "status": "severe",
-          "drawdown_pct": -17.3214
+          "drawdown_pct": -17.3214,
+          "rebalance_return_pct": -5.8943
         },
         "MXL": {
           "status": "severe",
-          "drawdown_pct": -26.3073
+          "drawdown_pct": -26.3073,
+          "rebalance_return_pct": -26.3073
         },
         "TWST": {
           "status": "severe",
-          "drawdown_pct": -27.303
+          "drawdown_pct": -27.303,
+          "rebalance_return_pct": -27.303
         },
         "KOD": {
           "status": "normal",
-          "drawdown_pct": -5.0904
+          "drawdown_pct": -5.0904,
+          "rebalance_return_pct": 6.2632
         },
         "LITE": {
           "status": "severe",
-          "drawdown_pct": -32.1687
+          "drawdown_pct": -32.1687,
+          "rebalance_return_pct": -32.1687
         },
         "MU": {
           "status": "severe",
-          "drawdown_pct": -20.5314
+          "drawdown_pct": -20.5314,
+          "rebalance_return_pct": -20.5314
         },
         "CDNA": {
           "status": "severe",
-          "drawdown_pct": -14.3778
+          "drawdown_pct": -14.3778,
+          "rebalance_return_pct": -13.3989
         }
       }
     }
