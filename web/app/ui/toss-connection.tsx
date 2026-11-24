@@ -201,11 +201,8 @@ export default function TossConnection({ momentum, positionWeight }: {
                           <thead>
                             <tr>
                               <th scope="col">종목</th>
-                              <th scope="col">수익률</th>
-                              <th scope="col">월간 순위</th>
                               <th scope="col">총 매수금액</th>
-                              <th scope="col">수량</th>
-                              <th scope="col">현재가</th>
+                              <th scope="col">수익률</th>
                               <th scope="col">평가금액</th>
                             </tr>
                           </thead>
@@ -221,19 +218,22 @@ export default function TossConnection({ momentum, positionWeight }: {
                                 : null;
                               return (
                                 <tr key={currency + ":" + symbol}>
-                                  <td><strong>{symbol}</strong><small>{name}</small></td>
-                                  <td className={`toss-return ${profitLossClass(rate)}`}>
+                                  <td className="holding-identity">
+                                    <strong>{symbol}</strong><small>{name}</small>
+                                    <span className={rank ? "holding-rank ranked" : "holding-rank"}>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `월간 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</span>
+                                  </td>
+                                  <td data-label="총 매수금액">
+                                    <strong>{cost === null ? "—" : displayValue(cost, currency)}</strong>
+                                    {gap !== null && <small>{gap === 0 ? "목표액 도달" : gap > 0 ? `목표까지 ${usd.format(gap / 100)}` : `목표보다 ${usd.format(-gap / 100)} 초과`}</small>}
+                                  </td>
+                                  <td data-label="수익률" className={`toss-return ${profitLossClass(rate)}`}>
                                     <span>{rate === null ? "—" : percent.format(rate)}</span>
                                     <small>{formatMoney(profitLoss, currency)}</small>
                                   </td>
-                                  <td>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `상위 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</td>
-                                  <td>
-                                    <strong>{cost === null ? "—" : formatMoney(String(Number(cost.toFixed(4))), currency)}</strong>
-                                    {gap !== null && <small>{gap === 0 ? "목표액 도달" : gap > 0 ? `목표까지 ${usd.format(gap / 100)}` : `목표보다 ${usd.format(-gap / 100)} 초과`}</small>}
+                                  <td data-label="평가금액">
+                                    <strong>{formatMoney(value, currency)}</strong>
+                                    <small>{formatNumber(quantity)}주 · 현재가 {lastPrice == null ? "—" : formatNumber(lastPrice) + " " + currency}</small>
                                   </td>
-                                  <td>{formatNumber(quantity)}</td>
-                                  <td>{formatMoney(lastPrice, currency)}</td>
-                                  <td>{formatMoney(value, currency)}</td>
                                 </tr>
                               );
                             })}
@@ -257,11 +257,18 @@ function formatNumber(amount: string) {
 }
 
 function formatMoney(amount: string | null, currency: string) {
-  return amount == null ? "—" : `${formatNumber(amount)} ${currency}`;
+  const value = readNumber(amount);
+  return value === null ? "—" : displayValue(value, currency);
 }
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const krw = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW" });
+function displayValue(value: number, currency: string) {
+  if (currency === "USD") return usd.format(value);
+  if (currency === "KRW") return krw.format(value);
+  return `${value.toLocaleString("ko-KR")} ${currency}`;
+}
+
 const percent = new Intl.NumberFormat("ko-KR", {
   style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
