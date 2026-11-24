@@ -7,6 +7,14 @@ import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculat
 import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
+type MonthlyMomentum = {
+  reference_date: string;
+  period_start: string;
+  period_end: string;
+  eligible_count: number;
+  items: { ticker: string; name: string | null; exchange: string | null; return_pct: number }[];
+};
+
 type Result = {
   status: string;
   last_successful_run_at: string | null;
@@ -27,6 +35,7 @@ type Result = {
   fundamental_diagnostics?: FundamentalDiagnostic[];
   fundamental_missing_fields?: Record<string, number>;
   candidates?: Candidate[];
+  monthly_momentum?: MonthlyMomentum | null;
   technical_candidates?: Candidate[];
   waiting_candidates?: Candidate[];
   sector_performance?: { symbol: string; sector: string; change_pct: number | null }[];
@@ -226,8 +235,12 @@ function tradingViewUrl(candidate: Candidate) {
     : "NASDAQ";
   return "https://kr.tradingview.com/chart/QaUkvTii/?symbol=" + encodeURIComponent(exchange + ":" + (candidate.Ticker || ""));
 }
-function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (candidate: Candidate) => void) {
-  const tickerColumn = -1;
+function renderMarkdown(
+  source: string,
+  candidates: Candidate[],
+  onSelect?: (candidate: Candidate) => void,
+  momentumRanks: ReadonlyMap<string, number> = new Map(),
+) {
   const byTicker = new Map(candidates.map((candidate) => [String(candidate.Ticker || ""), candidate]));
   const lines = source.split(/\r?\n/);
   const blocks: ReactNode[] = [];
@@ -266,7 +279,8 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
             <thead><tr>{headers.map((cell, cellIndex) => <th key={cellIndex}>{cell}</th>)}</tr></thead>
             <tbody>{rows.map((row, rowIndex) => {
               const rowCandidate = byTicker.get(row[tickerColumn] ?? "");
-              return <tr key={rowIndex}>{headers.map((_, cellIndex) => {
+              const rank = momentumRanks.get(row[tickerColumn] ?? "");
+              return <tr key={rowIndex} className={rank !== undefined ? "monthly-momentum-match" : undefined}>{headers.map((_, cellIndex) => {
                 
               const rawCell =
                 cellIndex === visibleSectorColumn && sectorColumn === -1
@@ -280,7 +294,7 @@ function renderMarkdown(source: string, candidates: Candidate[], onSelect?: (can
 
                 const candidate = cellIndex === tickerColumn ? byTicker.get(cell) : undefined;
                 return candidate && onSelect
-                  ? <td key={cellIndex}><button type="button" className="candidate-ticker-button" onClick={() => onSelect(candidate)}>{cell}</button></td>
+                  ? <td key={cellIndex}><button type="button" className="candidate-ticker-button" onClick={() => onSelect(candidate)}>{cell}</button>{rank !== undefined && <span className="monthly-momentum-tag">월간 #{rank}</span>}</td>
                   : <td key={cellIndex}>{cell}</td>;
               })}</tr>;
             })}</tbody>
@@ -427,13 +441,56 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <div><div className="eyebrow">LATEST SCREEN</div><h2>매수·준비 후보 리포트</h2><p>매수 또는 준비로 분류된 종목만 표시합니다. 확인 대기 종목은 위에서 따로 확인하세요.</p></div>
           {!missing && <a className="download" href="/data/latest-candidates.csv" download>CSV 다운로드 <span>↓</span></a>}
         </div>
-        {renderMarkdown(markdown, finalCandidates, (candidate) => setModal({ kind: "detail", candidate }))}
+        <MonthlyMomentumList momentum={result.monthly_momentum} candidates={finalCandidates} />
+        {renderMarkdown(
+          markdown,
+          finalCandidates,
+          (candidate) => setModal({ kind: "detail", candidate }),
+          new Map(result.monthly_momentum?.items.map(({ ticker }, index) => [ticker, index + 1])),
+        )}
         <CandidateModal modal={modal} onClose={() => setModal(null)} />
       </section>
 
       <footer><span>지표와 판정은 기존 Python 스크리너 산출값입니다.</span><span>매매 결정 전 시세와 갭 위험을 확인하세요.</span></footer>
       </>}
     </main>
+  );
+}
+
+const momentumPercent = new Intl.NumberFormat("ko-KR", {
+  style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 1,
+});
+
+function MonthlyMomentumList({ momentum, candidates }: { momentum?: MonthlyMomentum | null; candidates: Candidate[] }) {
+  const dailyTickers = new Set(candidates.map(({ Ticker }) => Ticker));
+  return (
+    <section className="monthly-momentum" aria-labelledby="monthly-momentum-title">
+      <div className="monthly-momentum-heading">
+        <div>
+          <h3 id="monthly-momentum-title">월간 모멘텀 관찰 목록</h3>
+          <p>최근 한 달을 제외한 약 11개월 수익률 상위 종목 · 월말 갱신</p>
+        </div>
+        {momentum && <span>기준일 {momentum.reference_date}</span>}
+      </div>
+      {momentum ? (
+        <>
+          <p className="monthly-momentum-meta">{momentum.period_start}~{momentum.period_end} 수익률 · 대상 {count(momentum.eligible_count)}종목</p>
+          <ol className="monthly-momentum-list">
+            {momentum.items.map(({ ticker, name, return_pct }, index) => (
+              <li key={ticker}>
+                <span className="monthly-momentum-rank" aria-label={`순위 ${index + 1}`}>{index + 1}</span>
+                <div className="monthly-momentum-stock">
+                  <a href={`https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/chart/`} target="_blank" rel="noreferrer">{ticker}<span className="monthly-momentum-link" aria-hidden="true"> ↗</span></a>
+                  {name && <small title={name}>{name}</small>}
+                </div>
+                {dailyTickers.has(ticker) && <span className="monthly-momentum-tag">오늘 후보</span>}
+                <strong>{momentumPercent.format(return_pct / 100)}</strong>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : <p className="monthly-momentum-meta">첫 월간 목록은 다음 스크리너 실행에서 월말 종가를 확인한 뒤 표시됩니다.</p>}
+    </section>
   );
 }
 

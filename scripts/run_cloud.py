@@ -104,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["SCREENER_OUTPUT_DIR"] = scratch
         from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
         from screener import Screener
+        from monthly_momentum import MonthlyMomentum, pending_month_end
 
         if args.scheduled:
             reference_date = previous_korea_date_session()
@@ -118,11 +119,14 @@ def main(argv: list[str] | None = None) -> int:
 
         result_path = ROOT / "web" / "public" / "data" / "latest-results.json"
         current = _read_current_result(result_path)
-        if args.skip_unchanged and current.get("data_date") == str(reference_date) and current.get("status") in ("success", "degraded"):
+        monthly = current.get("monthly_momentum")
+        month_end = pending_month_end(reference_date, monthly)
+        if month_end is None and args.skip_unchanged and current.get("data_date") == str(reference_date) and current.get("status") in ("success", "degraded"):
             print(f"No new XNYS session since {reference_date}; keeping the existing published result.")
             return 0
 
-        rows, stats = Screener().run(reference_date)
+        monthly_scan = MonthlyMomentum(month_end) if month_end else None
+        rows, stats = Screener().run(reference_date, monthly_momentum=monthly_scan)
         if stats.get("universe_error"):
             raise RuntimeError(f"Universe retrieval failed: {stats['universe_error']}")
         if not stats.get("universe_count") or not stats.get("universe_scanned_count"):
@@ -323,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_diagnostics": fundamental_diagnostics,
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
+            "monthly_momentum": (monthly_scan.result() if monthly_scan else None) or monthly,
             "candidates": candidates,
             "technical_candidates": technical_candidates,
             "waiting_candidates": waiting_candidates,
