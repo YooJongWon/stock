@@ -577,3 +577,32 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-capital-control input{min-width:0}
 .monthly-capital-control button{padding:5px 9px;border:1px solid #466683;border-radius:5px;background:#1c3148;color:#e8f4ff;font:inherit;white-space:nowrap;cursor:pointer}
 .monthly-capital-control button:disabled{opacity:.55;cursor:default}
+
+/* Investment tables */
+.menu-tabs button { min-height: 40px; font-size: 12px; }
+.menu-tabs button:focus-visible, .monthly-strategy-table a:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+.monthly-strategy-table th:nth-child(3), .monthly-strategy-table td:nth-child(3) { text-align: right; }
+.monthly-strategy-table th, .monthly-strategy-table td { padding-block: 13px; }
+.monthly-strategy-table td { font-size: 14px; }
+.monthly-strategy-table td small { font-size: 11px; line-height: 1.5; }
+.toss-holdings .portfolio-table { font-variant-numeric: tabular-nums; }
+.toss-holdings .portfolio-table th { font-size: 12px; padding: 13px 16px; }
+.toss-holdings .portfolio-table td { font-size: 15px; padding: 16px; }
+.toss-holdings .portfolio-table td small { font-size: 12px; color: #a5b5c6; line-height: 1.5; }
+.toss-holdings .holding-identity strong { color: var(--text); font-size: 16px; }
+.holding-rank { display: inline-block; margin-top: 5px; font-size: 11px; color: #a5b5c6; }
+.holding-rank.ranked { color: #c6b0f5; }
+@media (max-width: 680px) {
+  .toss-holdings .portfolio-table { display: block; min-width: 0; }
+  .toss-holdings thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .toss-holdings tbody { display: block; }
+  .toss-holdings tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; padding: 16px; }
+  .toss-holdings tbody tr + tr { border-top: 1px solid var(--line); }
+  .toss-holdings .portfolio-table td { padding: 0; min-width: 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .toss-holdings .portfolio-table td:nth-child(3) { text-align: left; }
+  .toss-holdings td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 5px; color: #a5b5c6; font-size: 12px; }
+  .menu-tabs button { min-height: 44px; }
+}
