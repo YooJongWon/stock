@@ -136,7 +136,7 @@ export default function TossConnection({ momentum, positionWeight }: {
 
       {needsAuth ? (
         <form className="portfolio-login" onSubmit={checkConnection}>
-          <h2>개인 포트폴리오 인증</h2>
+          <h2>계좌 조회 인증</h2>
           <label className="portfolio-field">
             <span>접근 비밀번호</span>
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
