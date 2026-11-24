@@ -18,11 +18,6 @@ type MonthlyMomentum = {
   items: MonthlyMomentumItem[];
   rebalance_open_at?: string;
   previous?: { reference_date: string; items: MonthlyMomentumItem[] };
-  daily_risk?: {
-    reference_date: string;
-    start_date: string;
-    items: Record<string, { status: "normal" | "warning" | "severe" | "pending" | "unavailable"; drawdown_pct?: number; rebalance_return_pct?: number }>;
-  };
 };
 
 export type MonthlyDashboardResult = {
@@ -176,8 +171,6 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
   const previousRank = new Map(momentum?.previous?.items.map(({ ticker }, index) => [ticker, index + 1]));
   const tickers = new Set(momentum?.items.map(({ ticker }) => ticker));
   const exits = momentum?.previous?.items.filter(({ ticker }) => !tickers.has(ticker)) ?? [];
-  const dailyRisk = momentum?.daily_risk;
-  const riskLabels = { normal: "기준 이내", warning: "낙폭 주의", severe: "큰 낙폭", pending: "첫 종가 대기", unavailable: "가격 미확인" };
   const marketLabel = marketRegime === "BULL" ? "상승 환경" : marketRegime === "RISK_OFF" ? "위험 구간" : "확인 대기";
 
   return (
@@ -220,28 +213,23 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
         </div>
         {momentum ? (
           <>
-            {!momentum.previous && <p className="monthly-panel-note">이전 월 목록을 저장한 뒤부터 신규·유지·이탈을 표시합니다.</p>}
             <p className="monthly-panel-note">
-              {dailyRisk ? `가격 기준 · 미국장 ${dailyRisk.reference_date} 종가 · ${dailyRisk.start_date} 교체 시점부터 고점 대비 −8% 이하 낙폭 주의 / −12% 이하 큰 낙폭` : "일일 손실 점검은 다음 배치에서 표시됩니다."}
+              {momentum.previous
+                ? `지난 목록(${momentum.previous.reference_date})과 비교합니다. 새로 상위 10위에 들면 신규 편입, 지난달에도 상위 10위였으면 유지로 표시합니다.`
+                : "지난달과 이번 달의 상위 10종목을 비교합니다. 첫 비교 결과는 다음 월말 순위가 게시되면 표시됩니다."}
             </p>
             <div className="monthly-table-wrap">
               <table className="monthly-strategy-table">
-                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">월간 변경</th><th scope="col">교체일 시가 대비</th><th scope="col">고점 대비 낙폭</th></tr></thead>
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">지난달 대비</th></tr></thead>
                 <tbody>
                   {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
                     const prior = previousRank.get(ticker);
-                    const risk = dailyRisk?.items[ticker];
-                    const periodReturn = risk?.rebalance_return_pct;
                     return (
                       <tr key={ticker}>
                         <td>{index + 1}</td>
                         <td><a href={tradingViewUrl({ Ticker: ticker, Exchange: exchange ?? undefined })} target="_blank" rel="noreferrer">{ticker} ↗</a>{name && <small>{name}</small>}</td>
                         <td className={return_pct >= 0 ? "monthly-profit" : "monthly-loss"}>{momentumPercent.format(return_pct / 100)}</td>
                         <td>{momentum.previous ? <span className={prior ? "monthly-badge" : "monthly-badge monthly-badge-new"}>{prior ? `유지 · 이전 ${prior}위` : "신규 편입"}</span> : "—"}</td>
-                        <td className={periodReturn == null ? undefined : periodReturn >= 0 ? "monthly-profit" : "monthly-loss"}>{periodReturn == null ? "—" : momentumPercent.format(periodReturn / 100)}</td>
-                        <td className={risk ? `monthly-risk-${risk.status}` : undefined}><span className="monthly-risk-label">{risk ? riskLabels[risk.status] : "배치 대기"}</span>
-                          {risk?.drawdown_pct != null && <small>{momentumPercent.format(risk.drawdown_pct / 100)}</small>}
-                        </td>
                       </tr>
                     );
                   })}
@@ -264,7 +252,7 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
         <dl>
           <div><dt>매수 검토</dt><dd>월말 순위 확정 후 다음 미국 거래일 개장에 신규 편입을 검토합니다. 실적 발표나 가이던스·공시를 더 확인해야 하면 배정액을 현금으로 둡니다.</dd></div>
           <div><dt>매도·익절</dt><dd>다음 월말 상위 10위 밖으로 밀린 보유 종목은 다음 거래일에 정리를 검토합니다. 상위권을 유지하면 보유하고 목표 비중을 점검합니다. 고정 수익률에 따른 분할익절 기준은 두지 않습니다.</dd></div>
-          <div><dt>낙폭과 월말 교체</dt><dd>교체일 시가 대비 수익률은 목록 전체에 같은 가격 기준을 적용합니다. 고점 대비 낙폭은 교체일 시가와 이후 최고 종가 중 높은 가격에서 얼마나 내려왔는지 보여줍니다. 낙폭 표시는 위험 점검용이며 정기 매매는 월말 순위에 따라 검토합니다. 회계·유동성 문제로 보유 근거가 깨지면 월중에도 청산을 검토합니다.</dd></div>
+          <div><dt>월중 위험 관리</dt><dd>회계·유동성 문제로 보유 근거가 깨지면 월중에도 청산을 검토합니다.</dd></div>
         </dl>
       </section>
     </section>

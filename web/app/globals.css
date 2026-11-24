@@ -577,8 +577,3 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-capital-control input{min-width:0}
 .monthly-capital-control button{padding:5px 9px;border:1px solid #466683;border-radius:5px;background:#1c3148;color:#e8f4ff;font:inherit;white-space:nowrap;cursor:pointer}
 .monthly-capital-control button:disabled{opacity:.55;cursor:default}
-.monthly-risk-label{white-space:nowrap}
-.monthly-risk-warning{background:#292217}
-.monthly-risk-severe{background:#301b27}
-.monthly-risk-warning .monthly-risk-label,.monthly-risk-warning small{color:#ffd68b;font-weight:700}
-.monthly-risk-severe .monthly-risk-label,.monthly-risk-severe small{color:#ffb0c4;font-weight:700}
