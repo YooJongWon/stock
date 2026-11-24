@@ -579,6 +579,7 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-capital-control button:disabled{opacity:.55;cursor:default}
 
 /* Investment tables */
+.monthly-sector-overview { margin: 0 0 16px; }
 .menu-tabs button { min-height: 40px; font-size: 12px; }
 .menu-tabs button:focus-visible, .monthly-strategy-table a:focus-visible {
   outline: 2px solid var(--mint);

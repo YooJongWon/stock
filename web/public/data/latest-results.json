@@ -132,5 +132,75 @@
         }
       }
     }
+  },
+  "sector_reference_date": "2026-11-23",
+  "sector_performance": [
+    {
+      "symbol": "XLB",
+      "sector": "소재",
+      "change_pct": 3.23
+    },
+    {
+      "symbol": "XLC",
+      "sector": "커뮤니케이션 서비스",
+      "change_pct": 3.57
+    },
+    {
+      "symbol": "XLE",
+      "sector": "에너지",
+      "change_pct": -1.06
+    },
+    {
+      "symbol": "XLF",
+      "sector": "금융",
+      "change_pct": 1.98
+    },
+    {
+      "symbol": "XLI",
+      "sector": "산업재",
+      "change_pct": 3.9
+    },
+    {
+      "symbol": "XLK",
+      "sector": "정보기술",
+      "change_pct": 8.97
+    },
+    {
+      "symbol": "XLP",
+      "sector": "필수소비재",
+      "change_pct": -0.09
+    },
+    {
+      "symbol": "XLRE",
+      "sector": "부동산",
+      "change_pct": 1.04
+    },
+    {
+      "symbol": "XLU",
+      "sector": "유틸리티",
+      "change_pct": 1.48
+    },
+    {
+      "symbol": "XLV",
+      "sector": "헬스케어",
+      "change_pct": 1.23
+    },
+    {
+      "symbol": "XLY",
+      "sector": "임의소비재",
+      "change_pct": 3.97
+    }
+  ],
+  "stock_sectors": {
+    "AXTI": "XLK",
+    "MRNA": "XLV",
+    "TXG": "XLV",
+    "ERAS": "XLV",
+    "MXL": "XLK",
+    "TWST": "XLV",
+    "KOD": "XLV",
+    "LITE": "XLK",
+    "MU": "XLK",
+    "CDNA": "XLV"
   }
 }

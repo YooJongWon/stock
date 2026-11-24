@@ -10,6 +10,7 @@ from data_provider import DataProvider, UniverseProvider
 from indicators import spy_market_regime
 from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
 from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
+from sector_performance import daily_sector_performance, monthly_stock_sectors
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     if (
         args.skip_unchanged and month_end is None
         and daily_risk.get("reference_date") == str(reference_date)
+        and current.get("sector_reference_date") == str(reference_date)
         and current.get("status") == "success"
     ):
         print(f"Monthly momentum checks already published for {reference_date}.")
@@ -82,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
         "spy_regime": market["market_regime"],
         "spy_reference_date": market["reference_date"],
         "monthly_momentum": monitored,
+        "sector_reference_date": str(reference_date),
+        "sector_performance": daily_sector_performance(prices, reference_date),
+        "stock_sectors": monthly_stock_sectors(monthly, current.get("stock_sectors") or {}),
     }
     status = {
         "status": payload["status"],

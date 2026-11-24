@@ -5,6 +5,7 @@ import pandas as pd
 
 from providers.fallback_provider import PriceResult
 from scripts import run_monthly
+from sector_performance import SECTOR_ETFS, YFinanceProvider
 
 
 def quote(values):
@@ -14,7 +15,7 @@ def quote(values):
     ), "test", None)
 
 
-def test_daily_batch_fetches_spy_and_published_tickers_only(tmp_path, monkeypatch):
+def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, monkeypatch):
     trading_day = date(2026, 11, 3)
     data = tmp_path / "web" / "public" / "data"
     initial = {
@@ -31,6 +32,8 @@ def test_daily_batch_fetches_spy_and_published_tickers_only(tmp_path, monkeypatc
             calls.append((ticker, reference_date))
             if ticker == "MISSING":
                 return PriceResult(None, None, "no close")
+            if ticker == "XLV":
+                return quote({date(2026, 10, 30): 100, trading_day: 88})
             return quote({date(2026, 11, 2): 100, trading_day: 88})
 
     def unused_universe():
@@ -40,12 +43,19 @@ def test_daily_batch_fetches_spy_and_published_tickers_only(tmp_path, monkeypatc
     monkeypatch.setattr(run_monthly, "latest_completed_session", lambda: trading_day)
     monkeypatch.setattr(run_monthly, "DataProvider", Prices)
     monkeypatch.setattr(run_monthly, "UniverseProvider", unused_universe)
+    monkeypatch.setattr(YFinanceProvider, "instrument_info",
+                        lambda self, ticker: {"sectorKey": "technology"} if ticker == "A" else {})
 
     assert run_monthly.main([]) == 0
-    assert calls == [(ticker, trading_day) for ticker in ("SPY", "A", "MISSING")]
+    assert calls == [(ticker, trading_day) for ticker in ("SPY", "A", "MISSING", *(symbol for symbol, _ in SECTOR_ETFS))]
     result = json.loads(snapshot.read_text())
     assert result["status"] == "degraded"
     assert result["monthly_momentum"]["items"] == initial["items"]
+    assert result["sector_reference_date"] == str(trading_day)
+    assert result["stock_sectors"] == {"A": "XLK"}
+    sectors = {row["symbol"]: row for row in result["sector_performance"]}
+    assert sectors[result["stock_sectors"]["A"]] == {"symbol": "XLK", "sector": "정보기술", "change_pct": -12.0}
+    assert sectors["XLV"]["change_pct"] is None
     assert result["monthly_momentum"]["daily_risk"]["items"] == {
         "A": {"status": "severe", "drawdown_pct": -12.0, "rebalance_return_pct": -12.0},
         "MISSING": {"status": "unavailable"},
@@ -87,9 +97,10 @@ def test_month_end_rebuilds_rankings_and_waits_for_first_close(tmp_path, monkeyp
     monkeypatch.setattr(run_monthly, "DataProvider", Prices)
     monkeypatch.setattr(run_monthly, "UniverseProvider", Universe)
     monkeypatch.setattr(run_monthly, "MonthlyMomentum", Ranking)
+    monkeypatch.setattr(YFinanceProvider, "instrument_info", lambda self, ticker: {})
 
     assert run_monthly.main([]) == 0
-    assert calls == [(ticker, month_end) for ticker in ["SPY", *tickers]]
+    assert calls == [(ticker, month_end) for ticker in ["SPY", *tickers, *(symbol for symbol, _ in SECTOR_ETFS)]]
     result = json.loads(snapshot.read_text())
     monthly = result["monthly_momentum"]
     assert monthly["previous"] == previous
