@@ -1153,6 +1153,7 @@
   ],
   "monthly_momentum": {
     "reference_date": "2026-10-30",
+    "rebalance_open_at": "2026-11-02T14:30:00+00:00",
     "period_start": "2025-10-29",
     "period_end": "2026-10-01",
     "eligible_count": 1510,

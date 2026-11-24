@@ -7,19 +7,24 @@ import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculat
 import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
+type MonthlyMomentumItem = { ticker: string; name: string | null; exchange: string | null; return_pct: number };
+
 type MonthlyMomentum = {
   reference_date: string;
   period_start: string;
   period_end: string;
   eligible_count: number;
   source?: string;
-  items: { ticker: string; name: string | null; exchange: string | null; return_pct: number }[];
+  items: MonthlyMomentumItem[];
+  rebalance_open_at?: string;
+  previous?: { reference_date: string; items: MonthlyMomentumItem[] };
 };
 
 type Result = {
   status: string;
   last_successful_run_at: string | null;
   data_date: string | null;
+  spy_regime?: string;
   error: string | null;
   warnings: string[];
   warning_count: number;
@@ -331,7 +336,7 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
   const [calculatorSettings, setCalculatorSettings] = useState<CalculatorInputs | null>(null);
   const [calculatorOpened, setCalculatorOpened] = useState(false);
   const [portfolioOpened, setPortfolioOpened] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<"screener" | "calculator" | "fundamentals" | "portfolio" | "momentum" | "toss">("screener");
+  const [activeMenu, setActiveMenu] = useState<"monthly" | "screener" | "calculator" | "fundamentals" | "portfolio" | "momentum" | "toss">("monthly");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
@@ -360,7 +365,8 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
       <header className="topbar">
         <a className="brand" href="#top"><span className="brand-mark">S</span> US EQUITY SCREENER</a>
         <nav className="menu-tabs" aria-label="주 메뉴" role="tablist">
-          <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스크리너</button>
+          <button type="button" role="tab" aria-selected={activeMenu === "monthly"} className={activeMenu === "monthly" ? "active" : ""} onClick={() => setActiveMenu("monthly")}>월간 모멘텀</button>
+          <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스윙 스크리너</button>
           <button type="button" role="tab" aria-selected={activeMenu === "momentum"} className={activeMenu === "momentum" ? "active" : ""} onClick={() => setActiveMenu("momentum")}>급등 모멘텀</button>
           <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
           <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => { setCalculatorOpened(true); setActiveMenu("calculator"); }}>스윙 투자 계산기</button>
@@ -372,7 +378,9 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
 
       {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} calculatorSettings={calculatorSettings} /></div>}
       {calculatorOpened && <div hidden={activeMenu !== "calculator"}><InvestmentCalculator active={activeMenu === "calculator"} onSettingsChange={setCalculatorSettings} /></div>}
-      {activeMenu === "toss" ? <TossConnection calculatorSettings={calculatorSettings} /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      {activeMenu === "monthly" ? (
+        <MonthlyStrategy momentum={result.monthly_momentum} marketRegime={result.spy_regime} marketDate={result.data_date} />
+      ) : activeMenu === "toss" ? <TossConnection calculatorSettings={calculatorSettings} /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
@@ -491,6 +499,101 @@ function MonthlyMomentumList({ momentum, candidates }: { momentum?: MonthlyMomen
           </ol>
         </>
       ) : <p className="monthly-momentum-meta">첫 월간 목록은 다음 스크리너 실행에서 월말 종가를 확인한 뒤 표시됩니다.</p>}
+    </section>
+  );
+}
+
+const monthlyDollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const monthlyPositionWeight = 0.0625;
+const monthlyPositionCount = 10;
+
+function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
+  momentum?: MonthlyMomentum | null;
+  marketRegime?: string;
+  marketDate: string | null;
+}) {
+  const [capitalInput, setCapitalInput] = useState("10000");
+  const capital = Number(capitalInput);
+  const validCapital = capitalInput.trim() !== "" && Number.isFinite(capital) && capital >= 0;
+  const allocation = validCapital ? monthlyDollars.format(capital * monthlyPositionWeight) : "—";
+  const cashReserve = validCapital ? monthlyDollars.format(capital * (1 - monthlyPositionCount * monthlyPositionWeight)) : "—";
+  const previousRank = new Map(momentum?.previous?.items.map(({ ticker }, index) => [ticker, index + 1]));
+  const tickers = new Set(momentum?.items.map(({ ticker }) => ticker));
+  const exits = momentum?.previous?.items.filter(({ ticker }) => !tickers.has(ticker)) ?? [];
+  const marketLabel = marketRegime === "BULL" ? "상승 환경" : marketRegime === "RISK_OFF" ? "위험 구간" : "확인 대기";
+
+  return (
+    <section className="monthly-dashboard" aria-label="월간 모멘텀 스크리너">
+      <header className="monthly-hero" id="top">
+        <div>
+          <p className="monthly-eyebrow">12−1개월 상대 모멘텀</p>
+          <h1>월간 모멘텀 스크리너</h1>
+          <p>최근 한 달을 제외한 수익률로 상위 10종목을 고르고, 월말 순위가 바뀌면 비중을 조정합니다.</p>
+        </div>
+        <div className="monthly-market">
+          <span>SPY 시장 환경</span><strong>{marketLabel}</strong>
+          {marketDate && <small>미국장 {marketDate} 종가</small>}
+        </div>
+      </header>
+
+      <div className="monthly-overview">
+        <article><span>순위 기준일 · 미국장</span><strong>{momentum?.reference_date ?? "—"}</strong><small>월말 정규장 종가</small></article>
+        <article><span>기준 리밸런싱 시점</span><strong>{localDate(momentum?.rebalance_open_at ?? null)}</strong><small>월말 직후 미국장 시가 · 한국 시간 · 경과한 일정은 참고</small></article>
+        <article>
+          <label htmlFor="monthly-capital">배정 계산용 자금 (USD)</label>
+          <input id="monthly-capital" type="number" min="0" step="0.01" value={capitalInput} onChange={(event) => setCapitalInput(event.target.value)} />
+          <small>종목당 6.25% · {monthlyPositionCount}종목 편입 시 목표 현금 {cashReserve}</small>
+        </article>
+      </div>
+
+      <section className="monthly-panel" aria-labelledby="monthly-current-title">
+        <div className="monthly-panel-heading">
+          <div>
+            <h2 id="monthly-current-title">월간 모멘텀 관찰 목록</h2>
+            {momentum && <p>{momentum.period_start}~{momentum.period_end} 수익률 · {count(momentum.eligible_count)}종목 중 상위 {momentum.items.length}개{momentum.source === "existing_momentum_price_cache" && " · 기존 가격 캐시 기준"}</p>}
+          </div>
+          <strong>종목당 목표 {allocation}</strong>
+        </div>
+        {momentum ? (
+          <>
+            {!momentum.previous && <p className="monthly-panel-note">이전 월 목록을 저장한 뒤부터 신규·유지·이탈을 표시합니다.</p>}
+            <div className="monthly-table-wrap">
+              <table className="monthly-strategy-table">
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">월간 변경</th></tr></thead>
+                <tbody>
+                  {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
+                    const prior = previousRank.get(ticker);
+                    return (
+                      <tr key={ticker}>
+                        <td>{index + 1}</td>
+                        <td><a href={tradingViewUrl({ Ticker: ticker, Exchange: exchange ?? undefined })} target="_blank" rel="noreferrer">{ticker} ↗</a>{name && <small>{name}</small>}</td>
+                        <td className={return_pct >= 0 ? "monthly-profit" : "monthly-loss"}>{momentumPercent.format(return_pct / 100)}</td>
+                        <td>{momentum.previous ? <span className={prior ? "monthly-badge" : "monthly-badge monthly-badge-new"}>{prior ? `유지 · 이전 ${prior}위` : "신규 편입"}</span> : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {momentum.previous && (
+              <div className="monthly-exits">
+                <strong>목록 이탈 · 보유 중이면 정리 검토</strong>
+                <span>{exits.length ? exits.map(({ ticker }) => ticker).join(" · ") : "이탈 종목 없음"}</span>
+                <small>비교 기준 {momentum.previous.reference_date} 목록</small>
+              </div>
+            )}
+          </>
+        ) : <p className="monthly-panel-note">첫 월말 순위가 게시되면 이곳에 표시됩니다.</p>}
+      </section>
+
+      <section className="monthly-panel monthly-playbook" aria-labelledby="monthly-playbook-title">
+        <div className="monthly-panel-heading"><h2 id="monthly-playbook-title">매수·매도와 손실 관리</h2></div>
+        <dl>
+          <div><dt>매수 검토</dt><dd>월말 순위 확정 후 다음 미국 거래일 개장에 신규 편입을 검토합니다. 실적 발표나 가이던스·공시를 더 확인해야 하면 배정액을 현금으로 둡니다.</dd></div>
+          <div><dt>매도·익절</dt><dd>다음 월말 상위 10위 밖으로 밀린 보유 종목은 다음 거래일에 정리를 검토합니다. 상위권을 유지하면 보유하고 목표 비중을 점검합니다. 고정 수익률에 따른 분할익절 기준은 두지 않습니다.</dd></div>
+          <div><dt>손절·위험 관리</dt><dd>고정 손절가는 두지 않습니다. 회계·유동성 문제 등으로 보유 근거가 깨지면 월말 전에도 청산을 검토합니다. 계좌 고점 대비 −8%, −12%는 위험 점검 기준입니다.</dd></div>
+        </dl>
+      </section>
     </section>
   );
 }

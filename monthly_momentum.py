@@ -32,6 +32,27 @@ def pending_month_end(reference_date, published):
     return None
 
 
+def rebalance_open(reference_date):
+    """Regular session open following the ranking close, serialized in UTC."""
+    import exchange_calendars as xc
+
+    cal = xc.get_calendar("XNYS")
+    return cal.session_open(cal.next_session(reference_date)).isoformat()
+
+
+def publish_monthly(previous, current):
+    """Keep the prior published list for month-over-month comparisons."""
+    if not current:
+        return previous
+    if not previous:
+        return current
+    if previous["reference_date"] == current["reference_date"]:
+        prior = previous.get("previous")
+    else:
+        prior = {"reference_date": previous["reference_date"], "items": previous["items"]}
+    return {**current, "previous": prior} if prior else current
+
+
 class MonthlyMomentum:
     def __init__(self, reference_date):
         import exchange_calendars as xc
@@ -70,6 +91,7 @@ class MonthlyMomentum:
         ranked = sorted(self.ranked, key=lambda item: (-item["return_pct"], item["ticker"]))
         return {
             "reference_date": self.reference_date.isoformat(),
+            "rebalance_open_at": rebalance_open(self.reference_date),
             "period_start": self.start.isoformat(),
             "period_end": self.end.isoformat(),
             "eligible_count": len(ranked),
