@@ -77,7 +77,7 @@ export default function Dashboard({ result, failedSession }: { result: MonthlyDa
       {activeMenu === "monthly" && (
         <MonthlyStrategy momentum={result.monthly_momentum} marketRegime={result.spy_regime} marketDate={result.data_date} failedSession={failedSession} />
       )}
-      {activeMenu === "toss" && <TossConnection />}
+      {activeMenu === "toss" && <TossConnection momentum={result.monthly_momentum} positionWeight={monthlyPositionWeight} />}
       {activeMenu === "momentum" && <Momentum />}
     </main>
   );
