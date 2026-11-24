@@ -4,21 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       scheduled:
-        description: "Run in scheduled mode"
+        description: "Unused for the one-off monthly watchlist"
         required: false
         type: boolean
         default: false
 
 permissions:
-  contents: write
-
-concurrency:
-  group: us-stock-screener
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  screen:
-    if: github.ref == 'refs/heads/main'
+  monthly-only:
+    if: github.ref == 'refs/heads/codex/monthly-momentum-bootstrap-run'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,74 +23,21 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
-      - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt
-      - id: screener
-        name: Run screener and validate the latest close
-        continue-on-error: true
-        env:
-          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-        run: |
-          args=()
-          if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.scheduled }}" == "true" ]]; then
-            args+=(--scheduled --skip-unchanged)
-          fi
-          python scripts/run_cloud.py "${args[@]}"
-      - name: Restore full-market momentum cache
-        uses: actions/cache@v4
+      - run: python -m pip install -r requirements.txt
+      - name: Restore existing market price data
+        uses: actions/cache/restore@v4
         with:
           path: work/momentum/daily-prices
-          key: momentum-market-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            momentum-market-${{ runner.os }}-
-      - id: momentum
-        name: Run independent lightweight momentum screening
-        continue-on-error: true
+          key: momentum-market-${{ runner.os }}-45275357423
+          restore-keys: momentum-market-${{ runner.os }}-
+          fail-on-cache-miss: true
+      - name: Calculate monthly rankings from cached prices
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-        run: python -m momentum.screen --skip-unchanged
-      - name: Record independent momentum failure
-        if: steps.momentum.outcome == 'failure'
-        run: python -m scripts.write_momentum_failure
-      - name: Commit refreshed dashboard data
-        if: steps.screener.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/public/data/latest-results.json
-          git add web/public/data/latest-candidates.md
-          git add web/public/data/latest-run-status.json
-          if [[ -f web/public/data/latest-momentum.json ]]; then
-            git add web/public/data/latest-momentum.json
-          fi
-          if [[ -f web/public/data/latest-candidates.csv ]]; then
-            git add web/public/data/latest-candidates.csv
-          fi
-          if [[ -f web/public/data/latest-fundamental-diagnostics.csv ]]; then
-            git add web/public/data/latest-fundamental-diagnostics.csv
-          fi
-          if git diff --cached --quiet; then
-            echo "Dashboard data did not change."
-          else
-            git commit -m "Update screener data"
-            git pull --rebase origin main
-            git push
-          fi
-      - name: Record failed attempt while preserving the last good result
-        if: steps.screener.outcome == 'failure'
-        run: python scripts/write_failed_status.py
-      - name: Commit failed-run status
-        if: steps.screener.outcome == 'failure'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/public/data/latest-run-status.json
-          if [[ -f web/public/data/latest-momentum.json ]]; then
-            git add web/public/data/latest-momentum.json
-          fi
-          git commit -m "Record screener run failure"
-          git pull --rebase origin main
-          git push
-      - name: Mark failed screening run as failed
-        if: steps.screener.outcome == 'failure' || steps.momentum.outcome == 'failure'
-        run: exit 1
+        run: python -m scripts.monthly_bootstrap_once
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monthly-momentum-initial
+          path: monthly-momentum-initial.json
+          if-no-files-found: error
+          retention-days: 3
