@@ -7,6 +7,7 @@ from config import SETTINGS
 from indicators import normalize_ohlcv
 
 LIST_SIZE = 10
+BOOTSTRAP_SOURCE = "existing_momentum_price_cache"
 
 
 def pending_month_end(reference_date, published):
@@ -21,8 +22,14 @@ def pending_month_end(reference_date, published):
     if target > ref:
         previous_month = first - timedelta(days=1)
         target = cal.sessions_in_range(previous_month.replace(day=1), previous_month)[-1].date()
-    published_date = (published or {}).get("reference_date", "")
-    return target if target.isoformat() > published_date else None
+    published = published or {}
+    published_date = published.get("reference_date", "")
+    target_date = target.isoformat()
+    if target_date > published_date or (
+        target_date == published_date and published.get("source") == BOOTSTRAP_SOURCE
+    ):
+        return target
+    return None
 
 
 class MonthlyMomentum:
