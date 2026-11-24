@@ -203,6 +203,7 @@ export default function TossConnection({ momentum, positionWeight }: {
                               <th scope="col">종목</th>
                               <th scope="col">수익률</th>
                               <th scope="col">월간 순위</th>
+                              <th scope="col">총 매수금액</th>
                               <th scope="col">수량</th>
                               <th scope="col">현재가</th>
                               <th scope="col">평가금액</th>
@@ -215,6 +216,9 @@ export default function TossConnection({ momentum, positionWeight }: {
                               const rate = readNumber(holding.returnRate) ?? (cost ? divide(profitLoss, cost) : null);
                               const ticker = tickerKey(symbol);
                               const rank = currency === "USD" ? ranked.get(ticker) : undefined;
+                              const gap = rank && capital !== null && cost !== null
+                                ? Math.round(capital * positionWeight * 100) - Math.round(cost * 100)
+                                : null;
                               return (
                                 <tr key={currency + ":" + symbol}>
                                   <td><strong>{symbol}</strong><small>{name}</small></td>
@@ -223,6 +227,10 @@ export default function TossConnection({ momentum, positionWeight }: {
                                     <small>{formatMoney(profitLoss, currency)}</small>
                                   </td>
                                   <td>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `상위 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</td>
+                                  <td>
+                                    <strong>{cost === null ? "—" : formatMoney(String(Number(cost.toFixed(4))), currency)}</strong>
+                                    {gap !== null && <small>{gap === 0 ? "목표액 도달" : gap > 0 ? `목표까지 ${usd.format(gap / 100)}` : `목표보다 ${usd.format(-gap / 100)} 초과`}</small>}
+                                  </td>
                                   <td>{formatNumber(quantity)}</td>
                                   <td>{formatMoney(lastPrice, currency)}</td>
                                   <td>{formatMoney(value, currency)}</td>
