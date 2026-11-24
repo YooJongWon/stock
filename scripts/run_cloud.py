@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["SCREENER_OUTPUT_DIR"] = scratch
         from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
         from screener import Screener
-        from monthly_momentum import MonthlyMomentum, pending_month_end
+        from monthly_momentum import MonthlyMomentum, pending_month_end, publish_monthly
 
         if args.scheduled:
             reference_date = previous_korea_date_session()
@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_diagnostics": fundamental_diagnostics,
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
-            "monthly_momentum": (monthly_scan.result() if monthly_scan else None) or monthly,
+            "monthly_momentum": publish_monthly(monthly, monthly_scan.result() if monthly_scan else None),
             "candidates": candidates,
             "technical_candidates": technical_candidates,
             "waiting_candidates": waiting_candidates,

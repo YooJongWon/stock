@@ -4,7 +4,7 @@ import exchange_calendars as xc
 import pandas as pd
 import pytest
 
-from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, pending_month_end
+from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, pending_month_end, publish_monthly, rebalance_open
 
 
 def test_month_end_bootstrap_and_rollover_use_us_exchange_sessions():
@@ -38,3 +38,12 @@ def test_monthly_ranking_skips_recent_returns_and_requires_confirmed_bars():
     assert result["period_end"] == scan.end.isoformat()
     assert [item["ticker"] for item in result["items"]] == ["A", "B"]
     assert [item["return_pct"] for item in result["items"]] == pytest.approx([50, 50])
+
+def test_rotation_preserves_prior_month_across_daily_runs_and_cache_replacement():
+    october = {"reference_date": "2026-10-30", "items": [{"ticker": "A"}]}
+    november = {"reference_date": "2026-11-30", "items": [{"ticker": "B"}]}
+    combined = publish_monthly(october, november)
+    assert combined["previous"] == october
+    assert publish_monthly(combined, None) == combined
+    assert publish_monthly(combined, {**november, "items": []})["previous"] == october
+    assert rebalance_open(date(2026, 10, 30)) == "2026-11-02T14:30:00+00:00"
