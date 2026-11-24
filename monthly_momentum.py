@@ -96,10 +96,12 @@ class MonthlyRiskMonitor:
                 items[ticker] = {"status": "unavailable"}
                 continue
             peak = max(entry, float(closes.max()))
-            loss = round((float(closes.iloc[-1]) / peak - 1) * 100, 4)
+            close = float(closes.iloc[-1])
+            loss = round((close / peak - 1) * 100, 4)
             items[ticker] = {
                 "status": "severe" if loss <= -12 else "warning" if loss <= -8 else "normal",
                 "drawdown_pct": loss,
+                "rebalance_return_pct": round((close / entry - 1) * 100, 4),
             }
         return {**published, "daily_risk": {
             "reference_date": self.reference_date.isoformat(),

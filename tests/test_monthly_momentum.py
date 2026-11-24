@@ -60,16 +60,16 @@ def test_daily_risk_uses_rebalance_open_and_confirmed_closes():
     }, index=days)
 
     monitor = MonthlyRiskMonitor(days[-1], ranking)
-    for ticker, closes in (("OK", [200, 96, 99]), ("CAUTION", [200, 96, 92]), ("REVIEW", [200, 100, 88])):
+    for ticker, closes in (("OK", [200, 110, 108.9]), ("CAUTION", [200, 96, 92]), ("REVIEW", [200, 100, 88])):
         monitor.observe({"ticker": ticker}, bars.assign(Close=closes))
     monitor.observe({"ticker": "STALE"}, bars.iloc[:-1])
     risk = monitor.result(ranking)["daily_risk"]
     assert risk["reference_date"] == "2026-11-03"
     assert risk["start_date"] == "2026-11-02"
     assert risk["items"] == {
-        "OK": {"status": "normal", "drawdown_pct": -1.0},
-        "CAUTION": {"status": "warning", "drawdown_pct": -8.0},
-        "REVIEW": {"status": "severe", "drawdown_pct": -12.0},
+        "OK": {"status": "normal", "drawdown_pct": -1.0, "rebalance_return_pct": 8.9},
+        "CAUTION": {"status": "warning", "drawdown_pct": -8.0, "rebalance_return_pct": -8.0},
+        "REVIEW": {"status": "severe", "drawdown_pct": -12.0, "rebalance_return_pct": -12.0},
         "STALE": {"status": "unavailable"},
         "MISSING": {"status": "unavailable"},
     }

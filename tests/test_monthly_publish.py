@@ -47,7 +47,7 @@ def test_daily_batch_fetches_spy_and_published_tickers_only(tmp_path, monkeypatc
     assert result["status"] == "degraded"
     assert result["monthly_momentum"]["items"] == initial["items"]
     assert result["monthly_momentum"]["daily_risk"]["items"] == {
-        "A": {"status": "severe", "drawdown_pct": -12.0},
+        "A": {"status": "severe", "drawdown_pct": -12.0, "rebalance_return_pct": -12.0},
         "MISSING": {"status": "unavailable"},
     }
 
