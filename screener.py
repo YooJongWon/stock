@@ -7,17 +7,10 @@ from data_provider import UniverseProvider, DataProvider
 from fundamentals import FallbackFundamentalProvider
 from indicators import technical_snapshot, spy_market_regime
 from scoring import classify, score_snapshot
+from sector_performance import SECTOR_ETFS, daily_sector_performance
 from providers.yfinance_provider import YFinanceProvider, is_us_common_equity
 
 LOG=logging.getLogger(__name__)
-
-SECTOR_ETFS=(
-    ("XLB","소재"),("XLC","커뮤니케이션 서비스"),("XLE","에너지"),
-    ("XLF","금융"),("XLI","산업재"),("XLK","정보기술"),
-    ("XLP","필수소비재"),("XLRE","부동산"),("XLU","유틸리티"),
-    ("XLV","헬스케어"),("XLY","임의소비재"),
-)
-
 
 def _price_failure_category(message):
     text=str(message).lower()
@@ -355,25 +348,8 @@ class Screener:
         return rows,stats
 
     def _sector_performance(self,reference_date):
-        results=[]
-        for symbol,sector in SECTOR_ETFS:
-            try:
-                result=self.prices.history(symbol,reference_date)
-                if result.frame is None or len(result.frame)<2:
-                    raise ValueError(result.error or "at least two daily closes are required")
-                frame=result.frame
-                latest=str(frame.index[-1])[:10]
-                if latest!=str(reference_date):
-                    raise ValueError(f"stale ETF close: expected {reference_date}, received {latest}")
-                previous=float(frame["Close"].iloc[-2])
-                close=float(frame["Close"].iloc[-1])
-                if previous<=0:
-                    raise ValueError("previous close is not positive")
-                results.append({"symbol":symbol,"sector":sector,"change_pct":round((close/previous-1)*100,2)})
-            except Exception as exc:
-                LOG.warning("Sector ETF %s unavailable: %s: %s",symbol,type(exc).__name__,exc)
-                results.append({"symbol":symbol,"sector":sector,"change_pct":None})
-        return results
+        return daily_sector_performance(self.prices, reference_date)
+
     @staticmethod
     def _write(rows,stats):
         SETTINGS.output_dir.mkdir(parents=True,exist_ok=True)

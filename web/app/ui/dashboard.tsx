@@ -8,6 +8,7 @@ import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
 type MonthlyMomentumItem = { ticker: string; name: string | null; exchange: string | null; return_pct: number };
+type SectorPerformance = { symbol: string; sector: string; change_pct: number | null };
 
 type MonthlyMomentum = {
   reference_date: string;
@@ -24,6 +25,9 @@ export type MonthlyDashboardResult = {
   data_date: string | null;
   spy_regime?: string;
   monthly_momentum?: MonthlyMomentum | null;
+  sector_reference_date?: string;
+  sector_performance?: SectorPerformance[];
+  stock_sectors?: Record<string, string>;
 };
 
 function count(value: number | undefined) {
@@ -72,7 +76,7 @@ export default function Dashboard({ result, failedSession }: { result: MonthlyDa
       </header>
 
       {activeMenu === "monthly" && (
-        <MonthlyStrategy momentum={result.monthly_momentum} marketRegime={result.spy_regime} marketDate={result.data_date} failedSession={failedSession} />
+        <MonthlyStrategy result={result} failedSession={failedSession} />
       )}
       {activeMenu === "toss" && <TossConnection momentum={result.monthly_momentum} positionWeight={monthlyPositionWeight} />}
       {activeMenu === "momentum" && <Momentum />}
@@ -88,12 +92,16 @@ const monthlyDollars = new Intl.NumberFormat("en-US", { style: "currency", curre
 const monthlyPositionWeight = 0.0625;
 const monthlyPositionCount = 10;
 
-function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: {
-  momentum?: MonthlyMomentum | null;
-  marketRegime?: string;
-  marketDate: string | null;
+const sectorPercent = new Intl.NumberFormat("ko-KR", {
+  style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
+function MonthlyStrategy({ result, failedSession }: {
+  result: MonthlyDashboardResult;
   failedSession?: string | null;
 }) {
+  const { monthly_momentum: momentum, spy_regime: marketRegime, data_date: marketDate,
+    sector_reference_date: sectorDate, sector_performance: sectors = [], stock_sectors: stockSectors } = result;
   const [capitalInput, setCapitalInput] = useState("10000");
   const [settings, setSettings] = useState<CalculatorInputs | null>(null);
   const [savedCapital, setSavedCapital] = useState<string | null>(null);
@@ -169,6 +177,8 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
   const tickers = new Set(momentum?.items.map(({ ticker }) => ticker));
   const exits = momentum?.previous?.items.filter(({ ticker }) => !tickers.has(ticker)) ?? [];
   const marketLabel = marketRegime === "BULL" ? "상승 환경" : marketRegime === "RISK_OFF" ? "위험 구간" : "확인 대기";
+  const sectorsBySymbol = new Map(sectors.map((sector) => [sector.symbol, sector]));
+  const orderedSectors = [...sectors].sort((a, b) => (b.change_pct ?? -Infinity) - (a.change_pct ?? -Infinity));
 
   return (
     <section className="monthly-dashboard" aria-label="월간 모멘텀 스크리너">
@@ -185,6 +195,24 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
       </header>
 
       {failedSession && <p className="monthly-panel-note" role="status">미국장 {failedSession} 기준 배치에 실패했습니다. 아래는 마지막으로 게시된 결과입니다.</p>}
+
+      <section className="sector-overview monthly-sector-overview" aria-labelledby="monthly-sector-title">
+        <div className="sector-overview-heading">
+          <div><h2 id="monthly-sector-title">섹터별 일일 등락률</h2><p>미국 11개 섹터 ETF · 직전 거래일 종가 대비</p></div>
+          {sectorDate && <span>미국장 {sectorDate}</span>}
+        </div>
+        {orderedSectors.length ? (
+          <div className="sector-grid">
+            {orderedSectors.map(({ symbol, sector, change_pct }) => (
+              <div key={symbol} className={`sector-card ${change_pct == null ? "unknown" : change_pct > 0 ? "up" : change_pct < 0 ? "down" : "flat"}`}>
+                <span>{sector}</span>
+                <strong>{change_pct == null ? "종가 미확인" : sectorPercent.format(change_pct / 100)}</strong>
+                <small>{symbol}</small>
+              </div>
+            ))}
+          </div>
+        ) : <p className="monthly-panel-note">섹터 등락률 데이터 게시 대기</p>}
+      </section>
 
       <div className="monthly-overview">
         <article><span>순위 기준일 · 미국장</span><strong>{momentum?.reference_date ?? "—"}</strong><small>월말 정규장 종가</small></article>
@@ -217,15 +245,17 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
             </p>
             <div className="monthly-table-wrap">
               <table className="monthly-strategy-table">
-                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">지난달 대비</th></tr></thead>
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">섹터</th><th scope="col">지난달 대비</th></tr></thead>
                 <tbody>
                   {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
                     const prior = previousRank.get(ticker);
+                    const sector = sectorsBySymbol.get(stockSectors?.[ticker] ?? "");
                     return (
                       <tr key={ticker}>
                         <td>{index + 1}</td>
                         <td><a href={tradingViewUrl({ Ticker: ticker, Exchange: exchange ?? undefined })} target="_blank" rel="noreferrer">{ticker} ↗</a>{name && <small>{name}</small>}</td>
                         <td className={return_pct >= 0 ? "monthly-profit" : "monthly-loss"}>{momentumPercent.format(return_pct / 100)}</td>
+                        <td>{sector?.sector ?? "미확인"}</td>
                         <td>{momentum.previous ? <span className={prior ? "monthly-badge" : "monthly-badge monthly-badge-new"}>{prior ? `유지 · 이전 ${prior}위` : "신규 편입"}</span> : "—"}</td>
                       </tr>
                     );
@@ -236,7 +266,10 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
             {momentum.previous && (
               <div className="monthly-exits">
                 <strong>목록 이탈 · 보유 중이면 정리 검토</strong>
-                <span>{exits.length ? exits.map(({ ticker }) => ticker).join(" · ") : "이탈 종목 없음"}</span>
+                <span>{exits.length ? exits.map(({ ticker }) => {
+                  const sector = sectorsBySymbol.get(stockSectors?.[ticker] ?? "");
+                  return sector ? `${ticker} (${sector.sector})` : ticker;
+                }).join(" · ") : "이탈 종목 없음"}</span>
                 <small>비교 기준 {momentum.previous.reference_date} 목록</small>
               </div>
             )}
