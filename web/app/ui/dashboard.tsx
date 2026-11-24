@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
 import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculator-plan";
+import { tradingViewChartUrl } from "@/lib/tradingview";
 import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
 
@@ -53,7 +54,7 @@ function tradingViewUrl(candidate: { Ticker: string; Exchange?: string }) {
   const exchange = rawExchange.includes("NYSE") || rawExchange === "NYQ" ? "NYSE"
     : rawExchange.includes("NASDAQ") || ["NMS", "NGM", "NCM"].includes(rawExchange) ? "NASDAQ"
     : "NASDAQ";
-  return "https://kr.tradingview.com/chart/QaUkvTii/?symbol=" + encodeURIComponent(exchange + ":" + (candidate.Ticker || ""));
+  return tradingViewChartUrl(exchange + ":" + (candidate.Ticker || ""));
 }
 export default function Dashboard({ result, failedSession }: { result: MonthlyDashboardResult; failedSession?: string | null }) {
   const [activeMenu, setActiveMenu] = useState<"monthly" | "momentum" | "toss">("monthly");

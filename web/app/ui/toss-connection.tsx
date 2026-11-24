@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "rea
 
 import type { MonthlyDashboardResult } from "./dashboard";
 import type { TossHolding, TossSnapshot } from "@/lib/toss";
+import { holdingChartUrl } from "@/lib/tradingview";
 
 const refreshMs = 30_000;
 const koreaTime = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "medium" });
@@ -219,7 +220,13 @@ export default function TossConnection({ momentum, positionWeight }: {
                               return (
                                 <tr key={currency + ":" + symbol}>
                                   <td className="holding-identity">
-                                    <strong>{symbol}</strong><small>{name}</small>
+                                    <a className="holding-chart-link"
+                                      href={holdingChartUrl(symbol, currency)}
+                                      target="_blank" rel="noopener noreferrer"
+                                      aria-label={`${name} (${symbol}) TradingView 차트 새 탭`}>
+                                      <strong>{symbol} <span aria-hidden="true">↗</span></strong>
+                                      <small>{name}</small>
+                                    </a>
                                     <span className={rank ? "holding-rank ranked" : "holding-rank"}>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `월간 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</span>
                                   </td>
                                   <td data-label="총 매수금액">

@@ -593,6 +593,11 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .toss-holdings .portfolio-table td { font-size: 15px; padding: 16px; }
 .toss-holdings .portfolio-table td small { font-size: 12px; color: #a5b5c6; line-height: 1.5; }
 .toss-holdings .holding-identity strong { color: var(--text); font-size: 16px; }
+.toss-holdings .holding-chart-link { display: block; width: fit-content; text-decoration: none; }
+.toss-holdings .holding-chart-link strong { color: var(--mint); }
+.toss-holdings .holding-chart-link:hover strong,
+.toss-holdings .holding-chart-link:hover small { text-decoration: underline; }
+.toss-holdings .holding-chart-link:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
 .holding-rank { display: inline-block; margin-top: 5px; font-size: 11px; color: #a5b5c6; }
 .holding-rank.ranked { color: #c6b0f5; }
 @media (max-width: 680px) {
