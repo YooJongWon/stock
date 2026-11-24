@@ -203,8 +203,8 @@ export default function TossConnection({ momentum, positionWeight }: {
                               <th scope="col">종목</th>
                               <th scope="col">수익률</th>
                               <th scope="col">월간 순위</th>
+                              <th scope="col">총 매수금액</th>
                               <th scope="col">수량</th>
-                              <th scope="col">평균 매수가</th>
                               <th scope="col">현재가</th>
                               <th scope="col">평가금액</th>
                             </tr>
@@ -216,6 +216,9 @@ export default function TossConnection({ momentum, positionWeight }: {
                               const rate = readNumber(holding.returnRate) ?? (cost ? divide(profitLoss, cost) : null);
                               const ticker = tickerKey(symbol);
                               const rank = currency === "USD" ? ranked.get(ticker) : undefined;
+                              const gap = rank && capital !== null && cost !== null
+                                ? Math.round(capital * positionWeight * 100) - Math.round(cost * 100)
+                                : null;
                               return (
                                 <tr key={currency + ":" + symbol}>
                                   <td><strong>{symbol}</strong><small>{name}</small></td>
@@ -224,8 +227,11 @@ export default function TossConnection({ momentum, positionWeight }: {
                                     <small>{formatMoney(profitLoss, currency)}</small>
                                   </td>
                                   <td>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `상위 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</td>
+                                  <td>
+                                    <strong>{cost === null ? "—" : formatMoney(String(Number(cost.toFixed(4))), currency)}</strong>
+                                    {gap !== null && <small>{gap === 0 ? "목표액 도달" : gap > 0 ? `목표까지 ${usd.format(gap / 100)}` : `목표보다 ${usd.format(-gap / 100)} 초과`}</small>}
+                                  </td>
                                   <td>{formatNumber(quantity)}</td>
-                                  <td>{formatAveragePurchasePrice(holding, cost)}</td>
                                   <td>{formatMoney(lastPrice, currency)}</td>
                                   <td>{formatMoney(value, currency)}</td>
                                 </tr>
@@ -252,16 +258,6 @@ function formatNumber(amount: string) {
 
 function formatMoney(amount: string | null, currency: string) {
   return amount == null ? "—" : `${formatNumber(amount)} ${currency}`;
-}
-
-function formatAveragePurchasePrice(holding: TossHolding, cost: number | null) {
-  const reported = readNumber(holding.averagePurchasePrice);
-  if (reported !== null && reported >= 0) return formatMoney(holding.averagePurchasePrice!, holding.currency);
-  const quantity = readNumber(holding.quantity);
-  if (cost === null || quantity === null || quantity <= 0) return "—";
-  const price = cost / quantity;
-  if (!Number.isFinite(price)) return "—";
-  return price.toLocaleString("ko-KR", { maximumFractionDigits: 4 }) + " " + holding.currency + " (계산)";
 }
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });

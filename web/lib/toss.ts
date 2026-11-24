@@ -53,7 +53,6 @@ export type TossHolding = {
   name: string;
   currency: string;
   quantity: string;
-  averagePurchasePrice?: string | null;
   lastPrice: string | null;
   value: string | null;
   profitLoss: string | null;
@@ -97,7 +96,6 @@ export async function fetchTossSnapshot(clientId: string, clientSecret: string):
         name: item.name,
         currency: item.currency,
         quantity: item.quantity,
-        averagePurchasePrice: item.averagePurchasePrice ?? null,
         lastPrice: item.lastPrice ?? null,
         value: item.marketValue?.amount ?? null,
         profitLoss: item.profitLoss?.amount ?? null,
