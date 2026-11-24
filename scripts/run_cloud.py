@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["SCREENER_OUTPUT_DIR"] = scratch
         from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
         from screener import Screener
-        from monthly_momentum import MonthlyMomentum, pending_month_end, publish_monthly
+        from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
 
         if args.scheduled:
             reference_date = previous_korea_date_session()
@@ -126,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         monthly_scan = MonthlyMomentum(month_end) if month_end else None
-        rows, stats = Screener().run(reference_date, monthly_momentum=monthly_scan)
+        monthly_risk = MonthlyRiskMonitor(reference_date, monthly)
+        rows, stats = Screener().run(reference_date, monthly_momentum=monthly_scan, monthly_risk=monthly_risk)
         if stats.get("universe_error"):
             raise RuntimeError(f"Universe retrieval failed: {stats['universe_error']}")
         if not stats.get("universe_count") or not stats.get("universe_scanned_count"):
@@ -327,7 +328,9 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_diagnostics": fundamental_diagnostics,
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
-            "monthly_momentum": publish_monthly(monthly, monthly_scan.result() if monthly_scan else None),
+            "monthly_momentum": monthly_risk.result(
+                publish_monthly(monthly, monthly_scan.result() if monthly_scan else None)
+            ),
             "candidates": candidates,
             "technical_candidates": technical_candidates,
             "waiting_candidates": waiting_candidates,

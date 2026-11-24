@@ -4,7 +4,7 @@ import exchange_calendars as xc
 import pandas as pd
 import pytest
 
-from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, pending_month_end, publish_monthly, rebalance_open
+from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly, rebalance_open
 
 
 def test_month_end_bootstrap_and_rollover_use_us_exchange_sessions():
@@ -47,3 +47,37 @@ def test_rotation_preserves_prior_month_across_daily_runs_and_cache_replacement(
     assert publish_monthly(combined, None) == combined
     assert publish_monthly(combined, {**november, "items": []})["previous"] == october
     assert rebalance_open(date(2026, 10, 30)) == "2026-11-02T14:30:00+00:00"
+
+
+def test_daily_risk_uses_rebalance_open_and_confirmed_closes():
+    ranking = {"reference_date": "2026-10-30", "items": [
+        {"ticker": ticker} for ticker in ("OK", "CAUTION", "REVIEW", "STALE", "MISSING")
+    ]}
+    days = [date(2026, 10, 30), date(2026, 11, 2), date(2026, 11, 3)]
+    bars = pd.DataFrame({
+        "Open": [200, 100, 99], "High": [210, 150, 120], "Low": [190, 85, 80],
+        "Close": [200, 96, 99], "Volume": [1000, 1000, 1000],
+    }, index=days)
+
+    monitor = MonthlyRiskMonitor(days[-1], ranking)
+    for ticker, closes in (("OK", [200, 96, 99]), ("CAUTION", [200, 96, 92]), ("REVIEW", [200, 100, 88])):
+        monitor.observe({"ticker": ticker}, bars.assign(Close=closes))
+    monitor.observe({"ticker": "STALE"}, bars.iloc[:-1])
+    risk = monitor.result(ranking)["daily_risk"]
+    assert risk["reference_date"] == "2026-11-03"
+    assert risk["start_date"] == "2026-11-02"
+    assert risk["items"] == {
+        "OK": {"status": "normal", "drawdown_pct": -1.0},
+        "CAUTION": {"status": "warning", "drawdown_pct": -8.0},
+        "REVIEW": {"status": "severe", "drawdown_pct": -12.0},
+        "STALE": {"status": "unavailable"},
+        "MISSING": {"status": "unavailable"},
+    }
+
+
+def test_daily_risk_resets_when_new_monthly_list_is_published():
+    ranking = {"reference_date": "2026-11-30", "items": [{"ticker": "NEW"}]}
+    monitor = MonthlyRiskMonitor(date(2026, 11, 30), None)
+    risk = monitor.result(ranking)["daily_risk"]
+    assert risk["start_date"] == "2026-12-01"
+    assert risk["items"] == {"NEW": {"status": "pending"}}

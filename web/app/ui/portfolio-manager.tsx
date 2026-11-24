@@ -185,7 +185,7 @@ function TickerSearchField({ value, onChange }: { value: string; onChange: (valu
   </label>;
 }
 
-export default function PortfolioManager({ active = true, calculatorSettings }: { active?: boolean; calculatorSettings?: Partial<CalculatorInputs> | null }) {
+export default function PortfolioManager({ active = true }: { active?: boolean }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationResolve = useRef<((confirmed: boolean) => void) | null>(null);
   const requestConfirmation = (options: Confirmation) => {
@@ -321,7 +321,7 @@ export default function PortfolioManager({ active = true, calculatorSettings }: 
     if (active && !saveRunning.current && !pendingSave.current) void load();
   }, [active, load]);
 
-  const plan = useMemo(() => buildCalculatorPlan(calculatorSettings ?? calculatorInputs), [calculatorSettings, calculatorInputs]);
+  const plan = useMemo(() => buildCalculatorPlan(calculatorInputs), [calculatorInputs]);
 
   const groupCounts = useMemo(() => {
     const counts: Record<PortfolioGroup, number> = {
@@ -658,7 +658,7 @@ export default function PortfolioManager({ active = true, calculatorSettings }: 
   return <section className="portfolio-page">
     {confirmation && <ConfirmDialog {...confirmation} onClose={closeConfirmation} />}
     <div className="portfolio-heading-row">
-      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>스윙 투자 계산기의 종목당 배정금액을 기준으로 분할매수·매도 진행 상황을 관리합니다.</p></div>
+      <div className="hero portfolio-hero"><div className="eyebrow">PRIVATE INVESTMENT TRACKER</div><h1>내 포트폴리오</h1><p>저장된 스윙 배정금액을 기준으로 분할매수·매도 진행 상황을 관리합니다.</p></div>
       <button className="portfolio-logout" type="button" disabled={saving || !!saveError} onClick={logout}>로그아웃</button>
     </div>
 
@@ -925,6 +925,6 @@ export default function PortfolioManager({ active = true, calculatorSettings }: 
         <button className="portfolio-primary" type="submit" disabled={saving}>다시 인증하고 자동 저장</button>
       </form>}
     </div>
-    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 스윙 투자 계산기의 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 익절은 50%씩 2회 진행하며 마지막 매도 또는 손절 완료 시 종목을 삭제합니다. 2차 매수는 자동 실행하지 않고 확인 가능한 날에만 판단합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 예상 회수액과 차익은 실제 누적 매수금액을 기준으로 각 매도 비중을 배분한 추정치이며 수수료·세금·체결 오차를 제외합니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 각 변경사항은 자동으로 저장됩니다.</div>
+    <div className="portfolio-note">매수 권장금액과 매도 목표 수익률은 저장된 총 투자금·종목 수·현금 비중·분할매수 비중·익절/손절 기준을 자동으로 사용합니다. 익절은 50%씩 2회 진행하며 마지막 매도 또는 손절 완료 시 종목을 삭제합니다. 2차 매수는 자동 실행하지 않고 확인 가능한 날에만 판단합니다. 포트폴리오는 실제 투입한 매수 금액과 수익률 기준만 관리하며 수량·평균 매수가·실시간 시세는 저장하지 않습니다. 기존 원금은 보존하되 과거 매수 차수는 임의로 추정하지 않습니다. 예상 회수액과 차익은 실제 누적 매수금액을 기준으로 각 매도 비중을 배분한 추정치이며 수수료·세금·체결 오차를 제외합니다. 매수·매도 버튼은 실제 체결을 기록하는 용도이며 자동 주문은 실행하지 않습니다. 각 변경사항은 자동으로 저장됩니다.</div>
   </section>;
 }
