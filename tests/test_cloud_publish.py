@@ -29,7 +29,7 @@ class StubScreener:
     candidate_rows = [{"Ticker": "ABC", "Final": "BUY", "Score": 8,
                        "Filter Results": json.dumps({"Price >= $10": True, "Score >= 7": True})}]
 
-    def run(self, reference_date, monthly_momentum=None):
+    def run(self, reference_date, monthly_momentum=None, monthly_risk=None):
         assert str(reference_date) == REFERENCE_DATE
         output = Path(__import__("os").environ["SCREENER_OUTPUT_DIR"])
         pd.DataFrame(self.candidate_rows, columns=["Ticker", "Final", "Score", "Filter Results"]).to_csv(

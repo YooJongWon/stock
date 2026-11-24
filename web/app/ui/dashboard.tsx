@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
 import PortfolioManager from "./portfolio-manager";
 import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculator-plan";
@@ -18,6 +18,11 @@ type MonthlyMomentum = {
   items: MonthlyMomentumItem[];
   rebalance_open_at?: string;
   previous?: { reference_date: string; items: MonthlyMomentumItem[] };
+  daily_risk?: {
+    reference_date: string;
+    start_date: string;
+    items: Record<string, { status: "normal" | "warning" | "severe" | "pending" | "unavailable"; drawdown_pct?: number }>;
+  };
 };
 
 type Result = {
@@ -333,10 +338,8 @@ function renderMarkdown(
 }
 
 export default function Dashboard({ result, runStatus, markdown }: { result: Result; runStatus: RunStatus; markdown: string }) {
-  const [calculatorSettings, setCalculatorSettings] = useState<CalculatorInputs | null>(null);
-  const [calculatorOpened, setCalculatorOpened] = useState(false);
   const [portfolioOpened, setPortfolioOpened] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<"monthly" | "screener" | "calculator" | "fundamentals" | "portfolio" | "momentum" | "toss">("monthly");
+  const [activeMenu, setActiveMenu] = useState<"monthly" | "screener" | "fundamentals" | "portfolio" | "momentum" | "toss">("monthly");
   const [modal, setModal] = useState<DashboardModal | null>(null);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
@@ -369,18 +372,16 @@ export default function Dashboard({ result, runStatus, markdown }: { result: Res
           <button type="button" role="tab" aria-selected={activeMenu === "screener"} className={activeMenu === "screener" ? "active" : ""} onClick={() => setActiveMenu("screener")}>스윙 스크리너</button>
           <button type="button" role="tab" aria-selected={activeMenu === "momentum"} className={activeMenu === "momentum" ? "active" : ""} onClick={() => setActiveMenu("momentum")}>급등 모멘텀</button>
           <button type="button" role="tab" aria-selected={activeMenu === "fundamentals"} className={activeMenu === "fundamentals" ? "active" : ""} onClick={() => setActiveMenu("fundamentals")}>재무 데이터 진단</button>
-          <button type="button" role="tab" aria-selected={activeMenu === "calculator"} className={activeMenu === "calculator" ? "active" : ""} onClick={() => { setCalculatorOpened(true); setActiveMenu("calculator"); }}>스윙 투자 계산기</button>
           <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => { setPortfolioOpened(true); setActiveMenu("portfolio"); }}>내 포트폴리오</button>
           <button type="button" role="tab" id="toss-tab" aria-controls="toss-panel" aria-selected={activeMenu === "toss"} className={activeMenu === "toss" ? "active" : ""} onClick={() => setActiveMenu("toss")}>토스</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
-      {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} calculatorSettings={calculatorSettings} /></div>}
-      {calculatorOpened && <div hidden={activeMenu !== "calculator"}><InvestmentCalculator active={activeMenu === "calculator"} onSettingsChange={setCalculatorSettings} /></div>}
+      {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} /></div>}
       {activeMenu === "monthly" ? (
         <MonthlyStrategy momentum={result.monthly_momentum} marketRegime={result.spy_regime} marketDate={result.data_date} />
-      ) : activeMenu === "toss" ? <TossConnection calculatorSettings={calculatorSettings} /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" || activeMenu === "calculator" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
+      ) : activeMenu === "toss" ? <TossConnection /> : activeMenu === "momentum" ? <Momentum /> : activeMenu === "portfolio" ? null : activeMenu === "fundamentals" ? <FundamentalDiagnostics result={result} /> : <>
       <section className="run-meta" aria-label="스크리너 실행 정보">
         <div><span>스크리너 실행 · 한국 시간</span><strong>{localDate(displayedRunAt)}</strong></div>
         <div><span>조회 대상 미국장 · 미 동부 날짜</span><strong>{usSessionDate(displayedSession)}</strong><small>정규장 종가 기준</small></div>
@@ -513,6 +514,72 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
   marketDate: string | null;
 }) {
   const [capitalInput, setCapitalInput] = useState("10000");
+  const [settings, setSettings] = useState<CalculatorInputs | null>(null);
+  const [savedCapital, setSavedCapital] = useState<string | null>(null);
+  const [capitalStatus, setCapitalStatus] = useState("저장된 투자금 확인 중…");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function restore() {
+      try {
+        const response = await fetch("/api/portfolio", { cache: "no-store", signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (response.status === 401) {
+          setCapitalStatus("내 포트폴리오에서 로그인하면 저장된 투자금을 불러옵니다.");
+          return;
+        }
+        if (!response.ok) throw new Error();
+        const data = await response.json() as { calculatorInputs?: Partial<CalculatorInputs> | null };
+        if (controller.signal.aborted) return;
+        let legacy: Partial<CalculatorInputs> = {};
+        if (!data.calculatorInputs?.total) {
+          try {
+            legacy = JSON.parse(window.localStorage.getItem("jong9-stock-swing-calculator-v1") ?? "{}") ?? {};
+          } catch {
+            // Browser storage is optional when restoring server settings.
+          }
+        }
+        const restored = { ...DEFAULT_CALCULATOR_INPUTS };
+        const stored = normalizeExitSettings({ ...legacy, ...data.calculatorInputs });
+        for (const key of Object.keys(restored) as (keyof CalculatorInputs)[]) {
+          const value = stored[key];
+          if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) restored[key] = value;
+        }
+        const serverTotal = data.calculatorInputs?.total;
+        const total = typeof stored.total === "string" && stored.total.trim() && Number.isFinite(Number(stored.total)) && Number(stored.total) >= 0 ? stored.total : "10000";
+        setSettings(restored);
+        setCapitalInput(total);
+        setSavedCapital(serverTotal === total ? total : null);
+        setCapitalStatus(serverTotal === total ? "저장된 투자금 불러옴" : total === stored.total ? "이 브라우저의 기존 투자금 불러옴 · 저장 가능" : "배정 계산용 투자금을 저장할 수 있습니다.");
+      } catch {
+        if (!controller.signal.aborted) setCapitalStatus("저장된 투자금을 불러오지 못했습니다. 탭을 다시 열어 주세요.");
+      }
+    }
+    void restore();
+    return () => controller.abort();
+  }, []);
+
+  async function saveCapital() {
+    if (!settings || !validCapital || saving) return;
+    setSaving(true);
+    setCapitalStatus("투자금 저장 중…");
+    try {
+      const response = await fetch("/api/portfolio", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calculatorInputs: { ...settings, total: capitalInput } }),
+      });
+      if (!response.ok) throw new Error();
+      setSavedCapital(capitalInput);
+      setCapitalStatus("투자금 저장됨");
+    } catch {
+      setCapitalStatus("투자금 저장 실패 · 다시 시도해 주세요.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const capital = Number(capitalInput);
   const validCapital = capitalInput.trim() !== "" && Number.isFinite(capital) && capital >= 0;
   const allocation = validCapital ? monthlyDollars.format(capital * monthlyPositionWeight) : "—";
@@ -520,6 +587,8 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
   const previousRank = new Map(momentum?.previous?.items.map(({ ticker }, index) => [ticker, index + 1]));
   const tickers = new Set(momentum?.items.map(({ ticker }) => ticker));
   const exits = momentum?.previous?.items.filter(({ ticker }) => !tickers.has(ticker)) ?? [];
+  const dailyRisk = momentum?.daily_risk;
+  const riskLabels = { normal: "기준 이내", warning: "주의", severe: "손절 검토", pending: "첫 종가 대기", unavailable: "가격 미확인" };
   const marketLabel = marketRegime === "BULL" ? "상승 환경" : marketRegime === "RISK_OFF" ? "위험 구간" : "확인 대기";
 
   return (
@@ -541,7 +610,11 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
         <article><span>기준 리밸런싱 시점</span><strong>{localDate(momentum?.rebalance_open_at ?? null)}</strong><small>월말 직후 미국장 시가 · 한국 시간 · 경과한 일정은 참고</small></article>
         <article>
           <label htmlFor="monthly-capital">배정 계산용 자금 (USD)</label>
-          <input id="monthly-capital" type="number" min="0" step="0.01" value={capitalInput} onChange={(event) => setCapitalInput(event.target.value)} />
+          <div className="monthly-capital-control">
+            <input id="monthly-capital" type="number" min="0" step="0.01" value={capitalInput} disabled={saving || capitalStatus === "저장된 투자금 확인 중…"} onChange={(event) => setCapitalInput(event.target.value)} />
+            {settings && <button type="button" disabled={!validCapital || saving || capitalInput === savedCapital} onClick={saveCapital}>저장</button>}
+          </div>
+          <small role="status">{capitalStatus}</small>
           <small>종목당 6.25% · {monthlyPositionCount}종목 편입 시 목표 현금 {cashReserve}</small>
         </article>
       </div>
@@ -557,18 +630,25 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
         {momentum ? (
           <>
             {!momentum.previous && <p className="monthly-panel-note">이전 월 목록을 저장한 뒤부터 신규·유지·이탈을 표시합니다.</p>}
+            <p className="monthly-panel-note">
+              {dailyRisk ? `손실 점검 · 미국장 ${dailyRisk.reference_date} 종가 · ${dailyRisk.start_date} 교체 시점부터 고점 대비 −8% 주의 / −12% 손절 검토` : "일일 손실 점검은 다음 배치에서 표시됩니다."}
+            </p>
             <div className="monthly-table-wrap">
               <table className="monthly-strategy-table">
-                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">월간 변경</th></tr></thead>
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">월간 변경</th><th scope="col">고점 대비 · 손실 점검</th></tr></thead>
                 <tbody>
                   {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
                     const prior = previousRank.get(ticker);
+                    const risk = dailyRisk?.items[ticker];
                     return (
-                      <tr key={ticker}>
+                      <tr key={ticker} className={risk ? `monthly-risk-${risk.status}` : undefined}>
                         <td>{index + 1}</td>
                         <td><a href={tradingViewUrl({ Ticker: ticker, Exchange: exchange ?? undefined })} target="_blank" rel="noreferrer">{ticker} ↗</a>{name && <small>{name}</small>}</td>
                         <td className={return_pct >= 0 ? "monthly-profit" : "monthly-loss"}>{momentumPercent.format(return_pct / 100)}</td>
                         <td>{momentum.previous ? <span className={prior ? "monthly-badge" : "monthly-badge monthly-badge-new"}>{prior ? `유지 · 이전 ${prior}위` : "신규 편입"}</span> : "—"}</td>
+                        <td><span className="monthly-risk-label">{risk ? riskLabels[risk.status] : "배치 대기"}</span>
+                          {risk?.drawdown_pct != null && <small>{momentumPercent.format(risk.drawdown_pct / 100)}</small>}
+                        </td>
                       </tr>
                     );
                   })}
@@ -591,7 +671,7 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate }: {
         <dl>
           <div><dt>매수 검토</dt><dd>월말 순위 확정 후 다음 미국 거래일 개장에 신규 편입을 검토합니다. 실적 발표나 가이던스·공시를 더 확인해야 하면 배정액을 현금으로 둡니다.</dd></div>
           <div><dt>매도·익절</dt><dd>다음 월말 상위 10위 밖으로 밀린 보유 종목은 다음 거래일에 정리를 검토합니다. 상위권을 유지하면 보유하고 목표 비중을 점검합니다. 고정 수익률에 따른 분할익절 기준은 두지 않습니다.</dd></div>
-          <div><dt>손절·위험 관리</dt><dd>고정 손절가는 두지 않습니다. 회계·유동성 문제 등으로 보유 근거가 깨지면 월말 전에도 청산을 검토합니다. 계좌 고점 대비 −8%, −12%는 위험 점검 기준입니다.</dd></div>
+          <div><dt>손절·위험 관리</dt><dd>매일 종가를 월별 교체일 시가와 이후 최고 종가 중 더 높은 가격과 비교합니다. −8%는 주의, −12%는 손절 검토 표시입니다. 회계·유동성 문제 등으로 보유 근거가 깨지면 월말 전에도 직접 청산을 검토합니다.</dd></div>
         </dl>
       </section>
     </section>
@@ -719,209 +799,6 @@ function FundamentalDiagnostics({ result }: { result: Result }) {
       </>}
       <div className="diagnostics-note">진단 대상은 기술 사전 필터를 통과해 재무 조회까지 진행한 종목입니다. 전체 상장 종목의 모든 재무 누락을 의미하지 않으며, 매수·준비·제외 판정 기준은 기존 설정 그대로 적용됩니다.</div>
     </section>
-  </section>;
-}
-
-const CALCULATOR_FIELDS: { key: keyof CalculatorInputs; label: string; suffix: string; min: number; max?: number; step: number }[] = [
-  { key: "total", label: "총 투자금", suffix: "USD", min: 0, step: 100 },
-  { key: "stockCount", label: "기본 종목 수", suffix: "종목", min: 1, max: 100, step: 1 },
-  { key: "cashRatio", label: "별도 현금 보유 비중", suffix: "%", min: 0, max: 100, step: 1 },
-  { key: "firstBuyRatio", label: "1차 매수 비중", suffix: "%", min: 0, max: 100, step: 1 },
-  { key: "stopLossRatio", label: "손절 기준", suffix: "%", min: -100, max: 0, step: 0.5 },
-  { key: "firstTargetRatio", label: "1차 익절 기준", suffix: "%", min: 0, step: 0.5 },
-  { key: "finalTargetRatio", label: "2차 익절 기준", suffix: "%", min: 0, step: 0.5 },
-  { key: "secondEntryRisePct", label: "2차 매수 상승률", suffix: "%", min: 3, max: 5, step: 0.5 },
-];
-
-function InvestmentCalculator({ active, onSettingsChange }: { active: boolean; onSettingsChange: (settings: CalculatorInputs) => void }) {
-  const [input, setInput] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
-  const [storageReady, setStorageReady] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const saveQueue = useRef(Promise.resolve());
-  const saveVersion = useRef(0);
-  const invalidField = CALCULATOR_FIELDS.find(({ key, min, max }) => {
-    const value = Number(input[key]);
-    return input[key].trim() === "" || !Number.isFinite(value) || value < min || (max !== undefined && value > max) || (key === "stockCount" && !Number.isInteger(value));
-  });
-
-  useEffect(() => {
-    if (!active || authenticated) return;
-    let cancelled = false;
-    const restore = async () => {
-      try {
-        const response = await fetch("/api/portfolio", { cache: "no-store" });
-        if (!response.ok) {
-          if (!cancelled && response.status === 401) setAuthenticated(false);
-          return;
-        }
-        const data = await response.json() as { calculatorInputs?: Partial<CalculatorInputs> | null };
-        if (cancelled) return;
-        setAuthenticated(true);
-        const restored = { ...DEFAULT_CALCULATOR_INPUTS };
-        const savedSettings = data.calculatorInputs ? normalizeExitSettings(data.calculatorInputs) : null;
-        if (savedSettings && Object.keys(savedSettings).length > 0) {
-          (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
-            const value = savedSettings[key];
-            if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) restored[key] = value;
-          });
-
-          setInput(restored);
-          setSaved(true);
-        } else {
-          const raw = window.localStorage.getItem("jong9-stock-swing-calculator-v1");
-          if (raw) {
-            const legacy = normalizeExitSettings(JSON.parse(raw) as Partial<CalculatorInputs>);
-            (Object.keys(restored) as (keyof CalculatorInputs)[]).forEach((key) => {
-              const value = legacy[key];
-              if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) restored[key] = value;
-            });
-            if (legacy.cashRatio === "17") restored.cashRatio = "5";
-            setInput(restored);
-            const migration = await fetch("/api/portfolio", {
-              method: "PATCH", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ calculatorInputs: restored }),
-            });
-            if (migration.ok) { window.localStorage.removeItem("jong9-stock-swing-calculator-v1"); setSaved(true); }
-          }
-        }
-      } catch {
-        if (!cancelled) setSaved(false);
-      } finally {
-        if (!cancelled) setStorageReady(true);
-      }
-    };
-    void restore();
-    return () => { cancelled = true; };
-  }, [active, authenticated]);
-
-  useEffect(() => {
-    if (!storageReady || !authenticated || invalidField) return;
-    const version = saveVersion.current;
-    const timer = window.setTimeout(() => {
-      saveQueue.current = saveQueue.current.then(async () => {
-        if (version !== saveVersion.current) return;
-        try {
-          const response = await fetch("/api/portfolio", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ calculatorInputs: input }),
-          });
-          if (!response.ok) throw new Error("자동 저장에 실패했습니다. 입력값을 유지하고 있으니 다시 시도해 주세요.");
-          if (version === saveVersion.current) { setSaved(true); setSaveError(""); }
-        } catch (caught) {
-          if (version === saveVersion.current) setSaveError(caught instanceof Error ? caught.message : "자동 저장에 실패했습니다.");
-        }
-      });
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [input, storageReady, authenticated, invalidField]);
-
-  useEffect(() => {
-    if (storageReady && !invalidField) onSettingsChange(input);
-  }, [input, storageReady, invalidField, onSettingsChange]);
-
-  const resetInputs = () => {
-    saveVersion.current += 1;
-    setSaved(false);
-    setSaveError("");
-    setInput((old) => ({ ...DEFAULT_CALCULATOR_INPUTS, total: old.total }));
-  };
-  const get = (key: keyof CalculatorInputs) => Number.parseFloat(input[key]) || 0;
-  const total = Math.max(0, get("total"));
-  const count = Math.max(1, Math.min(100, Math.floor(get("stockCount"))));
-  const cashPct = Math.min(100, Math.max(0, get("cashRatio"))) / 100;
-  const firstPct = Math.min(100, Math.max(0, get("firstBuyRatio"))) / 100;
-  const secondPct = 1 - firstPct;
-  const stopPct = Math.min(0, Math.max(-100, get("stopLossRatio"))) / 100;
-  const firstTargetPct = Math.max(0, get("firstTargetRatio")) / 100;
-  const finalTargetPct = Math.max(0, get("finalTargetRatio")) / 100;
-  // 2차 진입은 +3~5% 범위에서 사용자가 차트 지지 확인 후 선택합니다.
-  // 계산 예시는 기본 +4%이며, 입력값은 범위 밖으로 벗어나지 않게 제한합니다.
-  const secondEntryRisePct = Math.min(5, Math.max(3, get("secondEntryRisePct")));
-  const cash = total * cashPct;
-  const stockPool = total - cash;
-  const perStock = stockPool / count;
-  const firstBuyAmount = perStock * firstPct;
-  const secondBuyAmount = perStock * secondPct;
-  const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(n);
-  const percent = (n: number) => Number((n * 100).toFixed(2)) + "%";
-  const set = (key: keyof CalculatorInputs, value: string) => {
-    saveVersion.current += 1;
-    setSaved(false);
-    setSaveError("");
-    setInput((old) => ({ ...old, [key]: value }));
-  };
-  const renderField = ({ key, label, suffix, ...limits }: typeof CALCULATOR_FIELDS[number]) => <label className="calculator-field" key={key}><span>{label}</span><div className="calculator-input-wrap"><input type="number" inputMode="decimal" value={input[key]} onChange={(event) => set(key, event.target.value)} {...limits} aria-label={label} disabled={!storageReady} /><em>{suffix}</em></div></label>;
-  const sellPlan = [
-    { label: "1차 익절", rate: firstTargetPct, ratio: 0.5 },
-    { label: "2차 익절", rate: finalTargetPct, ratio: 0.5 },
-  ];
-  const expectedProfit = sellPlan.reduce((sum, item) => sum + perStock * item.ratio * item.rate, 0);
-  const lossAtStop = perStock * stopPct;
-
-  return <section className="calculator-page" aria-label="스윙 투자 계산기">
-    <div className="hero calculator-hero"><div className="eyebrow">POSITION SIZING</div><h1>미국주식 스윙 투자 계산기</h1><p>총투자금만 입력하면 분할매수·매도 계획이 계산됩니다. 운용 기준은 고급 설정에서 조정할 수 있습니다.</p></div>
-    <div className="calculator-layout">
-      <section className="calculator-card input-card">
-        <div className="calculator-section-title"><div><div className="eyebrow">YOUR PLAN</div><h2>총투자금 설정</h2></div><span className="calculator-save-status" role="status">{!storageReady ? "저장값 확인 중…" : !authenticated ? "포트폴리오 탭에서 인증 후 저장" : invalidField ? "입력값 확인 필요" : saveError ? "자동 저장 실패" : saved ? "✓ 자동 저장됨" : "자동 저장 대기 중…"}</span></div>
-        <div className="calculator-inputs calculator-basic-input">{renderField(CALCULATOR_FIELDS[0])}</div>
-        <p className="calculator-note">총투자금과 설정을 변경하면 아래 계획에 즉시 반영되며 자동 저장됩니다.</p>
-        <div className="calculator-applied-plan"><strong>현재 적용 중인 운용 기준</strong><span>{count}종목 · 현금 {percent(cashPct)} · 매수 {percent(firstPct)} / {percent(secondPct)}</span><span>손절 {percent(stopPct)} · 익절 +{percent(firstTargetPct)} / +{percent(finalTargetPct)}</span></div>
-        <details className="calculator-advanced">
-          <summary>고급 설정 <span>종목 수 · 현금 비중 · 매수·매도 기준</span></summary>
-          <div className="calculator-inputs">{CALCULATOR_FIELDS.filter(({ key }) => key !== "total").map(renderField)}</div>
-          <p className="calculator-note">2차 매수 비중은 나머지 {percent(secondPct)}로 자동 계산됩니다. 익절은 2단계이며 각 50%씩 매도합니다. 2차 매수는 자동 실행하지 않고 확인 가능한 날에만 판단합니다.</p>
-          <button type="button" className="calculator-reset-button" onClick={resetInputs} disabled={!storageReady}>전략 기본값 복원</button>
-        </details>
-        {invalidField && <p className="calculator-validation" role="alert">{invalidField.label}: {invalidField.min}{invalidField.max !== undefined ? `~${invalidField.max}` : " 이상"} 범위{invalidField.key === "stockCount" ? "의 정수" : "의 숫자"}를 입력해 주세요. 유효한 값으로 수정하면 자동 저장됩니다.</p>}
-        {saveError && <div className="calculator-validation" role="alert">{saveError} <button type="button" className="calculator-reset-button" onClick={() => setInput((old) => ({ ...old }))}>저장 다시 시도</button></div>}
-        <div className="calculator-note">
-          <strong>적용 중인 매매 원칙</strong><br />
-          별도 현금 {percent(cashPct)}는 예비 자금으로 유지하고, 종목별 목표 금액 안에 2차 매수 대기금 {percent(secondPct)}를 포함합니다.<br />
-          1차 매수 {percent(firstPct)} · 2차 매수 {percent(secondPct)} (1차 매수가 대비 +3~5% 구간에서 지지 확인 후 선택)<br />
-          2차 매수는 자동 실행하지 않고 확인 가능한 날에만 판단합니다. +{secondEntryRisePct.toFixed(1)}%를 계산 예시로 사용하며, 상승 추세 유지·지지 확인이 없거나 급등으로 이격이 크면 보류합니다.<br />
-          하락 시 물타기하지 않으며, 손절 {percent(stopPct)} · 익절 +{percent(firstTargetPct)} 40% 30% / +{percent(finalTargetPct)} 30%<br />
-          손절·익절 수익률은 각 종목의 실제 평균 매수가를 기준으로 적용합니다. 이 계산기는 종목별 주가가 아닌 배정금액과 예상 손익을 계산합니다.
-        </div>
-      </section>
-      <section className="calculator-card summary-card-large">
-        <div className="calculator-section-title"><div><div className="eyebrow">AUTOMATIC SUMMARY</div><h2>종목당 자동 계산</h2></div><span>USD</span></div>
-        <div className="calc-summary-grid">
-          <article><span>종목당 목표 투자액</span><strong>{money(perStock)}</strong><small>현금 목표 제외 · {count}종목 기준</small></article>
-          <article><span>1차 매수 금액 ({percent(firstPct)})</span><strong>{money(firstBuyAmount)}</strong><small>종목당 목표 투자액의 {percent(firstPct)}</small></article>
-          <article><span>2차 매수 금액 ({percent(secondPct)})</span><strong>{money(secondBuyAmount)}</strong><small>1차 체결가 대비 +3~5% 구간 · 설정 예시 +{secondEntryRisePct.toFixed(1)}%</small></article>
-          <article><span>별도 현금 보유액</span><strong>{money(cash)}</strong><small>총투자금의 {percent(cashPct)}</small></article>
-          <article className="negative"><span>전량 손절 시 예상 손실 ({percent(stopPct)})</span><strong>{money(lossAtStop)}</strong><small>종목당 목표 투자액 기준</small></article>
-          <article className="positive"><span>전체 분할매도 예상 수익</span><strong>{money(expectedProfit)}</strong><small>두 차례 매도 비중과 목표 수익률 반영</small></article>
-        </div>
-      </section>
-    </div>
-    <section className="calculator-card allocation-card">
-      <div className="calculator-section-title"><div><div className="eyebrow">ENTRY PLAN</div><h2>2회 분할매수 계획</h2><p>2차 매수는 자동 실행하지 않으며, 확인 가능한 날에만 +3~5% 구간의 상승 추세와 지지를 보고 판단합니다.</p></div></div>
-      <div className="allocation-table-wrap"><table className="allocation-table strategy-table">
-        <thead><tr><th>차수</th><th>배정 비중</th><th>매수 금액</th><th>실행 조건</th></tr></thead>
-        <tbody>
-          <tr><td>1차 매수</td><td>{percent(firstPct)}</td><td>{money(firstBuyAmount)}</td><td>스크리너 매수 후보 중 차트 확인 후 진입</td></tr>
-          <tr><td>2차 매수</td><td>{percent(secondPct)}</td><td>{money(secondBuyAmount)}</td><td>1차 체결가 대비 +3~5% 구간 (설정 예시 +{secondEntryRisePct.toFixed(1)}%)에서 20일선 또는 돌파 저항선 지지, 저점 상승 확인. 급등·이격 과다 또는 지지 실패 시 보류</td></tr>
-          <tr className="total-row"><td>합계</td><td>100%</td><td>{money(perStock)}</td><td>종목당 목표 투자액 이내</td></tr>
-        </tbody>
-      </table></div>
-    </section>
-    <section className="calculator-card strategy-card">
-      <div className="calculator-section-title"><div><div className="eyebrow">EXIT PLAN</div><h2>2회 분할매도 계획</h2><p>1차는 최초 수량의 50%, 2차는 남은 전량을 매도합니다. 수익률은 실제 평균 매수가, 예상 손익은 종목당 목표 투자액 기준입니다.</p></div></div>
-      <div className="allocation-table-wrap"><table className="allocation-table strategy-table">
-        <thead><tr><th>차수</th><th>목표 수익률</th><th>매도 비중</th><th>예상 실현 손익</th></tr></thead>
-        <tbody>
-          {sellPlan.map((item) => <tr className="profit-row" key={item.label}><td>{item.label}</td><td>+{percent(item.rate)}</td><td>{percent(item.ratio)}</td><td>{money(perStock * item.ratio * item.rate)}</td></tr>)}
-          <tr className="total-row"><td>합계</td><td>—</td><td>100%</td><td>{money(expectedProfit)}</td></tr>
-          <tr className="loss-row"><td>전량 손절</td><td>{percent(stopPct)}</td><td>100%</td><td>{money(lossAtStop)}</td></tr>
-        </tbody>
-      </table></div>
-      <p className="calculator-note">예상 손익은 수수료·환전 비용·세금 및 가격 갭을 제외한 단순 계산입니다. 2차 매수는 +3~5% 도달만으로 실행하지 말고, 20일선 또는 돌파 저항선 지지와 저점 상승을 확인하세요. 거래량 과열·이격 과다·지지 실패 시에는 2차 매수 대기금 {percent(secondPct)}를 현금으로 남겨둡니다. 예상 손익은 종목당 목표 투자액을 모두 매수한 경우를 기준으로 계산합니다. 실제 매수금액이 다르면 손익도 달라집니다.</p>
-    </section>
-    <footer><span>인증된 계정의 계산기 설정은 Supabase에 자동 저장됩니다.</span><span>실제 매매 전 가격, 수수료, 환율 및 갭 위험을 확인하세요.</span></footer>
   </section>;
 }
 

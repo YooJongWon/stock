@@ -41,7 +41,7 @@ async function saveStages(stages: StageRow[], options?: { importLegacy: true; si
   if (!response.ok) throw new Error("Could not save Toss buy stages");
 }
 
-export default function TossConnection({ calculatorSettings }: { calculatorSettings: CalculatorInputs | null }) {
+export default function TossConnection() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
@@ -56,7 +56,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
   const [stageLoadAttempt, setStageLoadAttempt] = useState(0);
   const inFlight = useRef(false);
   const hasSnapshot = snapshot !== null;
-  const plan = buildCalculatorPlan(calculatorSettings ?? savedSettings);
+  const plan = buildCalculatorPlan(savedSettings);
 
   useEffect(() => {
     if (!hasSnapshot) return;
@@ -149,7 +149,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
   }
 
   useEffect(() => {
-    if (!hasSnapshot || calculatorSettings) return;
+    if (!hasSnapshot) return;
     const controller = new AbortController();
     async function loadSettings() {
       try {
@@ -163,7 +163,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
     }
     void loadSettings();
     return () => controller.abort();
-  }, [hasSnapshot, calculatorSettings]);
+  }, [hasSnapshot]);
 
   const refresh = useEffectEvent(() => {
     if (!needsAuth && document.visibilityState === "visible") void checkConnection();
@@ -216,7 +216,7 @@ export default function TossConnection({ calculatorSettings }: { calculatorSetti
               <p className="toss-status" role="status">계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>
               <section className="portfolio-plan-banner" aria-label="스윙 투자 배정">
                 <div className="portfolio-plan-banner-heading">
-                  <div><span>스윙 투자 계산기{!calculatorSettings && !savedSettings && " · 기본 설정"}</span><strong>종목당 목표 투자금 {usd.format(plan.perStockAmount)}</strong></div>
+                  <div><span>스윙 매수 배정{!savedSettings && " · 기본 설정"}</span><strong>종목당 목표 투자금 {usd.format(plan.perStockAmount)}</strong></div>
                 </div>
                 <div className="portfolio-plan-amounts toss-plan-amounts">
                   <div><small>1차 매수 배정</small><strong>{usd.format(plan.firstBuyAmount)}</strong></div>

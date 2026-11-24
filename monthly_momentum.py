@@ -53,6 +53,61 @@ def publish_monthly(previous, current):
     return {**current, "previous": prior} if prior else current
 
 
+class MonthlyRiskMonitor:
+    """Measure the drawdown since the current monthly basket's rebalance open."""
+
+    def __init__(self, reference_date, published):
+        self.reference_date = reference_date
+        self.published = published or {}
+        self.tickers = {item["ticker"] for item in self.published.get("items", [])}
+        self.frames = {}
+
+    def observe(self, member, frame):
+        ticker = member["ticker"]
+        if ticker in self.tickers:
+            self.frames[ticker] = frame
+
+    def result(self, published):
+        import exchange_calendars as xc
+
+        if not published:
+            return published
+        cal = xc.get_calendar("XNYS")
+        start = cal.next_session(published["reference_date"])
+        sessions = (
+            cal.sessions_in_range(start, self.reference_date).date
+            if start.date() <= self.reference_date else []
+        )
+        items = {}
+        for item in published["items"]:
+            ticker = item["ticker"]
+            if len(sessions) == 0:
+                items[ticker] = {"status": "pending"}
+                continue
+            try:
+                bars = normalize_ohlcv(self.frames[ticker], self.reference_date).reindex(sessions)
+                entry = float(bars.Open.iloc[0])
+                closes = bars.Close
+                if not isfinite(entry) or entry <= 0 or not all(
+                    isfinite(close) and close > 0 for close in closes
+                ):
+                    raise ValueError("incomplete rebalance price history")
+            except (KeyError, ValueError):
+                items[ticker] = {"status": "unavailable"}
+                continue
+            peak = max(entry, float(closes.max()))
+            loss = round((float(closes.iloc[-1]) / peak - 1) * 100, 4)
+            items[ticker] = {
+                "status": "severe" if loss <= -12 else "warning" if loss <= -8 else "normal",
+                "drawdown_pct": loss,
+            }
+        return {**published, "daily_risk": {
+            "reference_date": self.reference_date.isoformat(),
+            "start_date": start.date().isoformat(),
+            "items": items,
+        }}
+
+
 class MonthlyMomentum:
     def __init__(self, reference_date):
         import exchange_calendars as xc

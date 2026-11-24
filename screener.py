@@ -52,7 +52,7 @@ class Screener:
         self.fundamentals=fundamentals or FallbackFundamentalProvider()
         self.instrument_lookup=instrument_lookup or YFinanceProvider().instrument_info
 
-    def run(self,reference_date,limit=None,only_ticker=None,monthly_momentum=None):
+    def run(self,reference_date,limit=None,only_ticker=None,monthly_momentum=None,monthly_risk=None):
         started=time.monotonic(); universe_error=None
         try: members=self.universe.get()
         except Exception as exc:
@@ -104,6 +104,8 @@ class Screener:
                     _record_price_failure(stats,ticker,error_text)
                     rows.append(_data_error_row(ticker,reference_date,member,error_text))
                     continue
+                if monthly_risk is not None:
+                    monthly_risk.observe(member, result.frame)
                 if monthly_momentum is not None:
                     try:
                         monthly_momentum.observe(member, result.frame)
