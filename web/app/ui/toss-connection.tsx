@@ -2,102 +2,36 @@
 
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 
-import { buildCalculatorPlan, type CalculatorInputs } from "@/lib/calculator-plan";
+import type { MonthlyDashboardResult } from "./dashboard";
 import type { TossHolding, TossSnapshot } from "@/lib/toss";
 
 const refreshMs = 30_000;
 const koreaTime = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "medium" });
 
-const buyStages = { 1: "1차매수", 2: "2차매수" } as const;
-type BuyStage = keyof typeof buyStages;
-type StageRow = { holding_key: string; stage: BuyStage };
-const legacyStorageKey = "toss-buy-stages";
-const stageFilters = [
-  { value: "all", label: "전체" },
-  { value: 1, label: buyStages[1] },
-  { value: 2, label: buyStages[2] },
-] as const;
-
-function legacyStageRows(): StageRow[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem(legacyStorageKey) ?? "{}");
-    return Object.entries(stored).flatMap(([holding_key, stage]): StageRow[] =>
-      holding_key.length > 0 && holding_key.length <= 120 && (stage === 0 || stage === 1 || stage === 2)
-        ? [{ holding_key, stage: stage === 2 ? 2 : 1 }]
-        : [],
-    );
-  } catch {
-    return [];
-  }
+function tickerKey(symbol: string) {
+  return symbol.trim().toUpperCase().replace(/\./g, "-");
 }
 
-async function saveStages(stages: StageRow[], options?: { importLegacy: true; signal: AbortSignal }) {
-  const response = await fetch("/api/toss/stages", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stages, importLegacy: options?.importLegacy }),
-    signal: options?.signal,
-  });
-  if (!response.ok) throw new Error("Could not save Toss buy stages");
-}
-
-export default function TossConnection() {
+export default function TossConnection({ momentum, positionWeight }: {
+  momentum: MonthlyDashboardResult["monthly_momentum"];
+  positionWeight: number;
+}) {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [snapshot, setSnapshot] = useState<TossSnapshot | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [savedSettings, setSavedSettings] = useState<Partial<CalculatorInputs> | null>(null);
-  const [stageFilter, setStageFilter] = useState<"all" | BuyStage>("all");
-  const [manualStages, setManualStages] = useState<Record<string, BuyStage> | null>(null);
-  const [stageError, setStageError] = useState("");
-  const [savingStage, setSavingStage] = useState(false);
-  const [stageLoadAttempt, setStageLoadAttempt] = useState(0);
+  const [capital, setCapital] = useState<number | null>(null);
+  const [defaultCapital, setDefaultCapital] = useState(false);
   const inFlight = useRef(false);
   const hasSnapshot = snapshot !== null;
-  const plan = buildCalculatorPlan(savedSettings);
-
-  useEffect(() => {
-    if (!hasSnapshot) return;
-    const controller = new AbortController();
-    async function loadStages() {
-      try {
-        const legacy = legacyStageRows();
-        for (let offset = 0; offset < legacy.length; offset += 500) {
-          await saveStages(legacy.slice(offset, offset + 500), { importLegacy: true, signal: controller.signal });
-        }
-        const response = await fetch("/api/toss/stages", { cache: "no-store", signal: controller.signal });
-        if (!response.ok) throw new Error("Could not load Toss buy stages");
-        const data: { stages: StageRow[] } = await response.json();
-        if (controller.signal.aborted) return;
-        setManualStages(Object.fromEntries(data.stages.map(({ holding_key, stage }) => [holding_key, stage])));
-        setStageError("");
-        if (legacy.length > 0) {
-          try { localStorage.removeItem(legacyStorageKey); } catch { /* Import is safe to repeat. */ }
-        }
-      } catch {
-        if (!controller.signal.aborted) setStageError("저장된 매수 상태를 불러오지 못했습니다.");
-      }
-    }
-    void loadStages();
-    return () => controller.abort();
-  }, [hasSnapshot, stageLoadAttempt]);
-
-  async function advanceStage(key: string, stage: BuyStage) {
-    if (!manualStages || savingStage) return;
-    const next: BuyStage = stage === 1 ? 2 : 1;
-    setSavingStage(true);
-    setStageError("");
-    try {
-      await saveStages([{ holding_key: key, stage: next }]);
-      setManualStages((current) => current && { ...current, [key]: next });
-    } catch {
-      setStageError("매수 상태를 저장하지 못했습니다. 상태 버튼을 다시 눌러 주세요.");
-    } finally {
-      setSavingStage(false);
-    }
-  }
+  const ranked = new Map(momentum?.items.map(({ ticker }, index) => [tickerKey(ticker), index + 1]));
+  const previous = new Set(momentum?.previous?.items.map(({ ticker }) => tickerKey(ticker)));
+  const held = new Set(snapshot?.accounts.flatMap(({ holdings }) =>
+    holdings.filter(({ currency }) => currency === "USD").map(({ symbol }) => tickerKey(symbol))
+  ));
+  const missing = momentum?.items.filter(({ ticker }) => !held.has(tickerKey(ticker)));
 
   async function checkConnection(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -128,7 +62,7 @@ export default function TossConnection() {
         setNeedsAuth(true);
         setRefreshing(false);
         setSnapshot(null);
-        setManualStages(null);
+        setCapital(null);
         return;
       }
 
@@ -156,9 +90,13 @@ export default function TossConnection() {
         const response = await fetch("/api/portfolio", { cache: "no-store", signal: controller.signal });
         if (!response.ok) return;
         const data = await response.json();
-        if (!controller.signal.aborted) setSavedSettings(data.calculatorInputs ?? null);
+        if (controller.signal.aborted) return;
+        const stored = data.calculatorInputs?.total;
+        const total = stored == null ? 10000 : readNumber(stored);
+        setCapital(total !== null && total >= 0 ? total : null);
+        setDefaultCapital(stored == null);
       } catch {
-        // The same defaults apply when saved calculator settings are unavailable.
+        // Keep allocation unavailable when the saved capital cannot be read.
       }
     }
     void loadSettings();
@@ -214,51 +152,20 @@ export default function TossConnection() {
           {snapshot ? (
             <>
               <p className="toss-status" role="status">계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>
-              <section className="portfolio-plan-banner" aria-label="스윙 투자 배정">
+              <section className="portfolio-plan-banner" aria-label="월간 모멘텀 배정">
                 <div className="portfolio-plan-banner-heading">
-                  <div><span>스윙 매수 배정{!savedSettings && " · 기본 설정"}</span><strong>종목당 목표 투자금 {usd.format(plan.perStockAmount)}</strong></div>
+                  <div><span>월간 모멘텀 · {momentum ? momentum.reference_date + " 기준" : "순위 확인 대기"}</span>
+                    <strong>종목당 목표 {capital === null ? "—" : usd.format(capital * positionWeight)}</strong></div>
                 </div>
-                <div className="portfolio-plan-amounts toss-plan-amounts">
-                  <div><small>1차 매수 배정</small><strong>{usd.format(plan.firstBuyAmount)}</strong></div>
-                  <div><small>2차 매수 추가 배정</small><strong>{usd.format(plan.secondBuyAmount)}</strong></div>
-                  <div><small>2차 매수 기준</small><strong>1차 체결가 대비 +{plan.secondEntryRisePct.toFixed(1)}%</strong></div>
-                </div>
-                <p>USD 종목은 매입금액이 목표액에 도달하면 기본 상태가 2차매수로 표시됩니다. 버튼으로 바꾼 상태는 자동 저장됩니다.</p>
+                <p>{defaultCapital ? "기본" : "월간 모멘텀"} 배정 자금 {capital === null ? "확인 대기" : usd.format(capital)} · 종목당 {positionWeight * 100}% · 목표 현금 37.5%</p>
+                {missing && snapshot.accounts.length > 0 && <p><strong>미보유 상위 종목</strong> · {missing.length ? missing.map(({ ticker }) => ticker).join(" · ") : "모두 보유 중"}</p>}
               </section>
-              {snapshot.accounts.some(({ holdings }) => holdings.length > 0) && (
-                <div className="portfolio-group-filter-tabs toss-stage-filters" role="group" aria-label="매수 상태별 종목 보기">
-                  {stageFilters.map(({ value, label }) => (
-                    <button type="button" key={value} className={stageFilter === value ? "active" : ""} aria-pressed={stageFilter === value} onClick={() => setStageFilter(value)}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {stageError && <p className="portfolio-error" role="alert">{stageError}</p>}
-              {!manualStages && stageError && (
-                <button type="button" className="portfolio-secondary toss-stage-retry" onClick={() => {
-                  setStageError("");
-                  setStageLoadAttempt((attempt) => attempt + 1);
-                }}>상태 다시 불러오기</button>
-              )}
-              {savingStage && <p className="toss-status" role="status">매수 상태 저장 중…</p>}
               {snapshot.accounts.length === 0 && <div className="portfolio-panel">조회 가능한 토스증권 계좌가 없습니다.</div>}
               {snapshot.accounts.map(({ holdings, buyingPower }, index) => {
                 const usdValue = sumHoldingValues(holdings, "USD");
                 const krwValue = holdings.some(({ currency }) => currency === "KRW") ? sumHoldingValues(holdings, "KRW") : undefined;
                 const usdBuyingPower = readNumber(buyingPower?.find(({ currency }) => currency === "USD")?.amount);
                 const usdTotal = usdValue === null || usdBuyingPower === null ? null : usdValue + usdBuyingPower;
-
-                const visibleHoldings = holdings.map((holding) => {
-                  const cost = holdingCost(holding);
-                  const trackBudget = holding.currency === "USD" && cost !== null && plan.perStockAmount > 0;
-                  const costCents = cost === null ? 0 : Math.round(cost * 100);
-                  const automaticStage: BuyStage = trackBudget && plan.secondBuyAmount > 0 &&
-                    costCents >= Math.round(plan.perStockAmount * 100) ? 2 : 1;
-                  const key = JSON.stringify([index, holding.currency, holding.symbol]);
-                  const stage = manualStages?.[key] ?? automaticStage;
-                  return { holding, key, cost, trackBudget, stage };
-                }).filter(({ stage }) => stageFilter === "all" || stageFilter === stage);
 
                 return (
                   <section key={index} className="portfolio-panel" aria-label={`토스증권 계좌 ${index + 1}`}>
@@ -286,8 +193,8 @@ export default function TossConnection() {
                       <h2>보유 종목</h2>
                       <span className="portfolio-count">{holdings.length}개</span>
                     </div>
-                    {visibleHoldings.length === 0 ? (
-                      <p className="toss-status">{holdings.length === 0 ? "보유 종목이 없습니다." : "이 상태에 해당하는 종목이 없습니다."}</p>
+                    {holdings.length === 0 ? (
+                      <p className="toss-status">보유 종목이 없습니다.</p>
                     ) : (
                       <div className="portfolio-table-wrap toss-holdings">
                         <table className="portfolio-table" aria-label={`계좌 ${index + 1} 보유 종목`}>
@@ -295,42 +202,27 @@ export default function TossConnection() {
                             <tr>
                               <th scope="col">종목</th>
                               <th scope="col">수익률</th>
-                              <th scope="col">매수 배정 진행</th>
+                              <th scope="col">월간 순위</th>
                               <th scope="col">수량</th>
                               <th scope="col">현재가</th>
                               <th scope="col">평가금액</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {visibleHoldings.map(({ holding, key, cost, trackBudget, stage }) => {
+                            {holdings.map((holding) => {
+                              const cost = holdingCost(holding);
                               const { symbol, name, currency, quantity, lastPrice, value, profitLoss } = holding;
                               const rate = readNumber(holding.returnRate) ?? (cost ? divide(profitLoss, cost) : null);
+                              const ticker = tickerKey(symbol);
+                              const rank = currency === "USD" ? ranked.get(ticker) : undefined;
                               return (
-                                <tr key={key}>
+                                <tr key={currency + ":" + symbol}>
                                   <td><strong>{symbol}</strong><small>{name}</small></td>
                                   <td className={`toss-return ${profitLossClass(rate)}`}>
                                     <span>{rate === null ? "—" : percent.format(rate)}</span>
                                     <small>{formatMoney(profitLoss, currency)}</small>
                                   </td>
-                                  <td className="toss-budget">
-                                    <button
-                                      type="button"
-                                      className={`toss-stage-button toss-stage-${stage}`}
-                                      aria-label={`${symbol} ${buyStages[stage]}. ${buyStages[stage === 1 ? 2 : 1]}(으)로 변경`}
-                                      disabled={!manualStages || savingStage}
-                                      onClick={() => void advanceStage(key, stage)}
-                                    >
-                                      {buyStages[stage]} <span aria-hidden="true">↻</span>
-                                    </button>
-                                    {trackBudget && cost !== null ? (
-                                      <>
-                                        <small>{usd.format(cost)} / {usd.format(plan.perStockAmount)}</small>
-                                        <div className="portfolio-budget-track" aria-hidden="true">
-                                          <span style={{ width: `${Math.min(100, cost / plan.perStockAmount * 100)}%` }} />
-                                        </div>
-                                      </>
-                                    ) : <small>{currency !== "USD" ? "USD 투자 계획 대상 아님" : "배정 확인 불가"}</small>}
-                                  </td>
+                                  <td>{currency !== "USD" ? "대상 외" : !ranked.size ? "순위 확인 대기" : rank ? `상위 ${rank}위` : previous.has(ticker) ? "목록 이탈" : "목록 밖"}</td>
                                   <td>{formatNumber(quantity)}</td>
                                   <td>{formatMoney(lastPrice, currency)}</td>
                                   <td>{formatMoney(value, currency)}</td>
