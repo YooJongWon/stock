@@ -4,13 +4,14 @@ import exchange_calendars as xc
 import pandas as pd
 import pytest
 
-from monthly_momentum import MonthlyMomentum, pending_month_end
+from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, pending_month_end
 
 
 def test_month_end_bootstrap_and_rollover_use_us_exchange_sessions():
     october = {"reference_date": "2026-10-30"}
     assert pending_month_end(date(2026, 11, 23), None) == date(2026, 10, 30)
     assert pending_month_end(date(2026, 11, 23), october) is None
+    assert pending_month_end(date(2026, 11, 23), {**october, "source": BOOTSTRAP_SOURCE}) == date(2026, 10, 30)
     assert pending_month_end(date(2026, 11, 30), october) == date(2026, 11, 30)
     assert pending_month_end(date(2026, 12, 1), october) == date(2026, 11, 30)
 

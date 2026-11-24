@@ -1151,6 +1151,77 @@
       "change_pct": 3.97
     }
   ],
+  "monthly_momentum": {
+    "reference_date": "2026-10-30",
+    "period_start": "2025-10-29",
+    "period_end": "2026-10-01",
+    "eligible_count": 1510,
+    "items": [
+      {
+        "ticker": "AXTI",
+        "name": "AXT Inc - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 1057.1427945152261
+      },
+      {
+        "ticker": "MRNA",
+        "name": "Moderna, Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 664.9392575116715
+      },
+      {
+        "ticker": "TXG",
+        "name": "10x Genomics, Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 588.0620524106893
+      },
+      {
+        "ticker": "ERAS",
+        "name": "Erasca, Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 517.796634398327
+      },
+      {
+        "ticker": "MXL",
+        "name": "MaxLinear, Inc - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 505.6541914236904
+      },
+      {
+        "ticker": "TWST",
+        "name": "Twist Bioscience Corporation - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 483.82492516868876
+      },
+      {
+        "ticker": "KOD",
+        "name": "Kodiak Sciences Inc - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 420.12676966281947
+      },
+      {
+        "ticker": "LITE",
+        "name": "Lumentum Holdings Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 388.04369761734165
+      },
+      {
+        "ticker": "MU",
+        "name": "Micron Technology, Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 384.6946073879846
+      },
+      {
+        "ticker": "CDNA",
+        "name": "CareDx, Inc. - Common Stock",
+        "exchange": "NASDAQ",
+        "return_pct": 363.79555038796445
+      }
+    ],
+    "source": "existing_momentum_price_cache",
+    "universe_count": 5562,
+    "price_histories_read": 4201
+  },
   "candidates": [
     {
       "Ticker": "A",

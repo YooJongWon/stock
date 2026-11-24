@@ -12,6 +12,7 @@ type MonthlyMomentum = {
   period_start: string;
   period_end: string;
   eligible_count: number;
+  source?: string;
   items: { ticker: string; name: string | null; exchange: string | null; return_pct: number }[];
 };
 
@@ -474,7 +475,7 @@ function MonthlyMomentumList({ momentum, candidates }: { momentum?: MonthlyMomen
       </div>
       {momentum ? (
         <>
-          <p className="monthly-momentum-meta">{momentum.period_start}~{momentum.period_end} 수익률 · 대상 {count(momentum.eligible_count)}종목</p>
+          <p className="monthly-momentum-meta">{momentum.period_start}~{momentum.period_end} 수익률 · 대상 {count(momentum.eligible_count)}종목{momentum.source === "existing_momentum_price_cache" && " · 기존 가격 캐시 기준"}</p>
           <ol className="monthly-momentum-list">
             {momentum.items.map(({ ticker, name, return_pct }, index) => (
               <li key={ticker}>
