@@ -29,7 +29,7 @@ class StubScreener:
     candidate_rows = [{"Ticker": "ABC", "Final": "BUY", "Score": 8,
                        "Filter Results": json.dumps({"Price >= $10": True, "Score >= 7": True})}]
 
-    def run(self, reference_date):
+    def run(self, reference_date, monthly_momentum=None):
         assert str(reference_date) == REFERENCE_DATE
         output = Path(__import__("os").environ["SCREENER_OUTPUT_DIR"])
         pd.DataFrame(self.candidate_rows, columns=["Ticker", "Final", "Score", "Filter Results"]).to_csv(
@@ -80,7 +80,10 @@ def test_cloud_refuses_stale_spy_close_and_preserves_last_good_files(isolated_pu
 
 def test_scheduled_repeat_skips_without_replacing_existing_result(isolated_publish, monkeypatch):
     result_file = isolated_publish / "latest-results.json"
-    result_file.write_text(json.dumps({"status": "success", "data_date": REFERENCE_DATE, "saved": "old"}), encoding="utf-8")
+    result_file.write_text(json.dumps({
+        "status": "success", "data_date": REFERENCE_DATE, "saved": "old",
+        "monthly_momentum": {"reference_date": "2026-09-30"},
+    }), encoding="utf-8")
 
     class MustNotRun:
         def __init__(self):
