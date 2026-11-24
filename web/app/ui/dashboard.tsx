@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
-import PortfolioManager from "./portfolio-manager";
 import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculator-plan";
 import TossConnection from "./toss-connection";
 import Momentum from "./momentum";
@@ -57,8 +56,7 @@ function tradingViewUrl(candidate: { Ticker: string; Exchange?: string }) {
   return "https://kr.tradingview.com/chart/QaUkvTii/?symbol=" + encodeURIComponent(exchange + ":" + (candidate.Ticker || ""));
 }
 export default function Dashboard({ result, failedSession }: { result: MonthlyDashboardResult; failedSession?: string | null }) {
-  const [portfolioOpened, setPortfolioOpened] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<"monthly" | "portfolio" | "momentum" | "toss">("monthly");
+  const [activeMenu, setActiveMenu] = useState<"monthly" | "momentum" | "toss">("monthly");
 
   return (
     <main className="shell">
@@ -67,13 +65,11 @@ export default function Dashboard({ result, failedSession }: { result: MonthlyDa
         <nav className="menu-tabs" aria-label="주 메뉴" role="tablist">
           <button type="button" role="tab" aria-selected={activeMenu === "monthly"} className={activeMenu === "monthly" ? "active" : ""} onClick={() => setActiveMenu("monthly")}>월간 모멘텀</button>
           <button type="button" role="tab" aria-selected={activeMenu === "momentum"} className={activeMenu === "momentum" ? "active" : ""} onClick={() => setActiveMenu("momentum")}>급등 모멘텀</button>
-          <button type="button" role="tab" aria-selected={activeMenu === "portfolio"} className={activeMenu === "portfolio" ? "active" : ""} onClick={() => { setPortfolioOpened(true); setActiveMenu("portfolio"); }}>내 포트폴리오</button>
           <button type="button" role="tab" id="toss-tab" aria-controls="toss-panel" aria-selected={activeMenu === "toss"} className={activeMenu === "toss" ? "active" : ""} onClick={() => setActiveMenu("toss")}>토스</button>
         </nav>
         <span className="market-tag"><i /> NYSE · NASDAQ</span>
       </header>
 
-      {portfolioOpened && <div hidden={activeMenu !== "portfolio"}><PortfolioManager active={activeMenu === "portfolio"} /></div>}
       {activeMenu === "monthly" && (
         <MonthlyStrategy momentum={result.monthly_momentum} marketRegime={result.spy_regime} marketDate={result.data_date} failedSession={failedSession} />
       )}
@@ -110,7 +106,7 @@ function MonthlyStrategy({ momentum, marketRegime, marketDate, failedSession }: 
         const response = await fetch("/api/portfolio", { cache: "no-store", signal: controller.signal });
         if (controller.signal.aborted) return;
         if (response.status === 401) {
-          setCapitalStatus("내 포트폴리오에서 로그인하면 저장된 투자금을 불러옵니다.");
+          setCapitalStatus("토스 탭에서 인증한 뒤 돌아오면 저장된 투자금을 불러옵니다.");
           return;
         }
         if (!response.ok) throw new Error();
