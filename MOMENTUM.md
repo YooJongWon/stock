@@ -50,7 +50,7 @@ RSI14, 이전 20일 대비 RVOL, ATR/주가, 5·10·20일 수익률, EMA20·SMA5
 
 스크리닝은 실행 시점의 NASDAQ·NYSE·NYSE American 상장 디렉터리 보통주 전체를 검사한다. 고정 200종목 제한과 연구 시점의 상위 유동성 목록은 사용하지 않는다. 최종 추천은 연구 종료 이후 세션부터 사용한다. 연구 종료 후 90일이 지나면 재검증 전 추천을 보류한다. 최근 5/10/20일 중 +10% 이상 상승하면 이미 급등한 그룹, 나머지는 초기 후보로 분리한다. RSI·RVOL·ATR·5일 수익률이 학습 90분위를 넘으면 위험 경고를 표시한다. 판정에 사용한 지표, 경계, 점수 기여를 표시한다. 과열 경고는 수익 검증된 추가 필터라는 뜻이 아니다.
 
-새 schedule은 추가하지 않는다. 기존 `.github/workflows/screen.yml`의 **US stock screener** workflow_dispatch 한 번으로 스윙 스크리너와 독립 모멘텀 스크리닝을 모두 실행한다. 기존 외부 cron-job 서비스가 이 workflow를 main으로 호출 중이면 cron 설정은 바꿀 필요가 없다. 모멘텀 단계는 별도 실패 처리를 하며 스윙 판정 성공·실패와 무관하게 실행한다. 새 모멘텀 JSON은 기존 데이터 커밋에 함께 게시한다. 두 엔진 중 하나가 실패하면 성공한 쪽 결과는 게시하고 workflow는 실패로 표시한다. 레거시 workflow와 같은 concurrency group으로 동시 게시를 직렬화한다. 동일 세션·동일 연구 버전 중복은 `--skip-unchanged`로 건너뛴다. 별도의 독립 실행 파일을 직접 여러 프로세스로 실행하는 방식은 지원하지 않는다. legacy workflow에는 독립 실행·진단·모멘텀 JSON 스테이징만 추가한다. 기존 스크리너 호출 명령·입력과 cron 스케줄 호출은 유지한다. main 이외 브랜치에서는 운영 게시 job이 실행되지 않는다.
+기존 외부 cron 서비스는 `.github/workflows/screen.yml`의 **US stock screener**를 main에서 호출한다. 월간 모멘텀 단계는 `python -m scripts.run_monthly`로 실행한다. 새 월말 순위가 필요할 때 전체 종목의 가격을 조회하고, 평소에는 현재 월간 목록과 SPY 가격만 조회해 손실 점검을 게시한다. 급등 모멘텀 단계는 같은 workflow에서 독립적으로 실행한다. 한쪽이 실패하면 성공한 결과를 게시하고 workflow는 실패로 표시한다. 동일 세션의 성공 결과는 `--skip-unchanged`로 중복 갱신을 건너뛴다.
 
 Vercel root `web`과 기존 Node 환경에서 정적 JSON을 제공하므로 Python·SEC secret·Supabase migration 추가가 없다. 별도 브랜치 PR은 main의 실제 서비스에 병합 전 영향을 주지 않는다. 이 작업은 main 병합이나 Vercel production 배포를 자동으로 수행하지 않는다.
 

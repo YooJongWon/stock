@@ -10,7 +10,7 @@ LIST_SIZE = 10
 BOOTSTRAP_SOURCE = "existing_momentum_price_cache"
 
 
-def pending_month_end(reference_date, published):
+def pending_month_end(reference_date, published, *, refresh_bootstrap=True):
     """Select the latest completed month-end not already represented in the report."""
     import exchange_calendars as xc
 
@@ -26,7 +26,7 @@ def pending_month_end(reference_date, published):
     published_date = published.get("reference_date", "")
     target_date = target.isoformat()
     if target_date > published_date or (
-        target_date == published_date and published.get("source") == BOOTSTRAP_SOURCE
+        refresh_bootstrap and target_date == published_date and published.get("source") == BOOTSTRAP_SOURCE
     ):
         return target
     return None
