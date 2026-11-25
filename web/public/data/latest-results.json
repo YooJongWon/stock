@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "status": "success",
-  "last_successful_run_at": "2026-11-24T22:00:56.752264+00:00",
-  "data_date": "2026-11-24",
+  "last_successful_run_at": "2026-11-25T22:00:58.514499+00:00",
+  "data_date": "2026-11-25",
   "spy_regime": "RISK_OFF",
-  "spy_reference_date": "2026-11-24",
+  "spy_reference_date": "2026-11-25",
   "monthly_momentum": {
     "reference_date": "2026-10-30",
     "rebalance_open_at": "2026-11-02T14:30:00+00:00",
@@ -77,118 +77,118 @@
     "universe_count": 5562,
     "price_histories_read": 4201,
     "daily_risk": {
-      "reference_date": "2026-11-24",
+      "reference_date": "2026-11-25",
       "start_date": "2026-11-02",
       "items": {
         "AXTI": {
           "status": "severe",
-          "drawdown_pct": -43.9475,
-          "rebalance_return_pct": -43.9475
+          "drawdown_pct": -43.2375,
+          "rebalance_return_pct": -43.2375
         },
         "MRNA": {
           "status": "severe",
-          "drawdown_pct": -15.4721,
-          "rebalance_return_pct": 1.4365
+          "drawdown_pct": -17.9033,
+          "rebalance_return_pct": -1.4811
         },
         "TXG": {
           "status": "severe",
-          "drawdown_pct": -18.5464,
-          "rebalance_return_pct": -18.5464
+          "drawdown_pct": -20.8078,
+          "rebalance_return_pct": -20.8078
         },
         "ERAS": {
           "status": "normal",
-          "drawdown_pct": -5.7738,
-          "rebalance_return_pct": 7.2493
+          "drawdown_pct": -5.8333,
+          "rebalance_return_pct": 7.1816
         },
         "MXL": {
           "status": "severe",
-          "drawdown_pct": -38.6407,
-          "rebalance_return_pct": -38.6407
+          "drawdown_pct": -38.4063,
+          "rebalance_return_pct": -38.4063
         },
         "TWST": {
           "status": "severe",
-          "drawdown_pct": -28.9156,
-          "rebalance_return_pct": -28.9156
+          "drawdown_pct": -29.4444,
+          "rebalance_return_pct": -29.4444
         },
         "KOD": {
           "status": "normal",
-          "drawdown_pct": 0.0,
-          "rebalance_return_pct": 15.4768
+          "drawdown_pct": -3.7496,
+          "rebalance_return_pct": 11.1469
         },
         "LITE": {
           "status": "severe",
-          "drawdown_pct": -39.3035,
-          "rebalance_return_pct": -39.3035
+          "drawdown_pct": -40.6168,
+          "rebalance_return_pct": -40.6168
         },
         "MU": {
           "status": "severe",
-          "drawdown_pct": -29.28,
-          "rebalance_return_pct": -29.28
+          "drawdown_pct": -32.4848,
+          "rebalance_return_pct": -32.4848
         },
         "CDNA": {
           "status": "severe",
-          "drawdown_pct": -12.0267,
-          "rebalance_return_pct": -11.0209
+          "drawdown_pct": -14.2534,
+          "rebalance_return_pct": -13.2731
         }
       }
     }
   },
-  "sector_reference_date": "2026-11-24",
+  "sector_reference_date": "2026-11-25",
   "sector_performance": [
     {
       "symbol": "XLB",
       "sector": "소재",
-      "change_pct": 0.54
+      "change_pct": 2.07
     },
     {
       "symbol": "XLC",
       "sector": "커뮤니케이션 서비스",
-      "change_pct": 0.82
+      "change_pct": 0.89
     },
     {
       "symbol": "XLE",
       "sector": "에너지",
-      "change_pct": 0.97
+      "change_pct": 0.74
     },
     {
       "symbol": "XLF",
       "sector": "금융",
-      "change_pct": 0.83
+      "change_pct": 0.71
     },
     {
       "symbol": "XLI",
       "sector": "산업재",
-      "change_pct": -0.53
+      "change_pct": 0.83
     },
     {
       "symbol": "XLK",
       "sector": "정보기술",
-      "change_pct": -3.26
+      "change_pct": -0.83
     },
     {
       "symbol": "XLP",
       "sector": "필수소비재",
-      "change_pct": 1.66
+      "change_pct": 0.46
     },
     {
       "symbol": "XLRE",
       "sector": "부동산",
-      "change_pct": 1.31
+      "change_pct": 0.92
     },
     {
       "symbol": "XLU",
       "sector": "유틸리티",
-      "change_pct": 0.18
+      "change_pct": 0.48
     },
     {
       "symbol": "XLV",
       "sector": "헬스케어",
-      "change_pct": 2.95
+      "change_pct": -0.56
     },
     {
       "symbol": "XLY",
       "sector": "임의소비재",
-      "change_pct": 0.68
+      "change_pct": -0.2
     }
   ],
   "stock_sectors": {
