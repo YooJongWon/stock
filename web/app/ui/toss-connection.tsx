@@ -156,35 +156,63 @@ export default function TossConnection({ momentum, positionWeight }: {
           {snapshot ? (
             <>
               <p className="toss-status" role="status">계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>
-              <section className="portfolio-panel" aria-labelledby="toss-personal-return">
-                <div className="portfolio-panel-heading">
-                  <h2 id="toss-personal-return">내 수익률</h2>
-                  <span>전체 계좌 · 현재 보유 종목</span>
-                </div>
-                {returns.length ? (
-                  <>
-                    <div className="portfolio-summary">
-                      {returns.map(({ currency, summary }) => (
-                        <article key={currency} className={profitLossClass(summary?.rate ?? null)}>
-                          <span>{currency} 평가 수익률</span>
-                          <strong>{summary ? percent.format(summary.rate) : "계산 불가"}</strong>
-                          <small>{summary ? `평가손익 ${displayValue(summary.profit, currency)} · 매수원금 ${displayValue(summary.cost, currency)}`
-                            : "매수원금 또는 평가손익을 확인할 수 없습니다."}</small>
-                        </article>
-                      ))}
+              <div className="portfolio-panel toss-overview">
+                <section aria-labelledby="toss-personal-return">
+                  <div className="toss-overview-heading">
+                    <h2 id="toss-personal-return">내 수익률</h2>
+                    <span>전체 계좌 · 현재 보유 종목</span>
+                  </div>
+                  {returns.length ? (
+                    <>
+                      <div className="toss-overview-returns">
+                        {returns.map(({ currency, summary }) => (
+                          <article key={currency} className="toss-performance">
+                            {summary ? (
+                              <dl className="toss-performance-values">
+                                <div>
+                                  <dt>{currency} 평가 수익률</dt>
+                                  <dd className={profitLossClass(summary.rate)}>{percent.format(summary.rate)}</dd>
+                                </div>
+                                <div>
+                                  <dt>평가손익</dt>
+                                  <dd className={profitLossClass(summary.profit)}>{displayValue(summary.profit, currency, true)}</dd>
+                                </div>
+                                <div>
+                                  <dt>매수원금</dt>
+                                  <dd>{displayValue(summary.cost, currency)}</dd>
+                                </div>
+                              </dl>
+                            ) : (
+                              <p className="toss-overview-note">{currency} 평가 수익률 계산 불가 · 매수원금 또는 평가손익 미확인</p>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                      <p className="toss-overview-note">통화별 평가손익 ÷ 매수원금 · 실현손익과 배당 제외</p>
+                    </>
+                  ) : <p className="toss-overview-note">수익률을 계산할 보유 종목이 없습니다.</p>}
+                </section>
+                <section className="toss-overview-allocation" aria-labelledby="toss-allocation-title">
+                  <div className="toss-overview-heading">
+                    <h2 id="toss-allocation-title">월간 모멘텀 배정</h2>
+                    <span>{momentum ? momentum.reference_date + " 기준" : "순위 확인 대기"}</span>
+                  </div>
+                  <dl className="toss-allocation-values">
+                    <div>
+                      <dt>종목당 목표</dt>
+                      <dd>{capital === null ? "—" : usd.format(capital * positionWeight)}</dd>
                     </div>
-                    <p className="toss-status">통화별 평가손익 합계 ÷ 매수원금 합계 · 실현손익과 배당 제외</p>
-                  </>
-                ) : <p className="toss-status">수익률을 계산할 보유 종목이 없습니다.</p>}
-              </section>
-              <section className="portfolio-plan-banner" aria-label="월간 모멘텀 배정">
-                <div className="portfolio-plan-banner-heading">
-                  <div><span>월간 모멘텀 · {momentum ? momentum.reference_date + " 기준" : "순위 확인 대기"}</span>
-                    <strong>종목당 목표 {capital === null ? "—" : usd.format(capital * positionWeight)}</strong></div>
-                </div>
-                <p>{defaultCapital ? "기본" : "월간 모멘텀"} 배정 자금 {capital === null ? "확인 대기" : usd.format(capital)} · 종목당 {positionWeight * 100}% · 목표 현금 37.5%</p>
-                {missing && snapshot.accounts.length > 0 && <p><strong>미보유 상위 종목</strong> · {missing.length ? missing.map(({ ticker }) => ticker).join(" · ") : "모두 보유 중"}</p>}
-              </section>
+                    <div>
+                      <dt>{defaultCapital ? "기본 배정 자금" : "배정 자금"}</dt>
+                      <dd>{capital === null ? "확인 대기" : usd.format(capital)}</dd>
+                    </div>
+                  </dl>
+                  <p className="toss-overview-note">종목당 {positionWeight * 100}% · 목표 현금 37.5%</p>
+                  {missing && snapshot.accounts.length > 0 && (
+                    <p className="toss-overview-note"><strong>미보유 상위 종목</strong> · {missing.length ? missing.map(({ ticker }) => ticker).join(" · ") : "모두 보유 중"}</p>
+                  )}
+                </section>
+              </div>
               {snapshot.accounts.length === 0 && <div className="portfolio-panel">조회 가능한 토스증권 계좌가 없습니다.</div>}
               {snapshot.accounts.map(({ holdings, buyingPower }, index) => {
                 const usdValue = sumHoldingValues(holdings, "USD");
@@ -294,10 +322,12 @@ function formatMoney(amount: string | null, currency: string) {
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const krw = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW" });
-function displayValue(value: number, currency: string) {
-  if (currency === "USD") return usd.format(value);
-  if (currency === "KRW") return krw.format(value);
-  return `${value.toLocaleString("ko-KR")} ${currency}`;
+const signedUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", signDisplay: "exceptZero" });
+const signedKrw = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", signDisplay: "exceptZero" });
+function displayValue(value: number, currency: string, signed = false) {
+  if (currency === "USD") return (signed ? signedUsd : usd).format(value);
+  if (currency === "KRW") return (signed ? signedKrw : krw).format(value);
+  return `${value.toLocaleString("ko-KR", { signDisplay: signed ? "exceptZero" : "auto" })} ${currency}`;
 }
 
 const percent = new Intl.NumberFormat("ko-KR", {
