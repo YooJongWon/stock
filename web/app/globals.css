@@ -617,3 +617,57 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
   .toss-holdings td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 5px; color: #a5b5c6; font-size: 12px; }
   .menu-tabs button { min-height: 44px; }
 }
+
+.toss-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.toss-overview-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.toss-overview-heading h2 { margin: 0; font-size: 17px; }
+.toss-overview-heading span,
+.toss-overview-note { color: #a8b8ca; font-size: 12px; line-height: 1.55; }
+.toss-overview-note { margin: 9px 0 0; }
+.toss-overview-note strong { color: var(--text); }
+.toss-overview-returns { display: grid; gap: 8px; }
+.toss-performance {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d151f;
+}
+.toss-performance > .toss-overview-note { margin: 0; }
+.toss-performance-values, .toss-allocation-values {
+  align-items: baseline;
+  gap: 10px clamp(14px, 2.2vw, 32px);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.toss-performance-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.toss-allocation-values { display: flex; flex-wrap: wrap; }
+.toss-overview dt { color: #a8b8ca; font-size: 12px; }
+.toss-overview dd { margin: 4px 0 0; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+.toss-performance-values > :first-child dd,
+.toss-performance-values > :nth-child(2) dd,
+.toss-allocation-values > :first-child dd { font-size: 21px; font-weight: 750; }
+.toss-overview dd.positive { color: var(--mint); }
+.toss-overview dd.negative { color: var(--red); }
+.toss-overview-allocation {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 720px) {
+  .toss-overview { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .toss-overview-allocation { padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 450px) {
+  .toss-performance-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toss-performance-values > :last-child { grid-column: 1 / -1; }
+}
