@@ -25,6 +25,14 @@ export type MonthlyDashboardResult = {
   data_date: string | null;
   spy_regime?: string;
   monthly_momentum?: MonthlyMomentum | null;
+  monthly_ranking_quality?: {
+    reference_date: string;
+    total_count: number;
+    missing_count: number;
+    eligible_count: number;
+    min_coverage_pct: number;
+    status: "published" | "held";
+  } | null;
   sector_reference_date?: string;
   sector_performance?: SectorPerformance[];
   stock_sectors?: Record<string, string>;
@@ -63,11 +71,12 @@ function tradingViewUrl(candidate: { Ticker: string; Exchange?: string }) {
 export type MarketSession = { date: string; kind: "regular" | "early_close" | "closed"; close_et?: string };
 const sessionLabels = { regular: "거래일", early_close: "조기 폐장", closed: "휴장" };
 
-export default function Dashboard({ result, marketSession, batchReferenceDate, failedSession }: {
+export default function Dashboard({ result, marketSession, batchReferenceDate, failedSession, dataLoadError }: {
   result: MonthlyDashboardResult;
   marketSession: MarketSession | null;
   batchReferenceDate: string | null;
   failedSession?: string | null;
+  dataLoadError?: "results" | "status";
 }) {
   const [activeMenu, setActiveMenu] = useState<"monthly" | "momentum" | "toss">("monthly");
 
@@ -84,7 +93,7 @@ export default function Dashboard({ result, marketSession, batchReferenceDate, f
       </header>
 
       {activeMenu === "monthly" && (
-        <MonthlyStrategy result={result} marketSession={marketSession} batchReferenceDate={batchReferenceDate} failedSession={failedSession} />
+        <MonthlyStrategy result={result} marketSession={marketSession} batchReferenceDate={batchReferenceDate} failedSession={failedSession} dataLoadError={dataLoadError} />
       )}
       {activeMenu === "toss" && <TossConnection momentum={result.monthly_momentum} positionWeight={monthlyPositionWeight} />}
       {activeMenu === "momentum" && <Momentum />}
@@ -104,13 +113,14 @@ const sectorPercent = new Intl.NumberFormat("ko-KR", {
   style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
 
-function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSession }: {
+function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSession, dataLoadError }: {
   result: MonthlyDashboardResult;
   marketSession: MarketSession | null;
   batchReferenceDate: string | null;
   failedSession?: string | null;
+  dataLoadError?: "results" | "status";
 }) {
-  const { monthly_momentum: momentum, spy_regime: marketRegime, data_date: marketDate,
+  const { monthly_momentum: momentum, spy_regime: marketRegime, data_date: marketDate, monthly_ranking_quality: rankingQuality,
     sector_reference_date: sectorDate, sector_performance: sectors = [], stock_sectors: stockSectors } = result;
   const [capitalInput, setCapitalInput] = useState("10000");
   const [settings, setSettings] = useState<CalculatorInputs | null>(null);
@@ -214,6 +224,9 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
         </div>
       </header>
 
+      {dataLoadError && <p className="monthly-panel-note" role="status">
+        {dataLoadError === "results" ? "결과 파일을 읽지 못했습니다." : "배치 상태 파일을 읽지 못했습니다."}
+      </p>}
       {failedSession && <p className="monthly-panel-note" role="status">미국장 {failedSession} 기준 배치에 실패했습니다. 아래는 마지막으로 게시된 결과입니다.</p>}
 
       <section className="sector-overview monthly-sector-overview" aria-labelledby="monthly-sector-title">
@@ -231,8 +244,16 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
               </div>
             ))}
           </div>
-        ) : <p className="monthly-panel-note">섹터 등락률 데이터 게시 대기</p>}
+        ) : dataLoadError !== "results" && <p className="monthly-panel-note">섹터 등락률 데이터 게시 대기</p>}
       </section>
+
+      {rankingQuality && <p className="monthly-panel-note" role="status">
+        {rankingQuality.reference_date} 월말 집계 · 전체 {count(rankingQuality.total_count)}종목 · 필수 시세 누락 {count(rankingQuality.missing_count)}종목 · 조건 통과 {count(rankingQuality.eligible_count)}종목
+        {rankingQuality.status === "held" && (
+          <> · 순위 갱신 보류 (필수 시세 확보율 {rankingQuality.min_coverage_pct}% 이상 및 조건 통과 10종목 필요).
+            {momentum ? " 직전 순위를 표시합니다." : " 아직 게시된 순위가 없습니다."}</>
+        )}
+      </p>}
 
       <div className="monthly-overview">
         <article><span>순위 기준일 · 미국장</span><strong>{momentum?.reference_date ?? "—"}</strong><small>월말 정규장 종가</small></article>

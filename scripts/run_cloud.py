@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["SCREENER_OUTPUT_DIR"] = scratch
         from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
         from screener import Screener
-        from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
+        from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, assess_monthly_ranking, pending_month_end, publish_monthly
 
         if args.scheduled:
             reference_date = previous_korea_date_session()
@@ -282,6 +282,13 @@ def main(argv: list[str] | None = None) -> int:
                 + (f" 예시: {example_text}" if example_text else "")
             )
 
+        ranking_quality = current.get("monthly_ranking_quality")
+        if monthly_scan is not None:
+            ranked, ranking_quality = assess_monthly_ranking(monthly_scan, stats["universe_count"])
+            monthly = publish_monthly(monthly, ranked)
+            if ranked is None:
+                warnings.append(f"월말 순위 갱신 보류: {ranking_quality['reference_date']}.")
+
         payload = {
             "schema_version": 1,
             "status": "degraded" if warnings else "success",
@@ -328,9 +335,8 @@ def main(argv: list[str] | None = None) -> int:
             "fundamental_diagnostics": fundamental_diagnostics,
             "fundamental_failure_examples": stats.get("fundamental_failure_examples", []),
             "sector_performance": stats.get("sector_performance", []),
-            "monthly_momentum": monthly_risk.result(
-                publish_monthly(monthly, monthly_scan.result() if monthly_scan else None)
-            ),
+            "monthly_momentum": monthly_risk.result(monthly),
+            "monthly_ranking_quality": ranking_quality,
             "candidates": candidates,
             "technical_candidates": technical_candidates,
             "waiting_candidates": waiting_candidates,
