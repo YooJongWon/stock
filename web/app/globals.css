@@ -678,3 +678,14 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 
 .monthly-company-risk{min-width:210px;vertical-align:top}
 .monthly-company-risk small{margin-top:4px}
+
+.monthly-filing-button{border:1px solid #625478;border-radius:6px;background:#241c32;color:#eadbff;padding:5px 8px;font:inherit;cursor:pointer}
+.monthly-filing-button:focus-visible,.monthly-filing-dialog button:focus-visible{outline:2px solid #c6a8f5;outline-offset:3px}
+.monthly-filing-dialog{box-sizing:border-box;width:min(42rem,calc(100% - 2rem));max-height:85dvh;overflow:auto;border:1px solid #625478;border-radius:14px;background:#151222;color:#f4eefb;padding:24px;line-height:1.6}
+.monthly-filing-dialog::backdrop{background:#080610bb}
+.monthly-filing-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;border-bottom:1px solid #453951;padding-bottom:10px}
+.monthly-filing-dialog header p{margin:0;color:#d0c3df;font-size:.85rem}
+.monthly-filing-dialog h2{margin:0}
+.monthly-filing-dialog h3{margin:1rem 0 .25rem}
+.monthly-filing-dialog p{margin:.25rem 0 .65rem}
+.monthly-filing-dialog button{border:1px solid #625478;border-radius:6px;padding:6px 12px;background:#241c32;color:inherit;cursor:pointer}

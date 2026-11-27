@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { normalizeExitSettings } from "../../lib/swing-plan";
 import { DEFAULT_CALCULATOR_INPUTS, type CalculatorInputs } from "@/lib/calculator-plan";
 import { tradingViewChartUrl } from "@/lib/tradingview";
@@ -10,10 +10,12 @@ import Momentum from "./momentum";
 type MonthlyMomentumItem = { ticker: string; name: string | null; exchange: string | null; return_pct: number };
 type SectorPerformance = { symbol: string; sector: string; change_pct: number | null };
 
+type FilingEvidence = { date: string; form: string; message: string; facts?: string[]; guidance?: string };
+
 type CompanyRisk = {
   status: "review" | "watch" | "observe" | "unavailable";
   details: string[];
-  evidence: { date: string; form: string; message: string; url: string }[];
+  evidence: FilingEvidence[];
 };
 
 const companyRiskLabels = {
@@ -142,6 +144,8 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
   const [savedCapital, setSavedCapital] = useState<string | null>(null);
   const [capitalStatus, setCapitalStatus] = useState("저장된 투자금 확인 중…");
   const [saving, setSaving] = useState(false);
+  const filingDialog = useRef<HTMLDialogElement>(null);
+  const [selectedFiling, setSelectedFiling] = useState<{ ticker: string; item: FilingEvidence } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -332,9 +336,12 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
                           {risk ? (
                             <>
                               <strong className={risk.status === "review" ? "monthly-loss" : undefined}>{companyRiskLabels[risk.status]}</strong>
-                              {risk.evidence.map((item) => (
-                                <small key={item.url + item.message}>{item.message}{" "}
-                                  <a href={item.url} target="_blank" rel="noreferrer">{item.date} {item.form} 원문 ↗</a>
+                              {risk.evidence.map((item, index) => (
+                                <small key={`${item.date}-${item.form}-${index}`}>{item.message}{" "}
+                                  <button className="monthly-filing-button" type="button" aria-haspopup="dialog" onClick={() => {
+                                    setSelectedFiling({ ticker, item });
+                                    filingDialog.current?.showModal();
+                                  }}>{item.date} {item.form} 한국어 해석</button>
                                 </small>
                               ))}
                               {risk.details.map((detail) => <small key={detail}>{detail}</small>)}
@@ -360,6 +367,25 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
           </>
         ) : <p className="monthly-panel-note">첫 월말 순위가 게시되면 이곳에 표시됩니다.</p>}
       </section>
+
+      <dialog ref={filingDialog} className="monthly-filing-dialog" aria-labelledby="monthly-filing-title" onClose={() => setSelectedFiling(null)}>
+        {selectedFiling && (
+          <>
+            <header>
+              <div>
+                <p>{selectedFiling.item.date} · SEC {selectedFiling.item.form}</p>
+                <h2 id="monthly-filing-title">{selectedFiling.ticker} 공시 해석</h2>
+              </div>
+              <form method="dialog"><button type="submit">닫기</button></form>
+            </header>
+            <h3>공시에서 확인한 내용</h3>
+            <p>{selectedFiling.item.message}</p>
+            {selectedFiling.item.facts?.map((fact) => <p key={fact}>{fact}</p>)}
+            <h3>보유 중이라면</h3>
+            <p>{selectedFiling.item.guidance || "이 공시의 투자 판단은 아직 게시되지 않았습니다. 다음 배치에서 갱신됩니다."}</p>
+          </>
+        )}
+      </dialog>
 
       <section className="monthly-panel monthly-playbook" aria-labelledby="monthly-playbook-title">
         <div className="monthly-panel-heading"><h2 id="monthly-playbook-title">매수·매도와 손실 관리</h2></div>
