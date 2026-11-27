@@ -52,14 +52,16 @@ def isolated_publish(tmp_path, monkeypatch):
     return data
 
 
-def test_cloud_publishes_actual_checks_and_distinguishes_empty_from_not_run(isolated_publish):
+def test_cloud_publishes_daily_checks_when_monthly_ranking_is_held(isolated_publish):
     assert run_cloud.main([]) == 0
     result = json.loads((isolated_publish / "latest-results.json").read_text(encoding="utf-8"))
-    assert result["status"] == "success"
+    assert result["status"] == "degraded"
+    assert result["monthly_momentum"] is None
+    assert result["monthly_ranking_quality"]["status"] == "held"
     assert result["data_date"] == REFERENCE_DATE
     assert result["candidates"][0]["filter_results"] == {"Price >= $10": True, "Score >= 7": True}
     assert (isolated_publish / "latest-candidates.csv").is_file()
-    assert json.loads((isolated_publish / "latest-run-status.json").read_text())["status"] == "success"
+    assert json.loads((isolated_publish / "latest-run-status.json").read_text())["status"] == "degraded"
 
 
 def test_cloud_refuses_stale_spy_close_and_preserves_last_good_files(isolated_publish, monkeypatch):

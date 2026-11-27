@@ -1,8 +1,10 @@
 import json
 from datetime import date
 
+import exchange_calendars as xc
 import pandas as pd
 
+from monthly_momentum import MonthlyMomentum
 from providers.fallback_provider import PriceResult
 from scripts import run_monthly
 from sector_performance import SECTOR_ETFS, YFinanceProvider
@@ -97,39 +99,46 @@ def test_month_end_rebuilds_rankings_and_waits_for_first_close(tmp_path, monkeyp
     data.mkdir(parents=True)
     snapshot = data / "latest-results.json"
     snapshot.write_text(json.dumps({"monthly_momentum": previous}))
-    tickers = [f"STOCK{i}" for i in range(11)]
+    tickers = [f"STOCK{i:02d}" for i in range(15)]
     calls = []
+    missing = set(tickers[-4:])
+    scan = MonthlyMomentum(month_end)
+    sessions = xc.get_calendar("XNYS").sessions_in_range(scan.start, month_end).date
+    complete_quote = quote(dict.fromkeys(sessions, 100))
+    stale_quote = quote(dict.fromkeys(sessions[:-1], 100))
 
     class Prices:
         def history(self, ticker, reference_date):
             calls.append((ticker, reference_date))
-            return quote({month_end: 100})
+            if ticker in missing:
+                return stale_quote if ticker == tickers[-1] else PriceResult(None, None, "no close")
+            return complete_quote
 
     class Universe:
         def get(self):
             return [{"ticker": ticker} for ticker in tickers]
 
-    class Ranking:
-        def __init__(self, reference_date):
-            assert reference_date == month_end
-            self.items = []
-
-        def observe(self, member, frame):
-            self.items.append(member)
-
-        def result(self):
-            return {"reference_date": str(month_end), "items": self.items[:10]}
-
     monkeypatch.setattr(run_monthly, "ROOT", tmp_path)
     monkeypatch.setattr(run_monthly, "latest_completed_session", lambda _now: month_end)
     monkeypatch.setattr(run_monthly, "DataProvider", Prices)
     monkeypatch.setattr(run_monthly, "UniverseProvider", Universe)
-    monkeypatch.setattr(run_monthly, "MonthlyMomentum", Ranking)
     monkeypatch.setattr(YFinanceProvider, "instrument_info", lambda self, ticker: {})
 
     assert run_monthly.main([]) == 0
+    held = json.loads(snapshot.read_text())
+    assert held["status"] == "degraded"
+    assert held["monthly_momentum"]["items"] == previous["items"]
+    assert held["monthly_ranking_quality"] == {
+        "reference_date": str(month_end), "status": "held", "total_count": 15,
+        "missing_count": 4, "eligible_count": 11, "min_coverage_pct": 75,
+    }
+
+    calls.clear()
+    missing.clear()
+    assert run_monthly.main(["--skip-unchanged"]) == 0
     assert calls == [(ticker, month_end) for ticker in ["SPY", *tickers, *(symbol for symbol, _ in SECTOR_ETFS)]]
     result = json.loads(snapshot.read_text())
+    assert result["monthly_ranking_quality"]["status"] == "published"
     monthly = result["monthly_momentum"]
     assert monthly["previous"] == previous
     assert monthly["daily_risk"]["items"] == {ticker: {"status": "pending"} for ticker in tickers[:10]}

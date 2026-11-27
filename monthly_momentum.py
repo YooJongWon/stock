@@ -7,6 +7,7 @@ from config import SETTINGS
 from indicators import normalize_ohlcv
 
 LIST_SIZE = 10
+MIN_PRICE_COVERAGE_PERCENT = 75
 BOOTSTRAP_SOURCE = "existing_momentum_price_cache"
 
 
@@ -120,6 +121,7 @@ class MonthlyMomentum:
         self.start, self.end = sessions[-253].date(), sessions[-22].date()
         self.liquidity_days = list(sessions[-30:].date)
         self.ranked = []
+        self.complete_count = 0
 
     def observe(self, member, frame):
         # Use the same 252/21-session anchors as the research. Missing anchor
@@ -128,6 +130,7 @@ class MonthlyMomentum:
         required = bars.reindex([self.start, self.end, *self.liquidity_days])
         if required[["Close", "Volume"]].isna().any().any():
             return
+        self.complete_count += 1
         first, last = required.Close.iloc[:2]
         recent = required.iloc[2:]
         dollar_volume = (recent.Close * recent.Volume).mean()
@@ -154,3 +157,22 @@ class MonthlyMomentum:
             "eligible_count": len(ranked),
             "items": ranked[:LIST_SIZE],
         }
+
+def assess_monthly_ranking(scan, total_count):
+    """Return the publishable list and diagnostics for the attempted month-end."""
+    ranked = scan.result()
+    eligible_count = len(scan.ranked)
+    can_publish = (
+        total_count > 0
+        and scan.complete_count * 100 >= total_count * MIN_PRICE_COVERAGE_PERCENT
+        and eligible_count >= LIST_SIZE
+    )
+    quality = {
+        "reference_date": scan.reference_date.isoformat(),
+        "total_count": total_count,
+        "missing_count": total_count - scan.complete_count,
+        "eligible_count": eligible_count,
+        "min_coverage_pct": MIN_PRICE_COVERAGE_PERCENT,
+        "status": "published" if can_publish else "held",
+    }
+    return ranked if can_publish else None, quality

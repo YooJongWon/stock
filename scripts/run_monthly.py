@@ -9,7 +9,7 @@ from scripts.run_cloud import ROOT, _atomic_write, _read_current_result
 from data_provider import DataProvider, UniverseProvider
 from indicators import spy_market_regime
 from market_calendar import batch_day_us_session, is_exchange_session, latest_completed_session, previous_korea_date
-from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
+from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, assess_monthly_ranking, pending_month_end, publish_monthly
 from sector_performance import daily_sector_performance, monthly_stock_sectors
 
 
@@ -71,9 +71,11 @@ def main(argv: list[str] | None = None) -> int:
     if market.get("reference_date") != str(reference_date):
         raise RuntimeError(f"SPY close unconfirmed for {reference_date}")
 
+    ranking_quality = current.get("monthly_ranking_quality")
     if month_end is not None:
         ranking = MonthlyMomentum(month_end)
-        for member in UniverseProvider().get():
+        members = list(UniverseProvider().get())
+        for member in members:
             quote = prices.history(member["ticker"], month_end)
             if quote.frame is None:
                 continue
@@ -81,9 +83,9 @@ def main(argv: list[str] | None = None) -> int:
                 ranking.observe(member, quote.frame)
             except (ValueError, KeyError) as exc:
                 print(f"Skipping {member['ticker']} in the month-end ranking: {exc}")
-        ranked = ranking.result()
-        if not ranked or len(ranked["items"]) < 10:
-            raise RuntimeError(f"Fewer than ten eligible prices for the {month_end} ranking")
+        ranked, ranking_quality = assess_monthly_ranking(ranking, len(members))
+        if ranked is None:
+            print(f"Holding month-end ranking: {ranking_quality}")
         monthly = publish_monthly(monthly, ranked)
 
     monitor = MonthlyRiskMonitor(reference_date, monthly)
@@ -94,19 +96,22 @@ def main(argv: list[str] | None = None) -> int:
             if quote.frame is not None:
                 monitor.observe(member, quote.frame)
     monitored = monitor.result(monthly)
+    risk_items = (monitored or {}).get("daily_risk", {}).get("items", {})
     unchecked = [
-        ticker for ticker, item in monitored["daily_risk"]["items"].items()
+        ticker for ticker, item in risk_items.items()
         if item["status"] == "unavailable"
     ]
     now = datetime.now(timezone.utc).isoformat()
+    ranking_held = ranking_quality and ranking_quality["status"] == "held"
     payload = {
         "schema_version": 1,
-        "status": "degraded" if unchecked else "success",
+        "status": "degraded" if unchecked or ranking_held else "success",
         "last_successful_run_at": now,
         "data_date": str(reference_date),
         "spy_regime": market["market_regime"],
         "spy_reference_date": market["reference_date"],
         "monthly_momentum": monitored,
+        "monthly_ranking_quality": ranking_quality,
         "sector_reference_date": str(reference_date),
         "sector_performance": daily_sector_performance(prices, reference_date),
         "stock_sectors": monthly_stock_sectors(monthly, current.get("stock_sectors") or {}),
