@@ -29,9 +29,12 @@ export default function TossConnection({ momentum, positionWeight }: {
   const hasSnapshot = snapshot !== null;
   const ranked = new Map(momentum?.items.map(({ ticker }, index) => [tickerKey(ticker), index + 1]));
   const previous = new Set(momentum?.previous?.items.map(({ ticker }) => tickerKey(ticker)));
-  const held = new Set(snapshot?.accounts.flatMap(({ holdings }) =>
-    holdings.filter(({ currency }) => currency === "USD").map(({ symbol }) => tickerKey(symbol))
-  ));
+  const holdings = snapshot?.accounts.flatMap((account) => account.holdings) ?? [];
+  const held = new Set(holdings.filter(({ currency }) => currency === "USD").map(({ symbol }) => tickerKey(symbol)));
+  const returns = [...new Set(holdings.map(({ currency }) => currency))].sort().map((currency) => ({
+    currency,
+    summary: summarizeReturn(holdings.filter((holding) => holding.currency === currency)),
+  }));
   const missing = momentum?.items.filter(({ ticker }) => !held.has(tickerKey(ticker)));
 
   async function checkConnection(event?: FormEvent<HTMLFormElement>) {
@@ -153,6 +156,27 @@ export default function TossConnection({ momentum, positionWeight }: {
           {snapshot ? (
             <>
               <p className="toss-status" role="status">계좌 {snapshot.accountCount}개 · 마지막 조회 {koreaTime.format(new Date(snapshot.checkedAt))} (한국 시간)</p>
+              <section className="portfolio-panel" aria-labelledby="toss-personal-return">
+                <div className="portfolio-panel-heading">
+                  <h2 id="toss-personal-return">내 수익률</h2>
+                  <span>전체 계좌 · 현재 보유 종목</span>
+                </div>
+                {returns.length ? (
+                  <>
+                    <div className="portfolio-summary">
+                      {returns.map(({ currency, summary }) => (
+                        <article key={currency} className={profitLossClass(summary?.rate ?? null)}>
+                          <span>{currency} 평가 수익률</span>
+                          <strong>{summary ? percent.format(summary.rate) : "계산 불가"}</strong>
+                          <small>{summary ? `평가손익 ${displayValue(summary.profit, currency)} · 매수원금 ${displayValue(summary.cost, currency)}`
+                            : "매수원금 또는 평가손익을 확인할 수 없습니다."}</small>
+                        </article>
+                      ))}
+                    </div>
+                    <p className="toss-status">통화별 평가손익 합계 ÷ 매수원금 합계 · 실현손익과 배당 제외</p>
+                  </>
+                ) : <p className="toss-status">수익률을 계산할 보유 종목이 없습니다.</p>}
+              </section>
               <section className="portfolio-plan-banner" aria-label="월간 모멘텀 배정">
                 <div className="portfolio-plan-banner-heading">
                   <div><span>월간 모멘텀 · {momentum ? momentum.reference_date + " 기준" : "순위 확인 대기"}</span>
@@ -305,6 +329,22 @@ function holdingCost(holding: TossHolding) {
   if (value === null || profit === null) return null;
   const cost = value - profit;
   return Number.isFinite(cost) && cost >= 0 ? cost : null;
+}
+
+function summarizeReturn(holdings: TossHolding[]) {
+  let cost = 0;
+  let profit = 0;
+  for (const holding of holdings) {
+    const purchase = holdingCost(holding);
+    if (purchase === null) return null;
+    const value = readNumber(holding.value);
+    const gain = readNumber(holding.profitLoss) ?? (value === null ? null : value - purchase);
+    if (gain === null) return null;
+    cost += purchase;
+    profit += gain;
+  }
+  const rate = profit / cost;
+  return cost > 0 && Number.isFinite(cost) && Number.isFinite(rate) ? { cost, profit, rate } : null;
 }
 
 function divide(amount: string | null, cost: number) {
