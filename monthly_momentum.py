@@ -11,18 +11,21 @@ MIN_PRICE_COVERAGE_PERCENT = 75
 BOOTSTRAP_SOURCE = "existing_momentum_price_cache"
 
 
+def _month_end_session(calendar, day):
+    first = day.replace(day=1)
+    last = day.replace(day=monthrange(day.year, day.month)[1])
+    return calendar.sessions_in_range(first, last)[-1].date()
+
+
 def pending_month_end(reference_date, published, *, refresh_bootstrap=True):
     """Select the latest completed month-end not already represented in the report."""
     import exchange_calendars as xc
 
     ref = date.fromisoformat(str(reference_date)[:10])
     cal = xc.get_calendar("XNYS")
-    first = ref.replace(day=1)
-    last = ref.replace(day=monthrange(ref.year, ref.month)[1])
-    target = cal.sessions_in_range(first, last)[-1].date()
+    target = _month_end_session(cal, ref)
     if target > ref:
-        previous_month = first - timedelta(days=1)
-        target = cal.sessions_in_range(previous_month.replace(day=1), previous_month)[-1].date()
+        target = _month_end_session(cal, ref.replace(day=1) - timedelta(days=1))
     published = published or {}
     published_date = published.get("reference_date", "")
     target_date = target.isoformat()
@@ -39,6 +42,15 @@ def rebalance_open(reference_date):
 
     cal = xc.get_calendar("XNYS")
     return cal.session_open(cal.next_session(reference_date)).isoformat()
+
+
+def next_rebalance(reference_date):
+    """Preview the next month's ranking close and following regular open."""
+    import exchange_calendars as xc
+
+    next_month = reference_date.replace(day=1) + timedelta(days=32)
+    ranking_date = _month_end_session(xc.get_calendar("XNYS"), next_month)
+    return {"ranking_date": ranking_date.isoformat(), "open_at": rebalance_open(ranking_date)}
 
 
 def publish_monthly(previous, current):
@@ -152,6 +164,7 @@ class MonthlyMomentum:
         return {
             "reference_date": self.reference_date.isoformat(),
             "rebalance_open_at": rebalance_open(self.reference_date),
+            "next_rebalance": next_rebalance(self.reference_date),
             "period_start": self.start.isoformat(),
             "period_end": self.end.isoformat(),
             "eligible_count": len(ranked),

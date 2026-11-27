@@ -18,6 +18,7 @@ type MonthlyMomentum = {
   source?: string;
   items: MonthlyMomentumItem[];
   rebalance_open_at?: string;
+  next_rebalance?: { ranking_date: string; open_at: string };
   previous?: { reference_date: string; items: MonthlyMomentumItem[] };
 };
 
@@ -258,6 +259,15 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
       <div className="monthly-overview">
         <article><span>순위 기준일 · 미국장</span><strong>{momentum?.reference_date ?? "—"}</strong><small>월말 정규장 종가</small></article>
         <article><span>기준 리밸런싱 시점</span><strong>{localDate(momentum?.rebalance_open_at ?? null)}</strong><small>월말 직후 미국장 시가 · 한국 시간 · 경과한 일정은 참고</small></article>
+        <article className="monthly-next-rebalance">
+          <span>예상 리밸런싱 시점 · 한국 시간</span>
+          <strong>{localDate(momentum?.next_rebalance?.open_at ?? null)}</strong>
+          <small>{momentum?.next_rebalance
+            ? `미국장 ${momentum.next_rebalance.ranking_date} 종가로 순위 확정 후 첫 정규장 시가`
+            : "월간 순위 게시 후 표시"}</small>
+          {rankingQuality?.status === "held" && rankingQuality.reference_date === momentum?.next_rebalance?.ranking_date &&
+            <small className="monthly-next-rebalance-held">순위 갱신 보류 · 위 날짜는 예정 시점</small>}
+        </article>
         <article>
           <label htmlFor="monthly-capital">배정 계산용 자금 (USD)</label>
           <div className="monthly-capital-control">
