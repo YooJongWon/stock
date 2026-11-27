@@ -5,12 +5,15 @@ import argparse
 import json
 from datetime import datetime, timezone
 
+import exchange_calendars as xc
+
 from scripts.run_cloud import ROOT, _atomic_write, _read_current_result
 from data_provider import DataProvider, UniverseProvider
 from indicators import spy_market_regime
 from market_calendar import batch_day_us_session, is_exchange_session, latest_completed_session, previous_korea_date
+from monthly_company_risk import review_monthly_companies
 from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, assess_monthly_ranking, pending_month_end, publish_monthly
-from sector_performance import daily_sector_performance, monthly_stock_sectors
+from sector_performance import daily_price_change, daily_sector_performance, monthly_stock_sectors
 
 
 def write_status(path, status, reference_date, attempted_at, market_session):
@@ -34,8 +37,17 @@ def main(argv: list[str] | None = None) -> int:
     attempted_at = datetime.now(timezone.utc)
     market_session = batch_day_us_session(attempted_at)
     reference_date = previous_korea_date(attempted_at) if args.scheduled else latest_completed_session(attempted_at)
+    current = _read_current_result(result_path)
+    monthly = current.get("monthly_momentum")
+    last_review = (monthly or {}).get("company_risk") or {}
+    company_check_due = not str(last_review.get("checked_at", "")).startswith(attempted_at.date().isoformat())
     if not is_exchange_session(reference_date):
         if args.scheduled:
+            if monthly and company_check_due:
+                monthly["company_risk"] = review_monthly_companies(
+                    monthly, attempted_at, last_review.get("price_context") or {},
+                )
+                _atomic_write(result_path, json.dumps(current, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
             last = _read_current_result(status_path)
             if (last.get("status"), last.get("reference_date"), last.get("market_session")) != (
                 "market_closed", str(reference_date), market_session
@@ -45,8 +57,6 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         raise RuntimeError(f"Invalid XNYS session: {reference_date}")
 
-    current = _read_current_result(result_path)
-    monthly = current.get("monthly_momentum")
     month_end = pending_month_end(reference_date, monthly, refresh_bootstrap=False)
     daily_risk = (monthly or {}).get("daily_risk") or {}
     if (
@@ -54,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         and daily_risk.get("reference_date") == str(reference_date)
         and current.get("sector_reference_date") == str(reference_date)
         and current.get("status") == "success"
+        and not company_check_due
     ):
         last = _read_current_result(status_path)
         if (last.get("status"), last.get("reference_date"), last.get("market_session")) != (
@@ -101,6 +112,27 @@ def main(argv: list[str] | None = None) -> int:
         ticker for ticker, item in risk_items.items()
         if item["status"] == "unavailable"
     ]
+    sectors = daily_sector_performance(prices, reference_date)
+    stock_sectors = monthly_stock_sectors(monthly, current.get("stock_sectors") or {})
+    if monitored:
+        previous_date = xc.get_calendar("XNYS").previous_session(reference_date).date()
+        try:
+            spy_change = daily_price_change(spy.frame, reference_date, previous_date)
+        except (ValueError, KeyError):
+            spy_change = None
+        changes_by_etf = {sector["symbol"]: sector["change_pct"] for sector in sectors}
+        price_context = {}
+        for ticker, frame in monitor.frames.items():
+            try:
+                change = daily_price_change(frame, reference_date, previous_date)
+            except (ValueError, KeyError):
+                continue
+            price_context[ticker] = {
+                "daily_return_pct": change,
+                "spy_change": spy_change,
+                "sector_change": changes_by_etf.get(stock_sectors.get(ticker)),
+            }
+        monitored["company_risk"] = review_monthly_companies(monitored, attempted_at, price_context)
     now = datetime.now(timezone.utc).isoformat()
     ranking_held = ranking_quality and ranking_quality["status"] == "held"
     payload = {
@@ -113,8 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         "monthly_momentum": monitored,
         "monthly_ranking_quality": ranking_quality,
         "sector_reference_date": str(reference_date),
-        "sector_performance": daily_sector_performance(prices, reference_date),
-        "stock_sectors": monthly_stock_sectors(monthly, current.get("stock_sectors") or {}),
+        "sector_performance": sectors,
+        "stock_sectors": stock_sectors,
     }
     _atomic_write(result_path, json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
     write_status(status_path, payload["status"], reference_date, attempted_at.isoformat(), market_session)

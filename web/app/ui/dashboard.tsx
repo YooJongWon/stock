@@ -10,6 +10,19 @@ import Momentum from "./momentum";
 type MonthlyMomentumItem = { ticker: string; name: string | null; exchange: string | null; return_pct: number };
 type SectorPerformance = { symbol: string; sector: string; change_pct: number | null };
 
+type CompanyRisk = {
+  status: "review" | "watch" | "observe" | "unavailable";
+  details: string[];
+  evidence: { date: string; form: string; message: string; url: string }[];
+};
+
+const companyRiskLabels = {
+  review: "월중 매도 검토",
+  watch: "주의 · 추가 확인",
+  observe: "월말까지 관찰",
+  unavailable: "자료 확인 필요",
+};
+
 type MonthlyMomentum = {
   reference_date: string;
   period_start: string;
@@ -18,6 +31,7 @@ type MonthlyMomentum = {
   source?: string;
   items: MonthlyMomentumItem[];
   rebalance_open_at?: string;
+  company_risk?: { checked_at: string; price_date: string | null; items: Record<string, CompanyRisk> };
   next_rebalance?: { ranking_date: string; open_at: string };
   previous?: { reference_date: string; items: MonthlyMomentumItem[] };
 };
@@ -294,12 +308,18 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
                 ? `지난 목록(${momentum.previous.reference_date})과 비교합니다. 새로 상위 10위에 들면 신규 편입, 지난달에도 상위 10위였으면 유지로 표시합니다.`
                 : "지난달과 이번 달의 상위 10종목을 비교합니다. 첫 비교 결과는 다음 월말 순위가 게시되면 표시됩니다."}
             </p>
+            {momentum.company_risk && <p className="monthly-panel-note">
+              SEC 점검 {localDate(momentum.company_risk.checked_at)} (한국 시간)
+              {momentum.company_risk.price_date && ` · 가격 기준 미국장 ${momentum.company_risk.price_date}`}
+              {" · 최근 30일 주요 공시와 최신 재무 수치 기준"}
+            </p>}
             <div className="monthly-table-wrap">
               <table className="monthly-strategy-table">
-                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">섹터</th><th scope="col">지난달 대비</th></tr></thead>
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">섹터</th><th scope="col">지난달 대비</th><th scope="col">월중 매도 검토</th></tr></thead>
                 <tbody>
                   {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
                     const prior = previousRank.get(ticker);
+                    const risk = momentum.company_risk?.items[ticker];
                     const sector = sectorsBySymbol.get(stockSectors?.[ticker] ?? "");
                     return (
                       <tr key={ticker}>
@@ -308,6 +328,19 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
                         <td className={return_pct >= 0 ? "monthly-profit" : "monthly-loss"}>{momentumPercent.format(return_pct / 100)}</td>
                         <td>{sector?.sector ?? "미확인"}</td>
                         <td>{momentum.previous ? <span className={prior ? "monthly-badge" : "monthly-badge monthly-badge-new"}>{prior ? `유지 · 이전 ${prior}위` : "신규 편입"}</span> : "—"}</td>
+                        <td className="monthly-company-risk">
+                          {risk ? (
+                            <>
+                              <strong className={risk.status === "review" ? "monthly-loss" : undefined}>{companyRiskLabels[risk.status]}</strong>
+                              {risk.evidence.map((item) => (
+                                <small key={item.url + item.message}>{item.message}{" "}
+                                  <a href={item.url} target="_blank" rel="noreferrer">{item.date} {item.form} 원문 ↗</a>
+                                </small>
+                              ))}
+                              {risk.details.map((detail) => <small key={detail}>{detail}</small>)}
+                            </>
+                          ) : <small>배치 점검 대기</small>}
+                        </td>
                       </tr>
                     );
                   })}

@@ -27,6 +27,14 @@ SECTOR_ETFS = tuple((symbol, label) for _, symbol, label in SECTORS)
 SECTOR_BY_KEY = {key: symbol for key, symbol, _ in SECTORS}
 
 
+def daily_price_change(frame, reference_date, previous_date):
+    closes = normalize_ohlcv(frame, reference_date).Close
+    previous, current = closes.reindex([previous_date, reference_date])
+    if not all(isfinite(value) and value > 0 for value in (previous, current)):
+        raise ValueError(f"missing valid close on {previous_date} or {reference_date}")
+    return round((current / previous - 1) * 100, 2)
+
+
 def daily_sector_performance(prices, reference_date):
     previous_date = xc.get_calendar("XNYS").previous_session(reference_date).date()
     results = []
@@ -36,11 +44,7 @@ def daily_sector_performance(prices, reference_date):
             result = prices.history(symbol, reference_date)
             if result.frame is None:
                 raise ValueError(result.error or "ETF history unavailable")
-            closes = normalize_ohlcv(result.frame, reference_date).Close
-            previous, current = closes.reindex([previous_date, reference_date])
-            if not all(isfinite(x) and x > 0 for x in (previous, current)):
-                raise ValueError(f"missing valid close on {previous_date} or {reference_date}")
-            change = round((current / previous - 1) * 100, 2)
+            change = daily_price_change(result.frame, reference_date, previous_date)
         except (KeyError, ValueError) as exc:
             LOG.warning("Sector ETF %s unavailable: %s", symbol, exc)
         results.append({"symbol": symbol, "sector": sector, "change_pct": change})

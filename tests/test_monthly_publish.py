@@ -74,6 +74,13 @@ def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, mon
     monkeypatch.setattr(YFinanceProvider, "instrument_info",
                         lambda self, ticker: {"sectorKey": "technology"} if ticker == "A" else {})
 
+    def review_companies(monthly, attempt, context):
+        assert monthly["daily_risk"]["reference_date"] == str(trading_day)
+        assert attempt.tzinfo is not None
+        assert context == {"A": {"daily_return_pct": -12.0, "spy_change": -12.0, "sector_change": -12.0}}
+        return {"checked_at": attempt.isoformat(), "items": {"A": {"status": "watch"}}}
+
+    monkeypatch.setattr(run_monthly, "review_monthly_companies", review_companies)
     assert run_monthly.main([]) == 0
     assert calls == [(ticker, trading_day) for ticker in ("SPY", "A", "MISSING", *(symbol for symbol, _ in SECTOR_ETFS))]
     result = json.loads(snapshot.read_text())
@@ -83,6 +90,7 @@ def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, mon
     assert result["monthly_momentum"]["items"] == initial["items"]
     assert result["sector_reference_date"] == str(trading_day)
     assert result["stock_sectors"] == {"A": "XLK"}
+    assert result["monthly_momentum"]["company_risk"]["items"]["A"]["status"] == "watch"
     sectors = {row["symbol"]: row for row in result["sector_performance"]}
     assert sectors[result["stock_sectors"]["A"]] == {"symbol": "XLK", "sector": "정보기술", "change_pct": -12.0}
     assert sectors["XLV"]["change_pct"] is None
