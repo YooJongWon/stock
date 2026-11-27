@@ -145,7 +145,13 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
   const [capitalStatus, setCapitalStatus] = useState("저장된 투자금 확인 중…");
   const [saving, setSaving] = useState(false);
   const filingDialog = useRef<HTMLDialogElement>(null);
+  const filingTrigger = useRef<HTMLButtonElement>(null);
   const [selectedFiling, setSelectedFiling] = useState<{ ticker: string; item: FilingEvidence } | null>(null);
+
+  useEffect(() => {
+    const dialog = filingDialog.current;
+    if (selectedFiling && dialog && !dialog.open) dialog.showModal();
+  }, [selectedFiling]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -336,14 +342,21 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
                           {risk ? (
                             <>
                               <strong className={risk.status === "review" ? "monthly-loss" : undefined}>{companyRiskLabels[risk.status]}</strong>
-                              {risk.evidence.map((item, index) => (
-                                <small key={`${item.date}-${item.form}-${index}`}>{item.message}{" "}
-                                  <button className="monthly-filing-button" type="button" aria-haspopup="dialog" onClick={() => {
-                                    setSelectedFiling({ ticker, item });
-                                    filingDialog.current?.showModal();
-                                  }}>{item.date} {item.form} 한국어 해석</button>
-                                </small>
-                              ))}
+                              {risk.evidence.length > 0 && (
+                                <ul className="monthly-filing-list">
+                                  {risk.evidence.map((item, index) => (
+                                    <li key={`${item.date}-${item.form}-${index}`}>
+                                      <button className="monthly-filing-button" type="button" aria-haspopup="dialog" onClick={(event) => {
+                                        filingTrigger.current = event.currentTarget;
+                                        setSelectedFiling({ ticker, item });
+                                      }}>
+                                        <span>{item.message}</span>
+                                        <small>{item.date} · {item.form} · 한국어 해석 <span aria-hidden="true">›</span></small>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               {risk.details.map((detail) => <small key={detail}>{detail}</small>)}
                             </>
                           ) : <small>배치 점검 대기</small>}
@@ -368,21 +381,34 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
         ) : <p className="monthly-panel-note">첫 월말 순위가 게시되면 이곳에 표시됩니다.</p>}
       </section>
 
-      <dialog ref={filingDialog} className="monthly-filing-dialog" aria-labelledby="monthly-filing-title" onClose={() => setSelectedFiling(null)}>
+      <dialog ref={filingDialog} className="monthly-filing-dialog" aria-labelledby="monthly-filing-title" onClose={() => {
+        setSelectedFiling(null);
+        filingTrigger.current?.focus();
+      }}>
         {selectedFiling && (
           <>
-            <header>
+            <header className="monthly-filing-header">
               <div>
-                <p>{selectedFiling.item.date} · SEC {selectedFiling.item.form}</p>
                 <h2 id="monthly-filing-title">{selectedFiling.ticker} 공시 해석</h2>
+                <p>SEC {selectedFiling.item.form} · <time dateTime={selectedFiling.item.date}>{selectedFiling.item.date}</time></p>
               </div>
-              <form method="dialog"><button type="submit">닫기</button></form>
+              <form method="dialog"><button type="submit" autoFocus>닫기</button></form>
             </header>
-            <h3>공시에서 확인한 내용</h3>
-            <p>{selectedFiling.item.message}</p>
-            {selectedFiling.item.facts?.map((fact) => <p key={fact}>{fact}</p>)}
-            <h3>보유 중이라면</h3>
-            <p>{selectedFiling.item.guidance || "이 공시의 투자 판단은 아직 게시되지 않았습니다. 다음 배치에서 갱신됩니다."}</p>
+            <div className="monthly-filing-body">
+              <section className="monthly-filing-section" aria-labelledby="monthly-filing-facts">
+                <h3 id="monthly-filing-facts"><span aria-hidden="true">#</span> 공시에서 확인한 내용</h3>
+                <p>{selectedFiling.item.message}</p>
+                {!!selectedFiling.item.facts?.length && (
+                  <ul>{selectedFiling.item.facts.map((fact) => <li key={fact}>{fact}</li>)}</ul>
+                )}
+              </section>
+              <section className="monthly-filing-section monthly-filing-guidance" aria-labelledby="monthly-filing-guidance">
+                <h3 id="monthly-filing-guidance"><span aria-hidden="true">#</span> 보유 중이라면</h3>
+                {selectedFiling.item.guidance
+                  ? <p>{selectedFiling.item.guidance}</p>
+                  : <p className="monthly-filing-pending"><strong>판단 대기</strong> 아직 이 공시의 투자 판단이 게시되지 않았어요.</p>}
+              </section>
+            </div>
           </>
         )}
       </dialog>

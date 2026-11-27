@@ -679,13 +679,29 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-company-risk{min-width:210px;vertical-align:top}
 .monthly-company-risk small{margin-top:4px}
 
-.monthly-filing-button{border:1px solid #625478;border-radius:6px;background:#241c32;color:#eadbff;padding:5px 8px;font:inherit;cursor:pointer}
-.monthly-filing-button:focus-visible,.monthly-filing-dialog button:focus-visible{outline:2px solid #c6a8f5;outline-offset:3px}
-.monthly-filing-dialog{box-sizing:border-box;width:min(42rem,calc(100% - 2rem));max-height:85dvh;overflow:auto;border:1px solid #625478;border-radius:14px;background:#151222;color:#f4eefb;padding:24px;line-height:1.6}
+.monthly-filing-list{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
+.monthly-filing-button{display:grid;gap:3px;width:100%;min-height:44px;padding:8px 10px;border:1px solid #625478;border-radius:8px;background:#241c32;color:#f2eaff;text-align:left;font:inherit;font-size:12px;line-height:1.45;cursor:pointer;overflow-wrap:anywhere}
+.monthly-filing-button:hover,.monthly-filing-header button:hover{background:#37294b}
+.monthly-filing-list .monthly-filing-button small{margin:0;color:#dbc9f6}
+.monthly-filing-button:focus-visible,.monthly-filing-header button:focus-visible{outline:2px solid #c6a8f5;outline-offset:2px}
+.monthly-filing-dialog{box-sizing:border-box;width:min(42rem,calc(100% - 1.5rem));max-height:85dvh;overflow:auto;overscroll-behavior:contain;border:1px solid #625478;border-radius:16px;background:#151222;color:#f4eefb;padding:0;line-height:1.65;box-shadow:0 20px 64px #080610bb}
 .monthly-filing-dialog::backdrop{background:#080610bb}
-.monthly-filing-dialog header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;border-bottom:1px solid #453951;padding-bottom:10px}
-.monthly-filing-dialog header p{margin:0;color:#d0c3df;font-size:.85rem}
-.monthly-filing-dialog h2{margin:0}
-.monthly-filing-dialog h3{margin:1rem 0 .25rem}
-.monthly-filing-dialog p{margin:.25rem 0 .65rem}
-.monthly-filing-dialog button{border:1px solid #625478;border-radius:6px;padding:6px 12px;background:#241c32;color:inherit;cursor:pointer}
+.monthly-filing-header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #453951;background:#151222}
+.monthly-filing-header h2{margin:0;font-size:clamp(1.2rem,4.5vw,1.55rem);line-height:1.3;overflow-wrap:anywhere}
+.monthly-filing-header p{margin:4px 0 0;color:#d0c3df;font-size:.83rem}
+.monthly-filing-header button{min-height:44px;padding:0 14px;border:1px solid #625478;border-radius:8px;background:#241c32;color:inherit;font:inherit;font-size:.9rem;cursor:pointer;white-space:nowrap}
+.monthly-filing-body{display:grid;gap:12px;padding:16px 20px 20px}
+.monthly-filing-section{padding:14px 16px;border:1px solid #453951;border-radius:10px;background:#1d182b}
+.monthly-filing-guidance{border-color:#715b92;background:#261c36}
+.monthly-filing-section h3{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid #534465;font-size:1.05rem;line-height:1.35}
+.monthly-filing-section h3 span{color:#c9abf6}
+.monthly-filing-section p,.monthly-filing-section ul{margin:0;font-size:.94rem;overflow-wrap:anywhere}
+.monthly-filing-section ul{margin-top:8px;padding-inline-start:1.25rem}
+.monthly-filing-section li+li{margin-top:4px}
+.monthly-filing-pending{color:#d0c3df}
+.monthly-filing-pending strong{display:inline-block;margin-inline-end:4px;color:#e5d4ff}
+@media(max-width:480px){
+  .monthly-filing-header{padding:12px 14px}
+  .monthly-filing-body{padding:12px 14px 14px}
+  .monthly-filing-section{padding:12px}
+}
