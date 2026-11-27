@@ -1,11 +1,11 @@
 {
-  "status": "market_closed",
-  "attempted_at": "2026-11-26T22:00:46+00:00",
-  "reference_date": "2026-11-26",
-  "message": null,
+  "status": "success",
+  "attempted_at": "2026-11-27T05:41:58.612117+00:00",
+  "reference_date": "2026-11-25",
   "market_session": {
     "date": "2026-11-27",
     "kind": "early_close",
     "close_et": "13:00"
-  }
+  },
+  "message": null
 }

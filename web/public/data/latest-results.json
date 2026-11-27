@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "success",
-  "last_successful_run_at": "2026-11-25T22:00:58.514499+00:00",
+  "last_successful_run_at": "2026-11-27T05:42:12.398606+00:00",
   "data_date": "2026-11-25",
   "spy_regime": "RISK_OFF",
   "spy_reference_date": "2026-11-25",
@@ -135,8 +135,213 @@
     "next_rebalance": {
       "ranking_date": "2026-11-30",
       "open_at": "2026-12-01T14:30:00+00:00"
+    },
+    "company_risk": {
+      "checked_at": "2026-11-27T05:41:58.612117+00:00",
+      "price_date": "2026-11-25",
+      "price_context": {
+        "AXTI": {
+          "daily_return_pct": 1.27,
+          "spy_change": -0.29,
+          "sector_change": -0.83
+        },
+        "MRNA": {
+          "daily_return_pct": -2.88,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        },
+        "TXG": {
+          "daily_return_pct": -2.78,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        },
+        "ERAS": {
+          "daily_return_pct": -0.06,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        },
+        "MXL": {
+          "daily_return_pct": 0.38,
+          "spy_change": -0.29,
+          "sector_change": -0.83
+        },
+        "TWST": {
+          "daily_return_pct": -0.74,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        },
+        "KOD": {
+          "daily_return_pct": -3.75,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        },
+        "LITE": {
+          "daily_return_pct": -2.16,
+          "spy_change": -0.29,
+          "sector_change": -0.83
+        },
+        "MU": {
+          "daily_return_pct": -4.53,
+          "spy_change": -0.29,
+          "sector_change": -0.83
+        },
+        "CDNA": {
+          "daily_return_pct": -2.53,
+          "spy_change": -0.29,
+          "sector_change": -0.56
+        }
+      },
+      "items": {
+        "AXTI": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -43.24%.",
+            "당일 +1.27% · SPY 대비 +1.56%p · 섹터 ETF 대비 +2.10%p."
+          ],
+          "evidence": [
+            {
+              "date": "2026-10-29",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1051627/000143774926033941/0001437749-26-033941-index.htm"
+            }
+          ]
+        },
+        "MRNA": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -17.90%.",
+            "당일 -2.88% · SPY 대비 -2.59%p · 섹터 ETF 대비 -2.32%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-06",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1682852/000168285226000194/0001682852-26-000194-index.htm"
+            }
+          ]
+        },
+        "TXG": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -20.81%.",
+            "당일 -2.78% · SPY 대비 -2.49%p · 섹터 ETF 대비 -2.22%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-05",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1770787/000162828026071025/0001628280-26-071025-index.htm"
+            }
+          ]
+        },
+        "ERAS": {
+          "status": "observe",
+          "details": [
+            "리밸런싱 이후 고점 대비 -5.83%.",
+            "당일 -0.06% · SPY 대비 +0.23%p · 섹터 ETF 대비 +0.50%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-12",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1761918/000119312526458350/0001193125-26-458350-index.htm"
+            }
+          ]
+        },
+        "MXL": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -38.41%.",
+            "당일 +0.38% · SPY 대비 +0.67%p · 섹터 ETF 대비 +1.21%p.",
+            "최근 30일 공시에서 점검 대상 위험 항목이 확인되지 않았습니다."
+          ],
+          "evidence": []
+        },
+        "TWST": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -29.44%.",
+            "당일 -0.74% · SPY 대비 -0.45%p · 섹터 ETF 대비 -0.18%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-12",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1581280/000158128026000053/0001581280-26-000053-index.htm"
+            }
+          ]
+        },
+        "KOD": {
+          "status": "observe",
+          "details": [
+            "리밸런싱 이후 고점 대비 -3.75%.",
+            "당일 -3.75% · SPY 대비 -3.46%p · 섹터 ETF 대비 -3.19%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-12",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1468748/000119312526458248/0001193125-26-458248-index.htm"
+            }
+          ]
+        },
+        "LITE": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -40.62%.",
+            "당일 -2.16% · SPY 대비 -1.87%p · 섹터 ETF 대비 -1.33%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-11-02",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1633978/000162828026068655/0001628280-26-068655-index.htm"
+            }
+          ]
+        },
+        "MU": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -32.48%.",
+            "당일 -4.53% · SPY 대비 -4.24%p · 섹터 ETF 대비 -3.70%p.",
+            "확인된 공시에서 하락 원인을 특정할 수 없습니다.",
+            "최근 30일 공시에서 점검 대상 위험 항목이 확인되지 않았습니다."
+          ],
+          "evidence": []
+        },
+        "CDNA": {
+          "status": "watch",
+          "details": [
+            "리밸런싱 이후 고점 대비 -14.25%.",
+            "당일 -2.53% · SPY 대비 -2.24%p · 섹터 ETF 대비 -1.97%p.",
+            "공시와 주가 하락의 인과관계는 확인되지 않았습니다."
+          ],
+          "evidence": [
+            {
+              "date": "2026-10-29",
+              "message": "실적 발표 공시가 나왔습니다.",
+              "form": "8-K",
+              "url": "https://www.sec.gov/Archives/edgar/data/1217234/000121723426000059/0001217234-26-000059-index.htm"
+            }
+          ]
+        }
+      }
     }
   },
+  "monthly_ranking_quality": null,
   "sector_reference_date": "2026-11-25",
   "sector_performance": [
     {
