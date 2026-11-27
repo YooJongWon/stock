@@ -60,7 +60,13 @@ function tradingViewUrl(candidate: { Ticker: string; Exchange?: string }) {
     : "NASDAQ";
   return tradingViewChartUrl(exchange + ":" + (candidate.Ticker || ""));
 }
-export default function Dashboard({ result, failedSession }: { result: MonthlyDashboardResult; failedSession?: string | null }) {
+type MarketSession = { date: string; open: boolean };
+
+export default function Dashboard({ result, marketSession, failedSession }: {
+  result: MonthlyDashboardResult;
+  marketSession: MarketSession | null;
+  failedSession?: string | null;
+}) {
   const [activeMenu, setActiveMenu] = useState<"monthly" | "momentum" | "toss">("monthly");
 
   return (
@@ -76,7 +82,7 @@ export default function Dashboard({ result, failedSession }: { result: MonthlyDa
       </header>
 
       {activeMenu === "monthly" && (
-        <MonthlyStrategy result={result} failedSession={failedSession} />
+        <MonthlyStrategy result={result} marketSession={marketSession} failedSession={failedSession} />
       )}
       {activeMenu === "toss" && <TossConnection momentum={result.monthly_momentum} positionWeight={monthlyPositionWeight} />}
       {activeMenu === "momentum" && <Momentum />}
@@ -96,8 +102,9 @@ const sectorPercent = new Intl.NumberFormat("ko-KR", {
   style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
 
-function MonthlyStrategy({ result, failedSession }: {
+function MonthlyStrategy({ result, marketSession, failedSession }: {
   result: MonthlyDashboardResult;
+  marketSession: MarketSession | null;
   failedSession?: string | null;
 }) {
   const { monthly_momentum: momentum, spy_regime: marketRegime, data_date: marketDate,
@@ -188,9 +195,18 @@ function MonthlyStrategy({ result, failedSession }: {
           <h1>월간 모멘텀 스크리너</h1>
           <p>최근 한 달을 제외한 수익률로 상위 10종목을 고르고, 월말 순위가 바뀌면 비중을 조정합니다.</p>
         </div>
-        <div className="monthly-market">
-          <span>SPY 시장 환경</span><strong>{marketLabel}</strong>
-          {marketDate && <small>미국장 {marketDate} 종가</small>}
+        <div className="monthly-market-cards">
+          <div className="monthly-market">
+            <span>SPY 시장 환경</span><strong>{marketLabel}</strong>
+            {marketDate && <small>미국장 {marketDate} 종가</small>}
+          </div>
+          <div className="monthly-market">
+            <span>미국장 개장 여부</span>
+            <strong className={marketSession ? marketSession.open ? "session-open" : "session-closed" : undefined}>
+              {marketSession ? marketSession.open ? "거래일" : "휴장" : "확인 대기"}
+            </strong>
+            {marketSession && <small>배치 기준 미국장 {marketSession.date}</small>}
+          </div>
         </div>
       </header>
 

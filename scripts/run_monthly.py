@@ -8,9 +8,18 @@ from datetime import datetime, timezone
 from scripts.run_cloud import ROOT, _atomic_write, _read_current_result
 from data_provider import DataProvider, UniverseProvider
 from indicators import spy_market_regime
-from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date_session
+from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date
 from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
 from sector_performance import daily_sector_performance, monthly_stock_sectors
+
+
+def write_status(path, status, reference_date, attempted_at):
+    _atomic_write(path, json.dumps({
+        "status": status,
+        "attempted_at": attempted_at,
+        "reference_date": str(reference_date),
+        "message": None,
+    }, indent=2) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,14 +28,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-unchanged", action="store_true")
     args = parser.parse_args(argv)
 
-    reference_date = previous_korea_date_session() if args.scheduled else latest_completed_session()
-    if reference_date is None:
-        print("No XNYS session on the previous Korea calendar date.")
-        return 0
+    result_path = ROOT / "web" / "public" / "data" / "latest-results.json"
+    status_path = result_path.with_name("latest-run-status.json")
+    reference_date = previous_korea_date() if args.scheduled else latest_completed_session()
     if not is_exchange_session(reference_date):
+        if args.scheduled:
+            last = _read_current_result(status_path)
+            if last.get("status") != "market_closed" or last.get("reference_date") != str(reference_date):
+                write_status(status_path, "market_closed", reference_date, datetime.now(timezone.utc).isoformat())
+            print(f"U.S. market closed on {reference_date}. Keeping the last trading session's results.")
+            return 0
         raise RuntimeError(f"Invalid XNYS session: {reference_date}")
 
-    result_path = ROOT / "web" / "public" / "data" / "latest-results.json"
     current = _read_current_result(result_path)
     monthly = current.get("monthly_momentum")
     month_end = pending_month_end(reference_date, monthly, refresh_bootstrap=False)
@@ -37,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
         and current.get("sector_reference_date") == str(reference_date)
         and current.get("status") == "success"
     ):
+        last = _read_current_result(status_path)
+        if last.get("status") != "success" or last.get("reference_date") != str(reference_date):
+            write_status(status_path, "success", reference_date, datetime.now(timezone.utc).isoformat())
         print(f"Monthly momentum checks already published for {reference_date}.")
         return 0
 
@@ -88,14 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         "sector_performance": daily_sector_performance(prices, reference_date),
         "stock_sectors": monthly_stock_sectors(monthly, current.get("stock_sectors") or {}),
     }
-    status = {
-        "status": payload["status"],
-        "attempted_at": now,
-        "reference_date": str(reference_date),
-        "message": None,
-    }
     _atomic_write(result_path, json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
-    _atomic_write(result_path.with_name("latest-run-status.json"), json.dumps(status, indent=2) + "\n")
+    write_status(status_path, payload["status"], reference_date, now)
     print(f"Monthly momentum for {reference_date}. Price checks unavailable: {', '.join(unchecked) or 'none'}")
     return 0
 
