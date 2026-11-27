@@ -678,6 +678,14 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 
 .monthly-company-risk{min-width:210px;vertical-align:top}
 .monthly-company-risk small{margin-top:4px}
+.monthly-risk-help{display:inline-grid;place-items:center;vertical-align:middle;min-width:34px;min-height:34px;margin-inline-start:4px;padding:0;border:1px solid transparent;border-radius:7px;background:transparent;color:#dbc9f6;font:700 16px/1 system-ui,sans-serif;cursor:pointer}
+.monthly-risk-help:hover{border-color:#625478;background:#37294b}
+.monthly-risk-help:focus-visible{outline:2px solid #c6a8f5;outline-offset:2px}
+.monthly-risk-help-list{display:grid;gap:12px;margin:0}
+.monthly-risk-help-list>div{padding-bottom:12px;border-bottom:1px solid #453951}
+.monthly-risk-help-list>div:last-child{padding-bottom:0;border-bottom:0}
+.monthly-risk-help-list dt{font-weight:700}
+.monthly-risk-help-list dd{margin:4px 0 0;color:#e0d5ee;font-size:.94rem}
 
 .monthly-filing-list{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
 .monthly-filing-button{display:grid;gap:3px;width:100%;min-height:44px;padding:8px 10px;border:1px solid #625478;border-radius:8px;background:#241c32;color:#f2eaff;text-align:left;font:inherit;font-size:12px;line-height:1.45;cursor:pointer;overflow-wrap:anywhere}

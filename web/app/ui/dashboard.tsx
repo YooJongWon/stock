@@ -25,6 +25,13 @@ const companyRiskLabels = {
   unavailable: "자료 확인 필요",
 };
 
+const companyRiskHelp = {
+  review: "파산·회생, 채무 조기상환 문제, 기존 재무제표 신뢰성 문제, 상장 종료 등 중대한 공시가 확인됐습니다. 보유 근거를 우선 점검할 단계입니다.",
+  watch: "상장 요건 미충족, 자산 손상, 자기자본이 음수인 경우, 유동자산이 유동부채보다 적은 경우, 또는 리밸런싱 이후 고점 대비 8% 이상 하락이 확인됐습니다. 관련 공시와 재무 상황을 추가로 확인할 단계입니다.",
+  observe: "공시·최신 재무·가격 자료를 확인했고, 위 두 상태에 해당하는 신호는 없었습니다. 월말 순위 갱신까지 추이를 관찰합니다.",
+  unavailable: "SEC 공시, 최신 재무 수치, 고점 대비 하락률 중 하나 이상을 확인하지 못했습니다. 자료가 확보되면 다시 점검합니다.",
+} satisfies Record<CompanyRisk["status"], string>;
+
 type MonthlyMomentum = {
   reference_date: string;
   period_start: string;
@@ -145,6 +152,7 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
   const [capitalStatus, setCapitalStatus] = useState("저장된 투자금 확인 중…");
   const [saving, setSaving] = useState(false);
   const filingDialog = useRef<HTMLDialogElement>(null);
+  const companyRiskDialog = useRef<HTMLDialogElement>(null);
   const filingTrigger = useRef<HTMLButtonElement>(null);
   const [selectedFiling, setSelectedFiling] = useState<{ ticker: string; item: FilingEvidence } | null>(null);
 
@@ -325,7 +333,13 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
             </p>}
             <div className="monthly-table-wrap">
               <table className="monthly-strategy-table">
-                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">섹터</th><th scope="col">지난달 대비</th><th scope="col">월중 매도 검토</th></tr></thead>
+                <thead><tr><th scope="col">순위</th><th scope="col">종목</th><th scope="col">12−1 수익률</th><th scope="col">섹터</th><th scope="col">지난달 대비</th><th scope="col">
+                  월중 매도 검토
+                  <button className="monthly-risk-help" type="button" aria-haspopup="dialog" aria-label="월중 매도 검토 상태 안내 열기"
+                    onClick={() => companyRiskDialog.current?.showModal()}>
+                    <span aria-hidden="true">ⓘ</span>
+                  </button>
+                </th></tr></thead>
                 <tbody>
                   {momentum.items.map(({ ticker, name, exchange, return_pct }, index) => {
                     const prior = previousRank.get(ticker);
@@ -380,6 +394,23 @@ function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSess
           </>
         ) : <p className="monthly-panel-note">첫 월말 순위가 게시되면 이곳에 표시됩니다.</p>}
       </section>
+
+      <dialog ref={companyRiskDialog} className="monthly-filing-dialog" aria-labelledby="monthly-risk-help-title">
+        <header className="monthly-filing-header">
+          <h2 id="monthly-risk-help-title">월중 매도 검토 상태 안내</h2>
+          <form method="dialog"><button type="submit">닫기</button></form>
+        </header>
+        <div className="monthly-filing-body">
+          <dl className="monthly-risk-help-list">
+            {(Object.keys(companyRiskLabels) as CompanyRisk["status"][]).map((status) => (
+              <div key={status}>
+                <dt className={status === "review" ? "monthly-loss" : undefined}>{companyRiskLabels[status]}</dt>
+                <dd>{companyRiskHelp[status]}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </dialog>
 
       <dialog ref={filingDialog} className="monthly-filing-dialog" aria-labelledby="monthly-filing-title" onClose={() => {
         setSelectedFiling(null);
