@@ -9,6 +9,7 @@ import requests
 
 from data_provider import UniverseProvider, _canonical_ticker
 from providers.sec_fundamentals import SECFundamentalProvider
+from sec_filing_interpretation import document_text, interpret_filing
 
 LOG = logging.getLogger(__name__)
 EVENTS = {
@@ -18,6 +19,9 @@ EVENTS = {
     "3.01": ("watch", "거래소 상장 요건 미충족 또는 상장폐지 관련 공시가 나왔습니다."),
     "2.06": ("watch", "자산 가치가 크게 줄어 회계상 손실을 반영한다고 공시했습니다."),
     "2.02": ("notice", "실적 발표 공시가 나왔습니다."),
+    "25": ("review", "상장 종료 관련 Form 25가 제출됐습니다."),
+    "25-NSE": ("review", "거래소가 상장 종료 관련 Form 25를 제출했습니다."),
+    "6-K": ("notice", "해외 발행사의 공시가 나왔습니다."),
 }
 PERIODIC_FORMS = {"10-K", "10-Q", "20-F", "40-F"}
 SEC_ERRORS = (requests.RequestException, RuntimeError, ValueError, TypeError, KeyError)
@@ -72,9 +76,11 @@ def financial_signals(provider, cik, row):
     has_liquidity = assets is not None and liabilities is not None and liabilities > 0
     signals = []
     if equity is not None and equity < 0:
-        signals.append(("watch", evidence(cik, row, "최신 보고서의 주주 몫 자산(자기자본)이 마이너스입니다.")))
+        signals.append(("watch", {**evidence(cik, row, "최신 보고서의 주주 몫 자산(자기자본)이 마이너스입니다."),
+            "guidance": "부채 대비 완충 여력이 낮을 수 있습니다. 최근 자금 조달과 부채 만기를 함께 확인할 사안입니다."}))
     if has_liquidity and 0 <= assets < liabilities:
-        signals.append(("watch", evidence(cik, row, f"1년 안에 현금화할 자산이 단기부채의 {assets / liabilities:.2f}배입니다.")))
+        signals.append(("watch", {**evidence(cik, row, f"1년 안에 현금화할 자산이 단기부채의 {assets / liabilities:.2f}배입니다."),
+            "guidance": "가까운 만기에 갚을 돈이 더 많습니다. 현금이 계속 들어오는 사업인지와 신규 차입이 가능한지를 확인할 사안입니다."}))
     return signals, equity is not None and has_liquidity
 
 
@@ -84,17 +90,38 @@ def check_company(provider, cik, as_of, since):
     )
     rows = filing_rows(payload, as_of)
     events = []
+    listing_resolved = False
     for row in rows:
         filed, _, form, items, _ = row
         if filed < since:
             break
-        if form == "8-K":
-            for code in dict.fromkeys(re.findall(r"\b\d\.\d{2}\b", items or "")):
-                if code in EVENTS:
-                    level, message = EVENTS[code]
-                    events.append((level, evidence(cik, row, message)))
-        elif form == "6-K":
-            events.append(("notice", evidence(cik, row, "해외 발행사의 새 공시가 나왔습니다. 세부 내용은 원문 확인이 필요합니다.")))
+        codes = dict.fromkeys(re.findall(r"\b\d\.\d{2}\b", items or "")) if form == "8-K" else [form]
+        codes = [code for code in codes if code in EVENTS and not (code == "3.01" and listing_resolved)]
+        if not codes:
+            continue
+        entry = evidence(cik, row, "")
+        body, exhibit = "", ""
+        if form in {"8-K", "6-K"}:
+            try:
+                submission = provider._get_text(
+                    entry["url"].removesuffix("-index.htm") + ".txt",
+                    f"monthly-original:{row[1]}",
+                )
+                body = document_text(submission, {form, f"{form}/A"})
+                if "2.02" in codes:
+                    exhibit = document_text(submission, {"EX-99.1"})
+            except SEC_ERRORS as exc:
+                LOG.warning("Monthly SEC body unavailable for %s: %s", row[1], type(exc).__name__)
+        for code in codes:
+            level, message = EVENTS[code]
+            decision, facts, guidance = interpret_filing(code, body, exhibit)
+            if decision == "resolved":
+                listing_resolved = True
+                decision = "notice"
+                message = "거래소 상장 요건 회복을 공시했습니다."
+            if not body and form in {"8-K", "6-K"}:
+                facts = ["공시 목록의 항목만 확인했습니다. 본문은 읽지 못해 세부 내용은 확인되지 않았습니다."]
+            events.append((decision or level, {**entry, "message": message, "facts": facts, "guidance": guidance}))
     periodic = next((row for row in rows if row[2] in PERIODIC_FORMS and row[4]), None)
     fundamentals_checked = False
     if periodic:
