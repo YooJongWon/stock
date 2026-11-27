@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
-from market_calendar import is_exchange_session, latest_completed_session
+from market_calendar import batch_day_us_session, is_exchange_session, latest_completed_session, previous_korea_date
 
 ET=ZoneInfo("America/New_York")
 
@@ -26,3 +26,9 @@ def test_xnys_holiday_is_not_a_session_and_reference_uses_previous_close():
 def test_thanksgiving_holiday_uses_early_close_session():
     assert not is_exchange_session(date(2024,11,28))
     assert latest_completed_session(datetime(2024,11,29,14,0,tzinfo=ET))==date(2024,11,29)
+
+
+def test_batch_day_market_schedule_differs_from_previous_day_data_reference():
+    batch_time = datetime(2026, 11, 26, 17, 0, tzinfo=ET)
+    assert previous_korea_date(batch_time) == date(2026, 11, 26)
+    assert batch_day_us_session(batch_time) == {"date": "2026-11-27", "kind": "early_close", "close_et": "13:00"}

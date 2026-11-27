@@ -9,13 +9,15 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from market_calendar import latest_completed_session
+from market_calendar import batch_day_us_session, latest_completed_session
 
 path = ROOT / "web" / "public" / "data" / "latest-run-status.json"
+attempted_at = datetime.now(timezone.utc)
 payload = {
     "status": "failed",
-    "attempted_at": datetime.now(timezone.utc).isoformat(),
-    "reference_date": str(latest_completed_session()),
+    "attempted_at": attempted_at.isoformat(),
+    "reference_date": str(latest_completed_session(attempted_at)),
+    "market_session": batch_day_us_session(attempted_at),
     "message": "The latest automated run failed. The dashboard continues to show the last successful result.",
 }
 path.parent.mkdir(parents=True, exist_ok=True)

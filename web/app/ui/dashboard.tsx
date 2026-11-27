@@ -60,11 +60,13 @@ function tradingViewUrl(candidate: { Ticker: string; Exchange?: string }) {
     : "NASDAQ";
   return tradingViewChartUrl(exchange + ":" + (candidate.Ticker || ""));
 }
-type MarketSession = { date: string; open: boolean };
+export type MarketSession = { date: string; kind: "regular" | "early_close" | "closed"; close_et?: string };
+const sessionLabels = { regular: "거래일", early_close: "조기 폐장", closed: "휴장" };
 
-export default function Dashboard({ result, marketSession, failedSession }: {
+export default function Dashboard({ result, marketSession, batchReferenceDate, failedSession }: {
   result: MonthlyDashboardResult;
   marketSession: MarketSession | null;
+  batchReferenceDate: string | null;
   failedSession?: string | null;
 }) {
   const [activeMenu, setActiveMenu] = useState<"monthly" | "momentum" | "toss">("monthly");
@@ -82,7 +84,7 @@ export default function Dashboard({ result, marketSession, failedSession }: {
       </header>
 
       {activeMenu === "monthly" && (
-        <MonthlyStrategy result={result} marketSession={marketSession} failedSession={failedSession} />
+        <MonthlyStrategy result={result} marketSession={marketSession} batchReferenceDate={batchReferenceDate} failedSession={failedSession} />
       )}
       {activeMenu === "toss" && <TossConnection momentum={result.monthly_momentum} positionWeight={monthlyPositionWeight} />}
       {activeMenu === "momentum" && <Momentum />}
@@ -102,9 +104,10 @@ const sectorPercent = new Intl.NumberFormat("ko-KR", {
   style: "percent", signDisplay: "exceptZero", minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
 
-function MonthlyStrategy({ result, marketSession, failedSession }: {
+function MonthlyStrategy({ result, marketSession, batchReferenceDate, failedSession }: {
   result: MonthlyDashboardResult;
   marketSession: MarketSession | null;
+  batchReferenceDate: string | null;
   failedSession?: string | null;
 }) {
   const { monthly_momentum: momentum, spy_regime: marketRegime, data_date: marketDate,
@@ -201,11 +204,12 @@ function MonthlyStrategy({ result, marketSession, failedSession }: {
             {marketDate && <small>미국장 {marketDate} 종가</small>}
           </div>
           <div className="monthly-market">
-            <span>미국장 개장 여부</span>
-            <strong className={marketSession ? marketSession.open ? "session-open" : "session-closed" : undefined}>
-              {marketSession ? marketSession.open ? "거래일" : "휴장" : "확인 대기"}
+            <span>배치 실행일 미국장 일정</span>
+            <strong className={marketSession ? marketSession.kind === "regular" ? "session-open" : "session-closed" : undefined}>
+              {marketSession ? sessionLabels[marketSession.kind] : "확인 대기"}
             </strong>
-            {marketSession && <small>배치 기준 미국장 {marketSession.date}</small>}
+            {marketSession && <small>{marketSession.date}{marketSession.kind === "early_close" && marketSession.close_et && ` · ${marketSession.close_et} ET`}</small>}
+            {batchReferenceDate && <small>배치 조회 기준 {batchReferenceDate}</small>}
           </div>
         </div>
       </header>

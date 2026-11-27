@@ -57,3 +57,17 @@ def previous_korea_date_session(now: datetime | None = None) -> date | None:
     """Return yesterday's KST calendar date only when XNYS was open that day."""
     previous_date = previous_korea_date(now)
     return previous_date if is_exchange_session(previous_date) else None
+
+
+def batch_day_us_session(now: datetime) -> dict:
+    """U.S. session scheduled for the same calendar date as the KST batch."""
+    import exchange_calendars as xc
+
+    day = now.astimezone(KST).date()
+    cal = xc.get_calendar("XNYS")
+    status = {"date": day.isoformat(), "kind": "closed"}
+    if cal.is_session(day):
+        close = cal.session_close(day).to_pydatetime().astimezone(NY)
+        status["kind"] = "early_close" if close.time() < time(16) else "regular"
+        status["close_et"] = close.strftime("%H:%M")
+    return status
