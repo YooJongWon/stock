@@ -540,8 +540,12 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-hero .monthly-eyebrow{color:#c1a6f2;font-weight:700}
 .monthly-market,.monthly-overview article{display:grid;gap:7px;min-width:0;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#101824}
 .monthly-market{min-width:140px}
+.monthly-market-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex-shrink:0}
+.monthly-market-cards .monthly-market{min-width:0}
 .monthly-market span,.monthly-market small,.monthly-overview span,.monthly-overview small,.monthly-overview label{color:#a6b5c6;font-size:11px;line-height:1.5}
 .monthly-market strong{color:#e4d7fa;font-size:14px}
+.monthly-market .session-open{color:var(--mint)}
+.monthly-market .session-closed{color:#f5c088}
 .monthly-overview{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:10px;margin-bottom:16px}
 .monthly-overview strong{font-size:15px}
 .monthly-overview input{box-sizing:border-box;width:100%;max-width:170px;padding:5px 7px;border:1px solid #39495c;border-radius:5px;background:#0c121d;color:var(--text);font:inherit}
@@ -568,6 +572,7 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
 .monthly-playbook dd{margin:5px 0 0;color:#a6b5c6;font-size:12px;line-height:1.65}
 @media(max-width:700px){
   .monthly-hero{align-items:flex-start;flex-direction:column;gap:13px;padding-top:10px}
+  .monthly-market-cards{width:100%}
   .monthly-overview,.monthly-playbook dl{grid-template-columns:1fr}
   .monthly-panel{padding:13px}
   .monthly-strategy-table th,.monthly-strategy-table td{padding:8px 5px}

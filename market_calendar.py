@@ -45,10 +45,15 @@ def is_exchange_session(session_date) -> bool:
     return bool(cal.is_session(session_date))
 
 
-def previous_korea_date_session(now: datetime | None = None) -> date | None:
-    """Return yesterday's KST calendar date only when XNYS was open that day."""
+def previous_korea_date(now: datetime | None = None) -> date:
+    """Return the calendar date a scheduled morning batch checks."""
     now = now or datetime.now(KST)
     if now.tzinfo is None:
         now = now.replace(tzinfo=KST)
-    previous_date = now.astimezone(KST).date() - timedelta(days=1)
+    return now.astimezone(KST).date() - timedelta(days=1)
+
+
+def previous_korea_date_session(now: datetime | None = None) -> date | None:
+    """Return yesterday's KST calendar date only when XNYS was open that day."""
+    previous_date = previous_korea_date(now)
     return previous_date if is_exchange_session(previous_date) else None

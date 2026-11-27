@@ -17,6 +17,10 @@ export default async function Home() {
     readData<{ status: string; reference_date: string | null }>("latest-run-status.json", { status: "not_run", reference_date: null }),
   ]);
   const { data_date, spy_regime, monthly_momentum, sector_reference_date, sector_performance, stock_sectors } = result;
+  const hasMarketStatus = ["success", "degraded", "failed", "market_closed"].includes(status.status);
+  const marketSession = hasMarketStatus && status.reference_date
+    ? { date: status.reference_date, open: status.status !== "market_closed" }
+    : null;
   return <Dashboard result={{ data_date, spy_regime, monthly_momentum, sector_reference_date, sector_performance, stock_sectors }}
-    failedSession={status.status === "failed" ? status.reference_date : null} />;
+    marketSession={marketSession} failedSession={status.status === "failed" ? status.reference_date : null} />;
 }

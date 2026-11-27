@@ -15,6 +15,32 @@ def quote(values):
     ), "test", None)
 
 
+def test_scheduled_holiday_publishes_market_status_without_refreshing_prices(tmp_path, monkeypatch):
+    holiday = date(2026, 11, 26)
+    data = tmp_path / "web" / "public" / "data"
+    data.mkdir(parents=True)
+    snapshot = data / "latest-results.json"
+    published = '{"data_date": "2026-11-25"}\n'
+    snapshot.write_text(published)
+
+    def unused_prices():
+        raise AssertionError("A market closure must not fetch prices")
+
+    monkeypatch.setattr(run_monthly, "ROOT", tmp_path)
+    monkeypatch.setattr(run_monthly, "previous_korea_date", lambda: holiday)
+    monkeypatch.setattr(run_monthly, "DataProvider", unused_prices)
+
+    assert run_monthly.main(["--scheduled", "--skip-unchanged"]) == 0
+    status_file = data / "latest-run-status.json"
+    status_text = status_file.read_text()
+    status = json.loads(status_text)
+    assert status["status"] == "market_closed"
+    assert status["reference_date"] == holiday.isoformat()
+    assert snapshot.read_text() == published
+    assert run_monthly.main(["--scheduled", "--skip-unchanged"]) == 0
+    assert status_file.read_text() == status_text
+
+
 def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, monkeypatch):
     trading_day = date(2026, 11, 3)
     data = tmp_path / "web" / "public" / "data"
@@ -50,6 +76,8 @@ def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, mon
     assert calls == [(ticker, trading_day) for ticker in ("SPY", "A", "MISSING", *(symbol for symbol, _ in SECTOR_ETFS))]
     result = json.loads(snapshot.read_text())
     assert result["status"] == "degraded"
+    status = json.loads((data / "latest-run-status.json").read_text())
+    assert (status["status"], status["reference_date"]) == ("degraded", str(trading_day))
     assert result["monthly_momentum"]["items"] == initial["items"]
     assert result["sector_reference_date"] == str(trading_day)
     assert result["stock_sectors"] == {"A": "XLK"}
