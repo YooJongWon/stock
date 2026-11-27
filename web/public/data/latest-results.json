@@ -131,6 +131,10 @@
           "rebalance_return_pct": -13.2731
         }
       }
+    },
+    "next_rebalance": {
+      "ranking_date": "2026-11-30",
+      "open_at": "2026-12-01T14:30:00+00:00"
     }
   },
   "sector_reference_date": "2026-11-25",

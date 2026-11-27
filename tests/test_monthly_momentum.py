@@ -4,7 +4,7 @@ import exchange_calendars as xc
 import pandas as pd
 import pytest
 
-from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly, rebalance_open
+from monthly_momentum import BOOTSTRAP_SOURCE, MonthlyMomentum, MonthlyRiskMonitor, next_rebalance, pending_month_end, publish_monthly, rebalance_open
 
 
 def test_month_end_bootstrap_and_rollover_use_us_exchange_sessions():
@@ -35,6 +35,7 @@ def test_monthly_ranking_skips_recent_returns_and_requires_confirmed_bars():
 
     result = scan.result()
     assert result["eligible_count"] == 2
+    assert result["next_rebalance"] == {"ranking_date": "2026-11-30", "open_at": "2026-12-01T14:30:00+00:00"}
     assert result["period_end"] == scan.end.isoformat()
     assert [item["ticker"] for item in result["items"]] == ["A", "B"]
     assert [item["return_pct"] for item in result["items"]] == pytest.approx([50, 50])
@@ -47,6 +48,12 @@ def test_rotation_preserves_prior_month_across_daily_runs_and_cache_replacement(
     assert publish_monthly(combined, None) == combined
     assert publish_monthly(combined, {**november, "items": []})["previous"] == october
     assert rebalance_open(date(2026, 10, 30)) == "2026-11-02T14:30:00+00:00"
+
+
+def test_next_rebalance_skips_new_year_holiday_and_weekend():
+    assert next_rebalance(date(2026, 11, 30)) == {
+        "ranking_date": "2026-12-31", "open_at": "2027-01-04T14:30:00+00:00",
+    }
 
 
 def test_daily_risk_uses_rebalance_open_and_confirmed_closes():
