@@ -8,16 +8,17 @@ from datetime import datetime, timezone
 from scripts.run_cloud import ROOT, _atomic_write, _read_current_result
 from data_provider import DataProvider, UniverseProvider
 from indicators import spy_market_regime
-from market_calendar import is_exchange_session, latest_completed_session, previous_korea_date
+from market_calendar import batch_day_us_session, is_exchange_session, latest_completed_session, previous_korea_date
 from monthly_momentum import MonthlyMomentum, MonthlyRiskMonitor, pending_month_end, publish_monthly
 from sector_performance import daily_sector_performance, monthly_stock_sectors
 
 
-def write_status(path, status, reference_date, attempted_at):
+def write_status(path, status, reference_date, attempted_at, market_session):
     _atomic_write(path, json.dumps({
         "status": status,
         "attempted_at": attempted_at,
         "reference_date": str(reference_date),
+        "market_session": market_session,
         "message": None,
     }, indent=2) + "\n")
 
@@ -30,12 +31,16 @@ def main(argv: list[str] | None = None) -> int:
 
     result_path = ROOT / "web" / "public" / "data" / "latest-results.json"
     status_path = result_path.with_name("latest-run-status.json")
-    reference_date = previous_korea_date() if args.scheduled else latest_completed_session()
+    attempted_at = datetime.now(timezone.utc)
+    market_session = batch_day_us_session(attempted_at)
+    reference_date = previous_korea_date(attempted_at) if args.scheduled else latest_completed_session(attempted_at)
     if not is_exchange_session(reference_date):
         if args.scheduled:
             last = _read_current_result(status_path)
-            if last.get("status") != "market_closed" or last.get("reference_date") != str(reference_date):
-                write_status(status_path, "market_closed", reference_date, datetime.now(timezone.utc).isoformat())
+            if (last.get("status"), last.get("reference_date"), last.get("market_session")) != (
+                "market_closed", str(reference_date), market_session
+            ):
+                write_status(status_path, "market_closed", reference_date, attempted_at.isoformat(), market_session)
             print(f"U.S. market closed on {reference_date}. Keeping the last trading session's results.")
             return 0
         raise RuntimeError(f"Invalid XNYS session: {reference_date}")
@@ -51,8 +56,10 @@ def main(argv: list[str] | None = None) -> int:
         and current.get("status") == "success"
     ):
         last = _read_current_result(status_path)
-        if last.get("status") != "success" or last.get("reference_date") != str(reference_date):
-            write_status(status_path, "success", reference_date, datetime.now(timezone.utc).isoformat())
+        if (last.get("status"), last.get("reference_date"), last.get("market_session")) != (
+            "success", str(reference_date), market_session
+        ):
+            write_status(status_path, "success", reference_date, attempted_at.isoformat(), market_session)
         print(f"Monthly momentum checks already published for {reference_date}.")
         return 0
 
@@ -105,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         "stock_sectors": monthly_stock_sectors(monthly, current.get("stock_sectors") or {}),
     }
     _atomic_write(result_path, json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
-    write_status(status_path, payload["status"], reference_date, now)
+    write_status(status_path, payload["status"], reference_date, attempted_at.isoformat(), market_session)
     print(f"Monthly momentum for {reference_date}. Price checks unavailable: {', '.join(unchecked) or 'none'}")
     return 0
 

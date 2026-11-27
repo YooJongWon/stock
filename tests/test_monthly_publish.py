@@ -27,7 +27,7 @@ def test_scheduled_holiday_publishes_market_status_without_refreshing_prices(tmp
         raise AssertionError("A market closure must not fetch prices")
 
     monkeypatch.setattr(run_monthly, "ROOT", tmp_path)
-    monkeypatch.setattr(run_monthly, "previous_korea_date", lambda: holiday)
+    monkeypatch.setattr(run_monthly, "previous_korea_date", lambda _now: holiday)
     monkeypatch.setattr(run_monthly, "DataProvider", unused_prices)
 
     assert run_monthly.main(["--scheduled", "--skip-unchanged"]) == 0
@@ -66,7 +66,7 @@ def test_daily_batch_fetches_spy_published_tickers_and_sector_etfs(tmp_path, mon
         raise AssertionError("Daily checks must not load the market universe")
 
     monkeypatch.setattr(run_monthly, "ROOT", tmp_path)
-    monkeypatch.setattr(run_monthly, "latest_completed_session", lambda: trading_day)
+    monkeypatch.setattr(run_monthly, "latest_completed_session", lambda _now: trading_day)
     monkeypatch.setattr(run_monthly, "DataProvider", Prices)
     monkeypatch.setattr(run_monthly, "UniverseProvider", unused_universe)
     monkeypatch.setattr(YFinanceProvider, "instrument_info",
@@ -121,7 +121,7 @@ def test_month_end_rebuilds_rankings_and_waits_for_first_close(tmp_path, monkeyp
             return {"reference_date": str(month_end), "items": self.items[:10]}
 
     monkeypatch.setattr(run_monthly, "ROOT", tmp_path)
-    monkeypatch.setattr(run_monthly, "latest_completed_session", lambda: month_end)
+    monkeypatch.setattr(run_monthly, "latest_completed_session", lambda _now: month_end)
     monkeypatch.setattr(run_monthly, "DataProvider", Prices)
     monkeypatch.setattr(run_monthly, "UniverseProvider", Universe)
     monkeypatch.setattr(run_monthly, "MonthlyMomentum", Ranking)
