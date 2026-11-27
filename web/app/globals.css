@@ -675,3 +675,6 @@ body,.portfolio-page{font-variant-numeric:tabular-nums lining-nums;font-feature-
   .toss-performance-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toss-performance-values > :last-child { grid-column: 1 / -1; }
 }
+
+.monthly-company-risk{min-width:210px;vertical-align:top}
+.monthly-company-risk small{margin-top:4px}
